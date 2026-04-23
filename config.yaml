@@ -129,6 +129,16 @@ halt_exits:
   enabled: true
   min_ai_confidence: 0.60          # AI must be this confident that closing is right
 
+earnings:
+  # Avoid the binary-event lottery around earnings. Block new entries within
+  # block_entry_days of a report; close held positions within trim_exit_days
+  # UNLESS blended confidence clears the high-conviction override.
+  enabled: true
+  block_entry_days: 5              # no new entries if earnings within N calendar days
+  trim_exit_days: 3                # close held positions within N calendar days of earnings
+  high_conviction_override: 0.85   # override both gates if blended conf >= this
+  cache_ttl_hours: 24              # how long to cache an earnings-date lookup
+
 ai:
   enabled: true                    # if true + ANTHROPIC_API_KEY set, runs subagents each scan
   model: claude-sonnet-4-6         # arbiter + risk-manager (full reasoning)

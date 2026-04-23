@@ -13,6 +13,7 @@ from src.ai_research import AIResearcher
 from src.alpaca_client import AlpacaClient
 from src.config import Config
 from src.decision import DecisionEngine, TradeDecision
+from src.earnings import EarningsInfo, fetch_earnings, within_window
 from src.executor import TradeExecutor
 from src.fundamentals import compute_fundamentals
 from src.journal import log_decision
@@ -49,6 +50,11 @@ class TradingOrchestrator:
         self.cash_proxy_enabled = bool(config.get("cash_proxy", "enabled", default=False))
         self.cash_proxy_symbol = str(config.get("cash_proxy", "symbol", default="SPY"))
         self.cash_proxy_min = float(config.get("cash_proxy", "min_rebalance_usd", default=500))
+        self.earnings_enabled = bool(config.get("earnings", "enabled", default=True))
+        self.earnings_block_days = int(config.get("earnings", "block_entry_days", default=5))
+        self.earnings_trim_days = int(config.get("earnings", "trim_exit_days", default=3))
+        self.earnings_override = float(config.get("earnings", "high_conviction_override", default=0.85))
+        self.earnings_ttl_hours = float(config.get("earnings", "cache_ttl_hours", default=24))
 
     def _is_cash_proxy(self, symbol: str) -> bool:
         return self.cash_proxy_enabled and symbol == self.cash_proxy_symbol
@@ -153,6 +159,10 @@ class TradingOrchestrator:
     ) -> TradeDecision:
         fund = compute_fundamentals(tech.symbol)
         sent = score_news_for_symbol(tech.symbol, news_items)
+        earnings = (
+            fetch_earnings(tech.symbol, ttl_hours=self.earnings_ttl_hours)
+            if self.earnings_enabled else None
+        )
 
         details: dict[str, Any] = {
             "technical": tech.to_dict(),
@@ -161,6 +171,8 @@ class TradingOrchestrator:
         }
         if fund:
             details["fundamental"] = fund.to_dict()
+        if earnings:
+            details["earnings"] = earnings.to_dict()
 
         # Risk alignment: penalize longs in risk_off regime, shorts in risk_on
         risk_score = 0.0
@@ -205,6 +217,7 @@ class TradingOrchestrator:
         news = self.client.get_news(symbols=symbols, limit=80, days_back=3)
         sent_map: dict[str, Any] = {}
         numeric: dict[str, TradeDecision] = {}
+        earnings_map: dict[str, EarningsInfo] = {}
         for p in holdings:
             sym = p.symbol
             tech = tech_map.get(sym)
@@ -213,6 +226,12 @@ class TradingOrchestrator:
             sent = score_news_for_symbol(sym, news)
             sent_map[sym] = sent
             fund = compute_fundamentals(sym)
+            earnings = (
+                fetch_earnings(sym, ttl_hours=self.earnings_ttl_hours)
+                if self.earnings_enabled else None
+            )
+            if earnings:
+                earnings_map[sym] = earnings
             details: dict[str, Any] = {
                 "technical": tech.to_dict(),
                 "sentiment": sent.to_dict(),
@@ -220,6 +239,8 @@ class TradingOrchestrator:
             }
             if fund:
                 details["fundamental"] = fund.to_dict()
+            if earnings:
+                details["earnings"] = earnings.to_dict()
             risk_score = 0.0
             if macro.regime == "risk_off" and tech.score > 0:
                 risk_score = -0.3
@@ -237,7 +258,8 @@ class TradingOrchestrator:
                 signal_details=details,
             )
         return {"positions": positions, "holdings": holdings, "tech_map": tech_map,
-                "sent_map": sent_map, "numeric": numeric, "news": news}
+                "sent_map": sent_map, "numeric": numeric, "news": news,
+                "earnings_map": earnings_map}
 
     # ---------- exits ----------
     def evaluate_exits(
@@ -253,6 +275,8 @@ class TradingOrchestrator:
         holdings = portfolio.get("holdings", [])
         tech_map = portfolio.get("tech_map", {})
         sent_map = portfolio.get("sent_map", {})
+        earnings_map = portfolio.get("earnings_map", {})
+        numeric = portfolio.get("numeric", {})
         if not holdings or not tech_map:
             return closes
         stall_thr = float(self.cfg.get("risk", "exit_stall_threshold", default=0.10))
@@ -267,6 +291,28 @@ class TradingOrchestrator:
             flipped = (is_long and tech.score < -0.3) or (not is_long and tech.score > 0.3)
             bad_news = (is_long and sent_score < -0.5) or (not is_long and sent_score > 0.5)
             stalled = (is_long and tech.score < stall_thr) or (not is_long and tech.score > -stall_thr)
+            # Earnings-window exit: avoid holding through the binary event unless
+            # numeric conviction on the current side clears the override threshold.
+            earnings_exit = False
+            if self.earnings_enabled:
+                einfo = earnings_map.get(p.symbol)
+                if einfo and within_window(einfo, self.earnings_trim_days):
+                    num = numeric.get(p.symbol)
+                    conf = num.confidence if num else 0.0
+                    side_aligned = num and (
+                        (is_long and num.combined_score > 0)
+                        or (not is_long and num.combined_score < 0)
+                    )
+                    if not (side_aligned and conf >= self.earnings_override):
+                        earnings_exit = True
+                        closes.append((
+                            p.symbol,
+                            f"earnings in {einfo.days_until}d ({einfo.next_date}) — "
+                            f"closing ahead of event (conf={conf:.2f} < override "
+                            f"{self.earnings_override:.2f})",
+                        ))
+            if earnings_exit:
+                continue
             if flipped:
                 closes.append((p.symbol, f"technical flipped (score={tech.score:.2f})"))
             elif bad_news:
@@ -671,6 +717,31 @@ class TradingOrchestrator:
             pipeline_candidates = [d for d in actions if d.confidence >= min_conf]
 
         log.info("Approved for execution: %d", len(pipeline_candidates))
+
+        # Earnings gate on new entries. Skip candidates with an earnings report
+        # within block_entry_days UNLESS blended confidence clears the override.
+        if self.earnings_enabled and pipeline_candidates:
+            gated: list[TradeDecision] = []
+            for d in pipeline_candidates:
+                einfo_dict = d.signal_details.get("earnings") or {}
+                days_until = einfo_dict.get("days_until_earnings")
+                if days_until is not None and 0 <= days_until <= self.earnings_block_days:
+                    if d.confidence < self.earnings_override:
+                        log.info(
+                            "[%s] earnings in %dd (%s) — blocking entry "
+                            "(conf=%.2f < override=%.2f)",
+                            d.symbol, days_until,
+                            einfo_dict.get("next_earnings_date"),
+                            d.confidence, self.earnings_override,
+                        )
+                        continue
+                    log.info(
+                        "[%s] earnings in %dd but conf=%.2f >= %.2f — allowing entry",
+                        d.symbol, days_until, d.confidence, self.earnings_override,
+                    )
+                gated.append(d)
+            pipeline_candidates = gated
+            log.info("Approved after earnings gate: %d", len(pipeline_candidates))
 
         for d in pipeline_candidates:
             tech_detail = d.signal_details.get("technical", {})

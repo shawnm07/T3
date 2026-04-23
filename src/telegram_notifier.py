@@ -126,6 +126,7 @@ class TelegramNotifier:
                 signal_details = decision.get("signal_details", {})
                 tech_detail = signal_details.get("technical", {})
                 fund_detail = signal_details.get("fundamental", {})
+                earn_detail = signal_details.get("earnings", {})
 
                 # Technical summary
                 tech_score = signals.get("technical", 0.0)
@@ -142,6 +143,9 @@ class TelegramNotifier:
                 msg += f"  Entry: ${entry} | Stop: ${stop} | Target: ${target} (Size: {position_pct:.1%})\n"
                 msg += f"  Technical: {tech_score:+.2f} (RSI {tech_reason})\n"
                 msg += f"  Fundamental: {fund_reason}\n"
+                days_until = earn_detail.get("days_until_earnings")
+                if days_until is not None:
+                    msg += f"  Earnings: {earn_detail.get('next_earnings_date','?')} (in {days_until}d)\n"
 
             # Exits
             for exit_item in exits:
@@ -202,7 +206,11 @@ class TelegramNotifier:
                 qty = p.get("qty", "?")
                 unrealized = p.get("unrealized_pnl", 0.0)
                 icon = "▲" if unrealized >= 0 else "▼"
-                msg += f"  {icon} {sym:5} {side:5} {qty:>4} sh | P&L: {unrealized:+,.0f}\n"
+                line = f"  {icon} {sym:5} {side:5} {qty:>4} sh | P&L: {unrealized:+,.0f}"
+                days_until = p.get("earnings_days")
+                if days_until is not None and days_until <= 7:
+                    line += f" | ⚠ earnings in {days_until}d"
+                msg += line + "\n"
 
         if total_pnl != 0:
             icon = "▲" if total_pnl >= 0 else "▼"

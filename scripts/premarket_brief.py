@@ -48,16 +48,25 @@ def main() -> int:
         # Calculate total P&L
         total_pnl = sum(float(p.unrealized_plpc) for p in positions)
 
-        # Format positions for notification
-        positions_list = [
-            {
+        # Format positions for notification; annotate with upcoming earnings so
+        # the morning brief flags binary-event risk.
+        from src.earnings import fetch_earnings
+        earnings_enabled = bool(cfg.get("earnings", "enabled", default=True))
+        earnings_ttl = float(cfg.get("earnings", "cache_ttl_hours", default=24))
+        positions_list = []
+        for p in positions:
+            entry = {
                 "symbol": p.symbol,
                 "side": str(p.side),
                 "qty": str(p.qty),
                 "unrealized_pnl": float(p.unrealized_plpc),
             }
-            for p in positions
-        ]
+            if earnings_enabled and "/" not in p.symbol:
+                info = fetch_earnings(p.symbol, ttl_hours=earnings_ttl)
+                if info.days_until is not None:
+                    entry["earnings_days"] = info.days_until
+                    entry["earnings_date"] = info.next_date
+            positions_list.append(entry)
 
         for p in positions:
             log.info(

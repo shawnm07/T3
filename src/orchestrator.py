@@ -836,10 +836,15 @@ class TradingOrchestrator:
         # Config knobs
         hold_threshold = float(self.cfg.get("overnight", "hold_threshold", default=0.0))
         buy_threshold = float(self.cfg.get("overnight", "buy_threshold", default=0.35))
+        bearish_buy_threshold = float(
+            self.cfg.get("overnight", "bearish_bias_buy_threshold", default=0.45)
+        )
         max_new = int(self.cfg.get("overnight", "max_new_positions", default=3))
         size_mult = float(self.cfg.get("overnight", "size_multiplier", default=0.5))
         scan_candidates = int(self.cfg.get("overnight", "scan_candidates", default=30))
         enable_new_buys = bool(self.cfg.get("overnight", "enable_new_buys", default=True))
+        max_rsi_new_buy = float(self.cfg.get("overnight", "max_rsi_for_new_buy", default=78))
+        sequential_cash = bool(self.cfg.get("overnight", "sequential_cash_check", default=True))
 
         account = self.client.get_account()
         equity = float(account.equity)
@@ -926,6 +931,12 @@ class TradingOrchestrator:
             intraday_cand = self._fetch_intraday(cand_syms, minutes=5) if cand_syms else None
             news_cand = self.client.get_news(symbols=cand_syms, limit=80, days_back=2) if cand_syms else []
 
+            # When the market tape is leaning down, require higher conviction
+            # than the default buy_threshold.
+            effective_buy_threshold = (
+                bearish_buy_threshold if market_bias < 0 else buy_threshold
+            )
+
             scored: list[tuple[TechnicalSignal, OvernightSignal]] = []
             for t in long_biased:
                 intraday = self._slice_symbol(intraday_cand, t.symbol)
@@ -933,22 +944,56 @@ class TradingOrchestrator:
                 ov = score_overnight(t.symbol, intraday, t.score, sent.score if sent else 0.0, market_bias)
                 if not ov:
                     continue
-                cand_reports.append({
+                report_entry = {
                     "symbol": t.symbol,
                     "tech_score": round(t.score, 3),
+                    "rsi": round(float(t.rsi), 1) if t.rsi is not None else None,
                     "overnight": ov.to_dict(),
-                })
-                if ov.score >= buy_threshold:
-                    scored.append((t, ov))
+                }
+                # RSI ceiling on new overnight longs: skip extended / overbought
+                # names that leave no room to run into the gap.
+                if t.rsi is not None and t.rsi > max_rsi_new_buy:
+                    report_entry["skipped"] = f"rsi {t.rsi:.1f} > {max_rsi_new_buy:.1f}"
+                    cand_reports.append(report_entry)
+                    log.info("[%s] overnight skip: RSI %.1f > %.1f (overbought)",
+                             t.symbol, t.rsi, max_rsi_new_buy)
+                    continue
+                if ov.score < effective_buy_threshold:
+                    report_entry["skipped"] = (
+                        f"ov {ov.score:.2f} < threshold {effective_buy_threshold:.2f}"
+                    )
+                    cand_reports.append(report_entry)
+                    continue
+                cand_reports.append(report_entry)
+                scored.append((t, ov))
 
             scored.sort(key=lambda x: x[1].score, reverse=True)
             picks = scored[:max_new]
-            log.info("Preclose new-buy picks: %d (from %d scored, threshold=%.2f)",
-                     len(picks), len(cand_reports), buy_threshold)
+            log.info("Preclose new-buy picks: %d (from %d scored, threshold=%.2f, market_bias=%+.2f)",
+                     len(picks), len(cand_reports), effective_buy_threshold, market_bias)
 
             # Refresh positions after closes
             if not dry_run and exit_results:
                 positions = self.client.get_positions()
+
+            # Sequential cash accounting: deduct each confirmed buy from the
+            # running liquidity figure (real cash + SPY cash-proxy) so two
+            # concurrent preclose buys can't both pass the 5% floor check.
+            cash_floor = equity * self.risk.cash_reserve_pct
+            if sequential_cash and not dry_run:
+                try:
+                    acct_now = self.client.get_account()
+                    live_cash = float(acct_now.cash)
+                except Exception:
+                    live_cash = float(account.cash)
+                proxy_value = 0.0
+                if self.cash_proxy_enabled:
+                    proxy = self._get_proxy_position(positions)
+                    if proxy:
+                        proxy_value = abs(float(proxy.market_value))
+                available_liquidity = live_cash + proxy_value - cash_floor
+            else:
+                available_liquidity = float("inf")
 
             for tech, ov in picks:
                 price = tech.price
@@ -966,6 +1011,15 @@ class TradingOrchestrator:
                 )
                 if not sizing:
                     continue
+                if sequential_cash and not dry_run:
+                    if sizing.notional > available_liquidity:
+                        log.info(
+                            "[%s] overnight skip: notional $%.0f > available liquidity $%.0f "
+                            "(preserving cash_reserve_pct floor)",
+                            tech.symbol, sizing.notional, max(0.0, available_liquidity),
+                        )
+                        continue
+                    available_liquidity -= sizing.notional
                 decision_obj = TradeDecision(
                     symbol=tech.symbol,
                     action="buy",

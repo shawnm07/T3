@@ -113,6 +113,7 @@ def compute_rebalance_plan(
     add_floor = float(config.get("rebalance", "add_confidence_floor", default=0.55))
     winner_threshold = float(config.get("rebalance", "winner_profit_threshold", default=0.03))
     ai_weight = float(config.get("ai", "weight", default=0.6))
+    block_on_risk_reject = bool(config.get("rebalance", "block_on_risk_reject", default=True))
 
     actions: list[RebalanceAction] = []
     for p in positions:
@@ -209,6 +210,14 @@ def compute_rebalance_plan(
         else:  # ADD
             if blended < add_floor:
                 continue
+            # Hard block on AI risk-agent reject. The risk agent has veto power
+            # over adds regardless of blended confidence (e.g. deteriorating
+            # fundamentals, near-term event risk). Only applies when AI ran.
+            if block_on_risk_reject and ai_used:
+                risk_grade = (ai_grades.get("risk") or ai_grades.get("risk_manager") or "").strip().lower()
+                if risk_grade in ("reject", "f", "fail", "d", "d-"):
+                    log.info("[%s] rebalance add blocked: AI risk grade=%s", sym, risk_grade)
+                    continue
             # Don't exceed max_position_pct
             max_notional = equity * max_position_pct
             if current_notional >= max_notional:

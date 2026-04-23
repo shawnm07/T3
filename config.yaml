@@ -83,6 +83,9 @@ overnight:
   # Pre-close (~5 min before bell) overnight-hold decision.
   hold_threshold: 0.0         # directional overnight score below this → close the position
   buy_threshold: 0.35         # new-candidate overnight score must exceed this to open
+  bearish_bias_buy_threshold: 0.45  # require higher conviction when SPY late-day bias < 0
+  max_rsi_for_new_buy: 78     # block new overnight longs when RSI > this (overbought gate)
+  sequential_cash_check: true # deduct each confirmed buy from available cash before sizing the next
   max_new_positions: 3        # cap on fresh overnight buys per preclose run
   size_multiplier: 0.5        # shrink normal sizing for overnight carry (0..1)
   scan_candidates: 30         # top-N technical longs to score for overnight gap
@@ -117,6 +120,7 @@ rebalance:
   trim_confidence_floor: 0.40      # only TRIM a position when blended conf < 0.40
   add_confidence_floor: 0.55       # only ADD to a position when blended conf >= 0.55
   winner_profit_threshold: 0.03    # don't trim if unrealized pnl > +3% AND tech still positive
+  block_on_risk_reject: true       # AI risk agent 'reject' or 'D/F' grade hard-blocks adds
   # AI budget for held-position analysis
   rerun_ai_on_score_delta: 0.15    # re-ask AI when tech score has moved this much since last scan
   max_ai_reruns_per_scan: 8        # cap AI reruns per scan to control cost

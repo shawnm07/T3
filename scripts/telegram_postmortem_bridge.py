@@ -66,7 +66,7 @@ def tg_send(token: str, chat_id: str, text: str) -> None:
     try:
         requests.post(
             f"https://api.telegram.org/bot{token}/sendMessage",
-            data={"chat_id": chat_id, "text": text, "parse_mode": "HTML"},
+            json={"chat_id": chat_id, "text": text, "parse_mode": "HTML"},
             timeout=15,
         )
     except Exception as e:
@@ -100,23 +100,38 @@ def discover_branches() -> list[str]:
 
 
 def read_report_summary(branch: str) -> str:
-    rc, out = _git("show", f"origin/{branch}:data/research/{branch.split('-', 1)[1]}_postmortem.md", timeout=30)
+    date = branch.split("-", 1)[1] if "-" in branch else branch
+    rc, out = _git("show", f"origin/{branch}:data/research/{date}_postmortem.md", timeout=30)
     if rc != 0 or not out:
         return ""
     lines = out.splitlines()
-    proposals = []
-    in_proposals = False
+    proposals: list[str] = []
+    in_section = False
     for ln in lines:
-        lower = ln.lower()
-        if lower.startswith("## proposed changes") or "proposed changes" in lower and ln.startswith("#"):
-            in_proposals = True
+        stripped = ln.strip()
+        if stripped.lower().startswith("## proposed changes"):
+            in_section = True
             continue
-        if in_proposals and ln.startswith("## "):
+        if in_section and stripped.startswith("## "):
             break
-        if in_proposals and ln.strip().startswith(("- ", "* ", "**")):
-            proposals.append(ln.strip().lstrip("*- ").split("\n")[0])
+        if not in_section:
+            continue
+        # Grab H3/H4 headings as proposal titles; strip markdown markers.
+        if stripped.startswith(("### ", "#### ")):
+            title = stripped.lstrip("#").strip(" *_`")
+            title = re.sub(r"\*\*|`|_", "", title)
+            if title:
+                proposals.append(title)
         if len(proposals) >= 6:
             break
+    # Fallback: if no headings found, grab first bold line per proposal block.
+    if not proposals:
+        for ln in lines:
+            m = re.match(r"^\s*(?:\d+\.|-)\s*\*\*([^*]{3,})\*\*", ln)
+            if m:
+                proposals.append(m.group(1).strip())
+                if len(proposals) >= 6:
+                    break
     return "\n".join(f"\u2022 {p[:160]}" for p in proposals[:6])
 
 

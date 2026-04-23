@@ -81,6 +81,16 @@ $triggerCrypto = New-ScheduledTaskTrigger -Once -At $cryptoStart `
     -RepetitionDuration (New-TimeSpan -Days 3650)
 Register-BotTask "Crypto" (Join-Path $BotDir "scripts\crypto_check.py") @($triggerCrypto)
 
+# Post-mortem Telegram bridge: every 30 min, 24/7. Polls GitHub for new
+# postmortem-YYYY-MM-DD branches created by the remote agent and sends a
+# Telegram summary. Also polls Telegram for 'accept/reject postmortem-...'
+# replies and merges or deletes the branch accordingly.
+$bridgeStart = Get-Date "00:20"
+$triggerBridge = New-ScheduledTaskTrigger -Once -At $bridgeStart `
+    -RepetitionInterval (New-TimeSpan -Minutes 30) `
+    -RepetitionDuration (New-TimeSpan -Days 3650)
+Register-BotTask "PostmortemBridge" (Join-Path $BotDir "scripts\telegram_postmortem_bridge.py") @($triggerBridge)
+
 Write-Host ""
 Write-Host "=== Registered Tasks ===" -ForegroundColor Green
 Get-ScheduledTask | Where-Object { $_.TaskName -like "TradingBot_*" } |

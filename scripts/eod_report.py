@@ -64,6 +64,42 @@ def main() -> int:
         today = datetime.now(timezone.utc).date().isoformat()
         today_trades = [t for t in trades if t["ts"].startswith(today)]
 
+        # Alpaca paper's unrealized_plpc is unreliable — compute pnl from
+        # avg_entry_price vs latest close bar instead.
+        equity_syms = [p.symbol for p in positions if "/" not in p.symbol]
+        current_prices: dict[str, float] = {}
+        if equity_syms:
+            try:
+                bars = client.get_stock_bars(equity_syms, lookback_days=5)
+                for s in equity_syms:
+                    try:
+                        sbars = bars.xs(s, level="symbol") if "symbol" in bars.index.names else bars
+                        current_prices[s] = float(sbars["close"].iloc[-1])
+                    except (KeyError, IndexError):
+                        pass
+            except Exception as e:
+                log.warning("current-price fetch failed: %s", e)
+
+        def _pos_record(p):
+            sym = p.symbol
+            avg_entry = float(p.avg_entry_price) if getattr(p, "avg_entry_price", None) else 0.0
+            curr = current_prices.get(sym, 0.0)
+            is_long = (str(p.side).lower().endswith("long"))
+            if avg_entry > 0 and curr > 0:
+                raw = (curr - avg_entry) / avg_entry
+                pnl_pct = raw if is_long else -raw
+            else:
+                pnl_pct = 0.0
+            return {
+                "symbol": sym,
+                "side": str(p.side),
+                "qty": float(p.qty),
+                "avg_entry": round(avg_entry, 4),
+                "current_price": round(curr, 4),
+                "pnl_pct": round(pnl_pct, 4),
+                "market_value": float(p.market_value) if getattr(p, "market_value", None) else 0.0,
+            }
+
         report = {
             "date": today,
             "equity": float(account.equity),
@@ -76,14 +112,7 @@ def main() -> int:
             "spy_30d": round(spy_30d, 4),
             "positions_count": len(positions),
             "trades_today": len(today_trades),
-            "positions": [
-                {
-                    "symbol": p.symbol, "side": str(p.side),
-                    "qty": str(p.qty), "mv": str(p.market_value),
-                    "unrealized_pct": round(float(p.unrealized_plpc), 4),
-                }
-                for p in positions
-            ],
+            "positions": [_pos_record(p) for p in positions],
         }
         log.info("EOD: daily=%+.2f%% (vs SPY %+.2f%%) period=%+.2f%% (vs SPY %+.2f%%)",
                  daily_ret * 100, (daily_ret - spy_daily) * 100,

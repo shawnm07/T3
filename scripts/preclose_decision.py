@@ -78,4 +78,10 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    rc = main()
+    try:
+        from src.data_push import push_data
+        push_data("preclose")
+    except Exception:
+        pass
+    sys.exit(rc)

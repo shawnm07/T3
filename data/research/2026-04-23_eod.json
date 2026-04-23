@@ -1,78 +1,105 @@
 {
   "date": "2026-04-23",
-  "equity": 99433.94,
-  "cash": 60501.1,
-  "daily_return": 0.0026,
-  "daily_vs_spy": -0.0075,
+  "equity": 101208.19,
+  "cash": -935.19,
+  "daily_return": 0.0156,
+  "daily_vs_spy": 0.0195,
   "period_return": 0,
-  "period_vs_spy": -0.0422,
-  "spy_daily": 0.0101,
-  "spy_30d": 0.0422,
-  "positions_count": 7,
-  "trades_today": 0,
+  "period_vs_spy": -0.0382,
+  "spy_daily": -0.0039,
+  "spy_30d": 0.0382,
+  "positions_count": 10,
+  "trades_today": 9,
   "positions": [
     {
       "symbol": "AMD",
       "side": "PositionSide.LONG",
-      "qty": 17.0,
-      "avg_entry": 296.07,
-      "current_price": 303.46,
-      "pnl_pct": 0.025,
-      "market_value": 5109.69
+      "qty": 41.423035627,
+      "avg_entry": 302.7207,
+      "current_price": 305.33,
+      "pnl_pct": 0.0086,
+      "market_value": 13166.311874
+    },
+    {
+      "symbol": "APLS",
+      "side": "PositionSide.LONG",
+      "qty": 184.0,
+      "avg_entry": 40.93,
+      "current_price": 40.94,
+      "pnl_pct": 0.0002,
+      "market_value": 7532.96
     },
     {
       "symbol": "ARW",
       "side": "PositionSide.LONG",
-      "qty": 47.0,
-      "avg_entry": 181.23,
-      "current_price": 181.54,
-      "pnl_pct": 0.0017,
-      "market_value": 8532.38
+      "qty": 67.249920136,
+      "avg_entry": 183.2143,
+      "current_price": 187.5,
+      "pnl_pct": 0.0234,
+      "market_value": 12609.360026
     },
     {
       "symbol": "AVGO",
       "side": "PositionSide.LONG",
-      "qty": 12.0,
-      "avg_entry": 408.83,
-      "current_price": 422.65,
-      "pnl_pct": 0.0338,
-      "market_value": 5011.2
+      "qty": 29.161661954,
+      "avg_entry": 420.0704,
+      "current_price": 419.94,
+      "pnl_pct": -0.0003,
+      "market_value": 12289.307581
     },
     {
       "symbol": "FIX",
       "side": "PositionSide.LONG",
-      "qty": 3.0,
-      "avg_entry": 1726.1333,
-      "current_price": 1724.49,
-      "pnl_pct": -0.001,
-      "market_value": 5189.97
+      "qty": 7.080830126,
+      "avg_entry": 1758.5495,
+      "current_price": 1773.91,
+      "pnl_pct": 0.0087,
+      "market_value": 13099.535733
     },
     {
       "symbol": "GEV",
       "side": "PositionSide.LONG",
-      "qty": 5.0,
-      "avg_entry": 1121.84,
-      "current_price": 1127.56,
-      "pnl_pct": 0.0051,
-      "market_value": 5618.6
+      "qty": 10.9841782,
+      "avg_entry": 1140.4504,
+      "current_price": 1149.53,
+      "pnl_pct": 0.008,
+      "market_value": 12626.642366
+    },
+    {
+      "symbol": "IRDM",
+      "side": "PositionSide.LONG",
+      "qty": 105.0,
+      "avg_entry": 40.8609,
+      "current_price": 40.93,
+      "pnl_pct": 0.0017,
+      "market_value": 4297.65
     },
     {
       "symbol": "MU",
       "side": "PositionSide.LONG",
-      "qty": 9.0,
-      "avg_entry": 476.6,
-      "current_price": 487.48,
-      "pnl_pct": 0.0228,
-      "market_value": 4320.0
+      "qty": 25.680166556,
+      "avg_entry": 480.5736,
+      "current_price": 481.72,
+      "pnl_pct": 0.0024,
+      "market_value": 12434.336646
+    },
+    {
+      "symbol": "SPY",
+      "side": "PositionSide.LONG",
+      "qty": 2.370362835,
+      "avg_entry": 711.7,
+      "current_price": 708.45,
+      "pnl_pct": -0.0046,
+      "market_value": 1677.38726
     },
     {
       "symbol": "VRT",
       "side": "PositionSide.LONG",
-      "qty": 17.0,
-      "avg_entry": 302.64,
-      "current_price": 305.14,
-      "pnl_pct": 0.0083,
-      "market_value": 5151.0
+      "qty": 38.532849409,
+      "avg_entry": 315.2022,
+      "current_price": 321.75,
+      "pnl_pct": 0.0208,
+      "market_value": 12409.889481
     }
   ]
 }

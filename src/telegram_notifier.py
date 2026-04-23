@@ -117,10 +117,11 @@ class TelegramNotifier:
                 side = "BUY" if action == "buy" else "SHORT"
 
                 qty = sizing.get("qty", "?")
-                entry = sizing.get("entry_price", "?")
-                stop = sizing.get("stop_price", "?")
-                target = sizing.get("target_price", "?")
-                position_pct = sizing.get("position_pct", 0.0)
+                entry = sizing.get("entry", sizing.get("entry_price", "?"))
+                stop = sizing.get("stop_loss", sizing.get("stop_price", "?"))
+                target = sizing.get("take_profit", sizing.get("target_price", "?"))
+                notional = sizing.get("notional", 0.0) or 0.0
+                position_pct = (notional / equity) if equity else sizing.get("position_pct", 0.0)
 
                 signals = decision.get("signal_scores", {})
                 signal_details = decision.get("signal_details", {})

@@ -520,7 +520,7 @@ class TradingOrchestrator:
                                     "reason": reason, "ai_verdict": v.to_dict()})
                 else:
                     res = self.executor.close_position(p.symbol, reason=reason)
-                    results.append({**res.to_dict(), "ai_verdict": v.to_dict()})
+                    results.append({**res.to_dict(), "reason": reason, "ai_verdict": v.to_dict()})
         return results
 
     # ---------- main loop ----------
@@ -568,7 +568,7 @@ class TradingOrchestrator:
                 exit_results.append({"symbol": sym, "action": "close_dry", "reason": reason})
             else:
                 res = self.executor.close_position(sym, reason=reason)
-                exit_results.append(res.to_dict())
+                exit_results.append({**res.to_dict(), "reason": reason})
 
         # After closes, refresh portfolio state and rebuild signal bundle so rebalance
         # sees the accurate current book. (Drop exited symbols from the in-memory bundle.)
@@ -902,7 +902,7 @@ class TradingOrchestrator:
                     exit_results.append({"symbol": sym, "action": "close_dry", "reason": reason})
                 else:
                     res = self.executor.close_position(sym, reason=reason)
-                    exit_results.append(res.to_dict())
+                    exit_results.append({**res.to_dict(), "reason": reason})
 
         # ---------- Find new overnight candidates ----------
         new_executions: list[dict[str, Any]] = []
@@ -987,7 +987,12 @@ class TradingOrchestrator:
                     # Ensure real cash covers the notional; sell SPY if short.
                     self._ensure_cash_for(sizing.notional, equity)
                     result = self.executor.execute(decision_obj, sizing)
-                    new_executions.append(result.to_dict())
+                    new_executions.append({
+                        "sizing": sizing.to_dict(),
+                        "decision": decision_obj.to_dict(),
+                        "execution": result.to_dict(),
+                        **result.to_dict(),  # keep top-level symbol/status for easy reads
+                    })
                     positions = self.client.get_positions()
 
         # Park any remaining idle cash in SPY for overnight carry.

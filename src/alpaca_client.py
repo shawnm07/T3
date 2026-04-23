@@ -144,7 +144,14 @@ class AlpacaClient:
 
     def close_position(self, symbol: str, qty: float | None = None, percentage: float | None = None):
         from alpaca.trading.requests import ClosePositionRequest
-        req = ClosePositionRequest(qty=str(qty) if qty else None, percentage=str(percentage) if percentage else None)
+        # alpaca-py requires one of qty/percentage. Default to a full close (100%)
+        # when the caller specifies neither.
+        if qty is None and percentage is None:
+            percentage = 100
+        req = ClosePositionRequest(
+            qty=str(qty) if qty is not None else None,
+            percentage=str(percentage) if percentage is not None else None,
+        )
         return self.trading.close_position(symbol, req)
 
     def cancel_all_orders(self):

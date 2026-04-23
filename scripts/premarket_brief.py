@@ -45,8 +45,38 @@ def main() -> int:
             account.equity, account.cash, len(positions), macro.regime,
         )
 
-        # Calculate total P&L
-        total_pnl = sum(float(p.unrealized_plpc) for p in positions)
+        # Alpaca paper's unrealized_pl / unrealized_plpc are unreliable — compute
+        # dollar P&L from avg_entry_price vs latest close bar.
+        equity_syms = [p.symbol for p in positions if "/" not in p.symbol]
+        current_prices: dict[str, float] = {}
+        if equity_syms:
+            try:
+                bars = client.get_stock_bars(equity_syms, lookback_days=5)
+                for s in equity_syms:
+                    try:
+                        sbars = bars.xs(s, level="symbol") if "symbol" in bars.index.names else bars
+                        current_prices[s] = float(sbars["close"].iloc[-1])
+                    except (KeyError, IndexError):
+                        pass
+            except Exception as e:
+                log.warning("premarket price fetch failed: %s", e)
+
+        def _pnl_dollars(p) -> float:
+            sym = p.symbol
+            avg = float(p.avg_entry_price) if getattr(p, "avg_entry_price", None) else 0.0
+            curr = current_prices.get(sym, 0.0)
+            qty = float(p.qty)
+            side_val = p.side.value if hasattr(p.side, "value") else str(p.side)
+            sign = 1 if str(side_val).lower().endswith("long") else -1
+            if avg <= 0 or curr <= 0:
+                return 0.0
+            return sign * (curr - avg) * qty
+
+        def _side_str(p) -> str:
+            s = p.side.value if hasattr(p.side, "value") else str(p.side)
+            return str(s).split(".")[-1].upper()
+
+        total_pnl = sum(_pnl_dollars(p) for p in positions)
 
         # Format positions for notification; annotate with upcoming earnings so
         # the morning brief flags binary-event risk.
@@ -57,9 +87,9 @@ def main() -> int:
         for p in positions:
             entry = {
                 "symbol": p.symbol,
-                "side": str(p.side),
+                "side": _side_str(p),
                 "qty": str(p.qty),
-                "unrealized_pnl": float(p.unrealized_plpc),
+                "unrealized_pnl": _pnl_dollars(p),
             }
             if earnings_enabled and "/" not in p.symbol:
                 info = fetch_earnings(p.symbol, ttl_hours=earnings_ttl)

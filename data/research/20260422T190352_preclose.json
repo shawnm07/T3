@@ -1,0 +1,676 @@
+{
+  "ts": "2026-04-22T19:03:52.767117+00:00",
+  "equity": 99526.15,
+  "positions_count": 4,
+  "market_bias": 0.16,
+  "kill_switch": {
+    "halted": false,
+    "reasons": [],
+    "weekly_return": 0,
+    "daily_return": 0.0,
+    "trades_today": 4
+  },
+  "hold_reports": [
+    {
+      "symbol": "AMD",
+      "is_long": true,
+      "overnight": {
+        "symbol": "AMD",
+        "score": 0.64,
+        "close_strength": 0.984,
+        "late_drift": 0.144,
+        "tech_bias": 0.838,
+        "sent_bias": 0.833,
+        "market_bias": 0.16,
+        "price": 301.29,
+        "notes": [
+          "closing_near_high"
+        ]
+      },
+      "directional_score": 0.64,
+      "decision": "hold"
+    },
+    {
+      "symbol": "AVGO",
+      "is_long": true,
+      "overnight": {
+        "symbol": "AVGO",
+        "score": 0.602,
+        "close_strength": 0.92,
+        "late_drift": 0.039,
+        "tech_bias": 0.749,
+        "sent_bias": 1.0,
+        "market_bias": 0.16,
+        "price": 420.1,
+        "notes": [
+          "closing_near_high"
+        ]
+      },
+      "directional_score": 0.602,
+      "decision": "hold"
+    },
+    {
+      "symbol": "MU",
+      "is_long": true,
+      "overnight": {
+        "symbol": "MU",
+        "score": 0.542,
+        "close_strength": 0.995,
+        "late_drift": 0.305,
+        "tech_bias": 0.754,
+        "sent_bias": 0.0,
+        "market_bias": 0.16,
+        "price": 488.12,
+        "notes": [
+          "closing_near_high"
+        ]
+      },
+      "directional_score": 0.542,
+      "decision": "hold"
+    },
+    {
+      "symbol": "VRT",
+      "is_long": true,
+      "overnight": {
+        "symbol": "VRT",
+        "score": 0.286,
+        "close_strength": -0.256,
+        "late_drift": 0.203,
+        "tech_bias": 0.73,
+        "sent_bias": 1.0,
+        "market_bias": 0.16,
+        "price": 305.27,
+        "notes": []
+      },
+      "directional_score": 0.286,
+      "decision": "hold"
+    }
+  ],
+  "exits": [],
+  "candidate_reports": [
+    {
+      "symbol": "ON",
+      "tech_score": 0.845,
+      "overnight": {
+        "symbol": "ON",
+        "score": 0.524,
+        "close_strength": 0.926,
+        "late_drift": 0.093,
+        "tech_bias": 0.845,
+        "sent_bias": 0.25,
+        "market_bias": 0.16,
+        "price": 89.1,
+        "notes": [
+          "closing_near_high"
+        ]
+      }
+    },
+    {
+      "symbol": "MPWR",
+      "tech_score": 0.839,
+      "overnight": {
+        "symbol": "MPWR",
+        "score": 0.149,
+        "close_strength": -0.323,
+        "late_drift": 0.1,
+        "tech_bias": 0.839,
+        "sent_bias": 0.25,
+        "market_bias": 0.16,
+        "price": 1535.13,
+        "notes": []
+      }
+    },
+    {
+      "symbol": "STX",
+      "tech_score": 0.838,
+      "overnight": {
+        "symbol": "STX",
+        "score": 0.198,
+        "close_strength": 0.124,
+        "late_drift": -0.167,
+        "tech_bias": 0.838,
+        "sent_bias": 0.125,
+        "market_bias": 0.16,
+        "price": 576.05,
+        "notes": []
+      }
+    },
+    {
+      "symbol": "SNDK",
+      "tech_score": 0.83,
+      "overnight": {
+        "symbol": "SNDK",
+        "score": 0.52,
+        "close_strength": 0.966,
+        "late_drift": 0.192,
+        "tech_bias": 0.83,
+        "sent_bias": 0.0,
+        "market_bias": 0.16,
+        "price": 975.56,
+        "notes": [
+          "closing_near_high"
+        ]
+      }
+    },
+    {
+      "symbol": "INTC",
+      "tech_score": 0.83,
+      "overnight": {
+        "symbol": "INTC",
+        "score": -0.017,
+        "close_strength": -0.87,
+        "late_drift": -0.126,
+        "tech_bias": 0.83,
+        "sent_bias": 0.625,
+        "market_bias": 0.16,
+        "price": 65.39,
+        "notes": [
+          "closing_near_low"
+        ]
+      }
+    },
+    {
+      "symbol": "WDC",
+      "tech_score": 0.826,
+      "overnight": {
+        "symbol": "WDC",
+        "score": 0.251,
+        "close_strength": -0.034,
+        "late_drift": 0.319,
+        "tech_bias": 0.826,
+        "sent_bias": 0.0,
+        "market_bias": 0.16,
+        "price": 391.54,
+        "notes": []
+      }
+    },
+    {
+      "symbol": "DELL",
+      "tech_score": 0.824,
+      "overnight": {
+        "symbol": "DELL",
+        "score": 0.156,
+        "close_strength": -0.114,
+        "late_drift": 0.038,
+        "tech_bias": 0.824,
+        "sent_bias": 0.0,
+        "market_bias": 0.16,
+        "price": 215.55,
+        "notes": []
+      }
+    },
+    {
+      "symbol": "GEV",
+      "tech_score": 0.818,
+      "overnight": {
+        "symbol": "GEV",
+        "score": 0.574,
+        "close_strength": 0.717,
+        "late_drift": 0.116,
+        "tech_bias": 0.818,
+        "sent_bias": 1.0,
+        "market_bias": 0.16,
+        "price": 1118.36,
+        "notes": [
+          "closing_near_high"
+        ]
+      }
+    },
+    {
+      "symbol": "COHR",
+      "tech_score": 0.806,
+      "overnight": {
+        "symbol": "COHR",
+        "score": 0.167,
+        "close_strength": -0.104,
+        "late_drift": 0.085,
+        "tech_bias": 0.806,
+        "sent_bias": 0.0,
+        "market_bias": 0.16,
+        "price": 350.06,
+        "notes": []
+      }
+    },
+    {
+      "symbol": "TER",
+      "tech_score": 0.803,
+      "overnight": {
+        "symbol": "TER",
+        "score": 0.183,
+        "close_strength": -0.088,
+        "late_drift": -0.096,
+        "tech_bias": 0.803,
+        "sent_bias": 0.375,
+        "market_bias": 0.16,
+        "price": 384.19,
+        "notes": []
+      }
+    },
+    {
+      "symbol": "JBL",
+      "tech_score": 0.786,
+      "overnight": {
+        "symbol": "JBL",
+        "score": 0.235,
+        "close_strength": 0.237,
+        "late_drift": -0.035,
+        "tech_bias": 0.786,
+        "sent_bias": 0.0,
+        "market_bias": 0.16,
+        "price": 334.85,
+        "notes": []
+      }
+    },
+    {
+      "symbol": "KEYS",
+      "tech_score": 0.779,
+      "overnight": {
+        "symbol": "KEYS",
+        "score": 0.192,
+        "close_strength": -0.047,
+        "late_drift": 0.138,
+        "tech_bias": 0.779,
+        "sent_bias": 0.0,
+        "market_bias": 0.16,
+        "price": 341.81,
+        "notes": []
+      }
+    },
+    {
+      "symbol": "FIX",
+      "tech_score": 0.778,
+      "overnight": {
+        "symbol": "FIX",
+        "score": 0.284,
+        "close_strength": -0.023,
+        "late_drift": 0.101,
+        "tech_bias": 0.778,
+        "sent_bias": 0.625,
+        "market_bias": 0.16,
+        "price": 1700.0,
+        "notes": []
+      }
+    },
+    {
+      "symbol": "ANET",
+      "tech_score": 0.775,
+      "overnight": {
+        "symbol": "ANET",
+        "score": 0.419,
+        "close_strength": 0.845,
+        "late_drift": -0.022,
+        "tech_bias": 0.775,
+        "sent_bias": 0.0,
+        "market_bias": 0.16,
+        "price": 177.07,
+        "notes": [
+          "closing_near_high"
+        ]
+      }
+    },
+    {
+      "symbol": "NUE",
+      "tech_score": 0.769,
+      "overnight": {
+        "symbol": "NUE",
+        "score": 0.343,
+        "close_strength": 0.733,
+        "late_drift": -0.112,
+        "tech_bias": 0.769,
+        "sent_bias": -0.125,
+        "market_bias": 0.16,
+        "price": 214.84,
+        "notes": [
+          "closing_near_high"
+        ]
+      }
+    },
+    {
+      "symbol": "STLD",
+      "tech_score": 0.759,
+      "overnight": {
+        "symbol": "STLD",
+        "score": 0.306,
+        "close_strength": 0.522,
+        "late_drift": -0.15,
+        "tech_bias": 0.759,
+        "sent_bias": 0.125,
+        "market_bias": 0.16,
+        "price": 226.12,
+        "notes": []
+      }
+    },
+    {
+      "symbol": "HPE",
+      "tech_score": 0.734,
+      "overnight": {
+        "symbol": "HPE",
+        "score": 0.047,
+        "close_strength": -0.429,
+        "late_drift": 0.052,
+        "tech_bias": 0.734,
+        "sent_bias": 0.0,
+        "market_bias": 0.16,
+        "price": 28.75,
+        "notes": []
+      }
+    },
+    {
+      "symbol": "KLAC",
+      "tech_score": 0.718,
+      "overnight": {
+        "symbol": "KLAC",
+        "score": 0.224,
+        "close_strength": 0.256,
+        "late_drift": -0.051,
+        "tech_bias": 0.718,
+        "sent_bias": 0.0,
+        "market_bias": 0.16,
+        "price": 1800.31,
+        "notes": []
+      }
+    },
+    {
+      "symbol": "ADI",
+      "tech_score": 0.709,
+      "overnight": {
+        "symbol": "ADI",
+        "score": 0.182,
+        "close_strength": 0.119,
+        "late_drift": -0.045,
+        "tech_bias": 0.709,
+        "sent_bias": 0.0,
+        "market_bias": 0.16,
+        "price": 381.0,
+        "notes": []
+      }
+    },
+    {
+      "symbol": "GLW",
+      "tech_score": 0.705,
+      "overnight": {
+        "symbol": "GLW",
+        "score": 0.263,
+        "close_strength": 0.19,
+        "late_drift": 0.196,
+        "tech_bias": 0.705,
+        "sent_bias": 0.0,
+        "market_bias": 0.16,
+        "price": 168.95,
+        "notes": []
+      }
+    },
+    {
+      "symbol": "STT",
+      "tech_score": 0.705,
+      "overnight": {
+        "symbol": "STT",
+        "score": -0.172,
+        "close_strength": -0.946,
+        "late_drift": -0.182,
+        "tech_bias": 0.705,
+        "sent_bias": 0.0,
+        "market_bias": 0.16,
+        "price": 152.66,
+        "notes": [
+          "closing_near_low"
+        ]
+      }
+    },
+    {
+      "symbol": "EQIX",
+      "tech_score": 0.704,
+      "overnight": {
+        "symbol": "EQIX",
+        "score": 0.136,
+        "close_strength": -0.09,
+        "late_drift": 0.024,
+        "tech_bias": 0.704,
+        "sent_bias": 0.0,
+        "market_bias": 0.16,
+        "price": 1101.39,
+        "notes": []
+      }
+    },
+    {
+      "symbol": "Q",
+      "tech_score": 0.702,
+      "overnight": {
+        "symbol": "Q",
+        "score": 0.506,
+        "close_strength": 0.9,
+        "late_drift": 0.32,
+        "tech_bias": 0.702,
+        "sent_bias": 0.0,
+        "market_bias": 0.16,
+        "price": 139.6,
+        "notes": [
+          "closing_near_high"
+        ]
+      }
+    },
+    {
+      "symbol": "CIEN",
+      "tech_score": 0.702,
+      "overnight": {
+        "symbol": "CIEN",
+        "score": 0.316,
+        "close_strength": 0.248,
+        "late_drift": 0.34,
+        "tech_bias": 0.702,
+        "sent_bias": 0.0,
+        "market_bias": 0.16,
+        "price": 499.0,
+        "notes": []
+      }
+    },
+    {
+      "symbol": "JBHT",
+      "tech_score": 0.684,
+      "overnight": {
+        "symbol": "JBHT",
+        "score": -0.193,
+        "close_strength": -1.0,
+        "late_drift": -0.182,
+        "tech_bias": 0.684,
+        "sent_bias": 0.0,
+        "market_bias": 0.16,
+        "price": 248.09,
+        "notes": [
+          "closing_near_low"
+        ]
+      }
+    }
+  ],
+  "new_executions": [
+    {
+      "dry_run": true,
+      "sizing": {
+        "symbol": "GEV",
+        "side": "buy",
+        "qty": 3.0,
+        "notional": 3349.78,
+        "entry": 1116.6,
+        "stop_loss": 1030.21,
+        "take_profit": 1289.36,
+        "risk_usd": 308.33,
+        "confidence": 0.287,
+        "reasoning": "sector=Industrials; size=4.0%cap"
+      },
+      "decision": {
+        "symbol": "GEV",
+        "action": "buy",
+        "confidence": 0.574,
+        "combined_score": 0.818,
+        "signal_scores": {
+          "technical": 0.818,
+          "overnight": 0.574
+        },
+        "signal_details": {
+          "technical": {
+            "symbol": "GEV",
+            "score": 0.818,
+            "trend": 0.929,
+            "momentum": 0.926,
+            "volatility": -0.172,
+            "atr": 43.19,
+            "rsi": 78.5,
+            "price": 1116.6,
+            "ema50": 884.57,
+            "ema200": 703.59,
+            "notes": [
+              "golden_cross_regime",
+              "rsi_overbought"
+            ]
+          },
+          "overnight": {
+            "symbol": "GEV",
+            "score": 0.574,
+            "close_strength": 0.717,
+            "late_drift": 0.116,
+            "tech_bias": 0.818,
+            "sent_bias": 1.0,
+            "market_bias": 0.16,
+            "price": 1118.36,
+            "notes": [
+              "closing_near_high"
+            ]
+          }
+        },
+        "reasoning": [
+          "preclose overnight buy ov=+0.57",
+          "close_strength=+0.72 late_drift=+0.12",
+          "market_bias=+0.16"
+        ]
+      }
+    },
+    {
+      "dry_run": true,
+      "sizing": {
+        "symbol": "ON",
+        "side": "buy",
+        "qty": 43.0,
+        "notional": 3837.54,
+        "entry": 89.25,
+        "stop_loss": 83.15,
+        "take_profit": 101.43,
+        "risk_usd": 264.89,
+        "confidence": 0.262,
+        "reasoning": "sector=Information Technology; size=3.9%cap"
+      },
+      "decision": {
+        "symbol": "ON",
+        "action": "buy",
+        "confidence": 0.524,
+        "combined_score": 0.845,
+        "signal_scores": {
+          "technical": 0.845,
+          "overnight": 0.524
+        },
+        "signal_details": {
+          "technical": {
+            "symbol": "ON",
+            "score": 0.845,
+            "trend": 0.926,
+            "momentum": 0.983,
+            "volatility": -0.082,
+            "atr": 3.05,
+            "rsi": 85.3,
+            "price": 89.25,
+            "ema50": 67.35,
+            "ema200": 59.13,
+            "notes": [
+              "golden_cross_regime",
+              "rsi_overbought"
+            ]
+          },
+          "overnight": {
+            "symbol": "ON",
+            "score": 0.524,
+            "close_strength": 0.926,
+            "late_drift": 0.093,
+            "tech_bias": 0.845,
+            "sent_bias": 0.25,
+            "market_bias": 0.16,
+            "price": 89.1,
+            "notes": [
+              "closing_near_high"
+            ]
+          }
+        },
+        "reasoning": [
+          "preclose overnight buy ov=+0.52",
+          "close_strength=+0.93 late_drift=+0.09",
+          "market_bias=+0.16"
+        ]
+      }
+    },
+    {
+      "dry_run": true,
+      "sizing": {
+        "symbol": "SNDK",
+        "side": "buy",
+        "qty": 3.0,
+        "notional": 2917.68,
+        "entry": 972.56,
+        "stop_loss": 853.38,
+        "take_profit": 1210.93,
+        "risk_usd": 474.59,
+        "confidence": 0.26,
+        "reasoning": "sector=Information Technology; size=3.9%cap"
+      },
+      "decision": {
+        "symbol": "SNDK",
+        "action": "buy",
+        "confidence": 0.52,
+        "combined_score": 0.83,
+        "signal_scores": {
+          "technical": 0.83,
+          "overnight": 0.52
+        },
+        "signal_details": {
+          "technical": {
+            "symbol": "SNDK",
+            "score": 0.83,
+            "trend": 0.997,
+            "momentum": 0.962,
+            "volatility": -0.555,
+            "atr": 59.59,
+            "rsi": 70.1,
+            "price": 972.56,
+            "ema50": 709.52,
+            "ema200": 405.2,
+            "notes": [
+              "golden_cross_regime",
+              "rsi_overbought"
+            ]
+          },
+          "overnight": {
+            "symbol": "SNDK",
+            "score": 0.52,
+            "close_strength": 0.966,
+            "late_drift": 0.192,
+            "tech_bias": 0.83,
+            "sent_bias": 0.0,
+            "market_bias": 0.16,
+            "price": 975.56,
+            "notes": [
+              "closing_near_high"
+            ]
+          }
+        },
+        "reasoning": [
+          "preclose overnight buy ov=+0.52",
+          "close_strength=+0.97 late_drift=+0.19",
+          "market_bias=+0.16"
+        ]
+      }
+    }
+  ],
+  "thresholds": {
+    "hold": 0.0,
+    "buy": 0.35,
+    "max_new": 3,
+    "size_mult": 0.5
+  }
+}

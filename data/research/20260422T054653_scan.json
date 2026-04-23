@@ -1,0 +1,414 @@
+{
+  "ts": "2026-04-22T05:46:53.046359+00:00",
+  "equity": 99175.74,
+  "positions_count": 0,
+  "macro": {
+    "regime": "neutral",
+    "score": 0.207,
+    "spy_trend": 0.304,
+    "spy_vs_200ema": 0.063,
+    "vix_level": 28.91,
+    "vix_regime": "normal",
+    "breadth_pct_above_50": 0.64,
+    "notes": [
+      "spy_uptrend",
+      "vixy_ratio_0.91",
+      "breadth_64pct"
+    ]
+  },
+  "kill_switch": {
+    "halted": false,
+    "reasons": [],
+    "weekly_return": 0,
+    "daily_return": -0.00556019807829633,
+    "trades_today": 0
+  },
+  "candidates_evaluated": 5,
+  "actionable": 0,
+  "exits": [],
+  "executions": [],
+  "decisions": [
+    {
+      "symbol": "MPWR",
+      "action": "hold",
+      "confidence": 0.358,
+      "combined_score": 0.308,
+      "signal_scores": {
+        "technical": 0.841,
+        "fundamental": -0.084,
+        "sentiment": 0.0,
+        "macro": 0.207,
+        "risk": 0.0
+      },
+      "signal_details": {
+        "technical": {
+          "symbol": "MPWR",
+          "score": 0.841,
+          "trend": 0.921,
+          "momentum": 0.979,
+          "volatility": -0.084,
+          "atr": 52.26,
+          "rsi": 80.7,
+          "price": 1527.95,
+          "ema50": 1195.36,
+          "ema200": 1001.51,
+          "notes": [
+            "golden_cross_regime",
+            "rsi_overbought"
+          ]
+        },
+        "sentiment": {
+          "symbol": "MPWR",
+          "score": 0.0,
+          "article_count": 0,
+          "positive_hits": 0,
+          "negative_hits": 0,
+          "top_headlines": []
+        },
+        "macro": {
+          "regime": "neutral",
+          "score": 0.207,
+          "spy_trend": 0.304,
+          "spy_vs_200ema": 0.063,
+          "vix_level": 28.91,
+          "vix_regime": "normal",
+          "breadth_pct_above_50": 0.64,
+          "notes": [
+            "spy_uptrend",
+            "vixy_ratio_0.91",
+            "breadth_64pct"
+          ]
+        },
+        "fundamental": {
+          "symbol": "MPWR",
+          "score": -0.084,
+          "pe": 119.09197,
+          "peg": 2.45,
+          "rev_growth": 0.208,
+          "earnings_growth": -0.862,
+          "roe": 0.19173999,
+          "debt_to_equity": 0.683,
+          "market_cap": 75049844736.0,
+          "notes": [
+            "expensive_pe",
+            "high_rev_growth"
+          ]
+        }
+      },
+      "reasoning": [
+        "technical=+0.84",
+        "fundamental=-0.08",
+        "sentiment=+0.00",
+        "macro=+0.21",
+        "risk=+0.00",
+        "below_threshold (|combined|=0.31 < 0.70 or positive=2, negative=0)"
+      ]
+    },
+    {
+      "symbol": "INTC",
+      "action": "hold",
+      "confidence": 0.374,
+      "combined_score": 0.324,
+      "signal_scores": {
+        "technical": 0.838,
+        "fundamental": 0.0,
+        "sentiment": 0.0,
+        "macro": 0.207,
+        "risk": 0.0
+      },
+      "signal_details": {
+        "technical": {
+          "symbol": "INTC",
+          "score": 0.838,
+          "trend": 0.961,
+          "momentum": 0.982,
+          "volatility": -0.343,
+          "atr": 3.17,
+          "rsi": 70.9,
+          "price": 66.26,
+          "ema50": 51.89,
+          "ema200": 40.23,
+          "notes": [
+            "golden_cross_regime",
+            "rsi_overbought"
+          ]
+        },
+        "sentiment": {
+          "symbol": "INTC",
+          "score": 0.0,
+          "article_count": 0,
+          "positive_hits": 0,
+          "negative_hits": 0,
+          "top_headlines": []
+        },
+        "macro": {
+          "regime": "neutral",
+          "score": 0.207,
+          "spy_trend": 0.304,
+          "spy_vs_200ema": 0.063,
+          "vix_level": 28.91,
+          "vix_regime": "normal",
+          "breadth_pct_above_50": 0.64,
+          "notes": [
+            "spy_uptrend",
+            "vixy_ratio_0.91",
+            "breadth_64pct"
+          ]
+        },
+        "fundamental": {
+          "symbol": "INTC",
+          "score": 0.0,
+          "pe": null,
+          "peg": 1.36,
+          "rev_growth": -0.041,
+          "earnings_growth": null,
+          "roe": 0.00022,
+          "debt_to_equity": 37.282,
+          "market_cap": 332692160512.0,
+          "notes": [
+            "rev_declining"
+          ]
+        }
+      },
+      "reasoning": [
+        "technical=+0.84",
+        "fundamental=+0.00",
+        "sentiment=+0.00",
+        "macro=+0.21",
+        "risk=+0.00",
+        "below_threshold (|combined|=0.32 < 0.70 or positive=2, negative=0)"
+      ]
+    },
+    {
+      "symbol": "STX",
+      "action": "hold",
+      "confidence": 0.384,
+      "combined_score": 0.334,
+      "signal_scores": {
+        "technical": 0.835,
+        "fundamental": 0.052,
+        "sentiment": 0.0,
+        "macro": 0.207,
+        "risk": 0.0
+      },
+      "signal_details": {
+        "technical": {
+          "symbol": "STX",
+          "score": 0.835,
+          "trend": 0.971,
+          "momentum": 0.966,
+          "volatility": -0.373,
+          "atr": 27.77,
+          "rsi": 72.4,
+          "price": 559.9,
+          "ema50": 435.45,
+          "ema200": 311.4,
+          "notes": [
+            "golden_cross_regime",
+            "rsi_overbought"
+          ]
+        },
+        "sentiment": {
+          "symbol": "STX",
+          "score": 0.0,
+          "article_count": 0,
+          "positive_hits": 0,
+          "negative_hits": 0,
+          "top_headlines": []
+        },
+        "macro": {
+          "regime": "neutral",
+          "score": 0.207,
+          "spy_trend": 0.304,
+          "spy_vs_200ema": 0.063,
+          "vix_level": 28.91,
+          "vix_regime": "normal",
+          "breadth_pct_above_50": 0.64,
+          "notes": [
+            "spy_uptrend",
+            "vixy_ratio_0.91",
+            "breadth_64pct"
+          ]
+        },
+        "fundamental": {
+          "symbol": "STX",
+          "score": 0.052,
+          "pe": 63.265537,
+          "peg": 0.82,
+          "rev_growth": 0.215,
+          "earnings_growth": 0.677,
+          "roe": null,
+          "debt_to_equity": 1046.623,
+          "market_cap": 125431816192.0,
+          "notes": [
+            "expensive_pe",
+            "peg_attractive",
+            "high_rev_growth",
+            "high_leverage"
+          ]
+        }
+      },
+      "reasoning": [
+        "technical=+0.83",
+        "fundamental=+0.05",
+        "sentiment=+0.00",
+        "macro=+0.21",
+        "risk=+0.00",
+        "below_threshold (|combined|=0.33 < 0.70 or positive=2, negative=0)"
+      ]
+    },
+    {
+      "symbol": "DELL",
+      "action": "hold",
+      "confidence": 0.53,
+      "combined_score": 0.43,
+      "signal_scores": {
+        "technical": 0.832,
+        "fundamental": 0.538,
+        "sentiment": 0.0,
+        "macro": 0.207,
+        "risk": 0.0
+      },
+      "signal_details": {
+        "technical": {
+          "symbol": "DELL",
+          "score": 0.832,
+          "trend": 0.96,
+          "momentum": 0.938,
+          "volatility": -0.243,
+          "atr": 9.0,
+          "rsi": 72.5,
+          "price": 212.36,
+          "ema50": 162.78,
+          "ema200": 139.22,
+          "notes": [
+            "golden_cross_regime",
+            "rsi_overbought"
+          ]
+        },
+        "sentiment": {
+          "symbol": "DELL",
+          "score": 0.0,
+          "article_count": 0,
+          "positive_hits": 0,
+          "negative_hits": 0,
+          "top_headlines": []
+        },
+        "macro": {
+          "regime": "neutral",
+          "score": 0.207,
+          "spy_trend": 0.304,
+          "spy_vs_200ema": 0.063,
+          "vix_level": 28.91,
+          "vix_regime": "normal",
+          "breadth_pct_above_50": 0.64,
+          "notes": [
+            "spy_uptrend",
+            "vixy_ratio_0.91",
+            "breadth_64pct"
+          ]
+        },
+        "fundamental": {
+          "symbol": "DELL",
+          "score": 0.538,
+          "pe": 24.437286,
+          "peg": 0.85,
+          "rev_growth": 0.395,
+          "earnings_growth": 0.573,
+          "roe": null,
+          "debt_to_equity": null,
+          "market_cap": 138074079232.0,
+          "notes": [
+            "peg_attractive",
+            "high_rev_growth"
+          ]
+        }
+      },
+      "reasoning": [
+        "technical=+0.83",
+        "fundamental=+0.54",
+        "sentiment=+0.00",
+        "macro=+0.21",
+        "risk=+0.00",
+        "below_threshold (|combined|=0.43 < 0.70 or positive=3, negative=0)"
+      ]
+    },
+    {
+      "symbol": "ON",
+      "action": "hold",
+      "confidence": 0.343,
+      "combined_score": 0.293,
+      "signal_scores": {
+        "technical": 0.832,
+        "fundamental": -0.144,
+        "sentiment": 0.0,
+        "macro": 0.207,
+        "risk": 0.0
+      },
+      "signal_details": {
+        "technical": {
+          "symbol": "ON",
+          "score": 0.832,
+          "trend": 0.906,
+          "momentum": 0.984,
+          "volatility": -0.109,
+          "atr": 3.08,
+          "rsi": 83.9,
+          "price": 86.91,
+          "ema50": 66.46,
+          "ema200": 58.83,
+          "notes": [
+            "golden_cross_regime",
+            "rsi_overbought"
+          ]
+        },
+        "sentiment": {
+          "symbol": "ON",
+          "score": 0.0,
+          "article_count": 0,
+          "positive_hits": 0,
+          "negative_hits": 0,
+          "top_headlines": []
+        },
+        "macro": {
+          "regime": "neutral",
+          "score": 0.207,
+          "spy_trend": 0.304,
+          "spy_vs_200ema": 0.063,
+          "vix_level": 28.91,
+          "vix_regime": "normal",
+          "breadth_pct_above_50": 0.64,
+          "notes": [
+            "spy_uptrend",
+            "vixy_ratio_0.91",
+            "breadth_64pct"
+          ]
+        },
+        "fundamental": {
+          "symbol": "ON",
+          "score": -0.144,
+          "pe": 299.68967,
+          "peg": 0.32,
+          "rev_growth": -0.112,
+          "earnings_growth": -0.487,
+          "roe": 0.01498,
+          "debt_to_equity": 42.294,
+          "market_cap": 34244327424.0,
+          "notes": [
+            "expensive_pe",
+            "peg_attractive",
+            "rev_declining"
+          ]
+        }
+      },
+      "reasoning": [
+        "technical=+0.83",
+        "fundamental=-0.14",
+        "sentiment=+0.00",
+        "macro=+0.21",
+        "risk=+0.00",
+        "below_threshold (|combined|=0.29 < 0.70 or positive=2, negative=1)"
+      ]
+    }
+  ]
+}

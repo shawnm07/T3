@@ -1,0 +1,78 @@
+{
+  "date": "2026-04-23",
+  "equity": 99433.94,
+  "cash": 60501.1,
+  "daily_return": 0.0026,
+  "daily_vs_spy": -0.0075,
+  "period_return": 0,
+  "period_vs_spy": -0.0422,
+  "spy_daily": 0.0101,
+  "spy_30d": 0.0422,
+  "positions_count": 7,
+  "trades_today": 0,
+  "positions": [
+    {
+      "symbol": "AMD",
+      "side": "PositionSide.LONG",
+      "qty": 17.0,
+      "avg_entry": 296.07,
+      "current_price": 303.46,
+      "pnl_pct": 0.025,
+      "market_value": 5109.69
+    },
+    {
+      "symbol": "ARW",
+      "side": "PositionSide.LONG",
+      "qty": 47.0,
+      "avg_entry": 181.23,
+      "current_price": 181.54,
+      "pnl_pct": 0.0017,
+      "market_value": 8532.38
+    },
+    {
+      "symbol": "AVGO",
+      "side": "PositionSide.LONG",
+      "qty": 12.0,
+      "avg_entry": 408.83,
+      "current_price": 422.65,
+      "pnl_pct": 0.0338,
+      "market_value": 5011.2
+    },
+    {
+      "symbol": "FIX",
+      "side": "PositionSide.LONG",
+      "qty": 3.0,
+      "avg_entry": 1726.1333,
+      "current_price": 1724.49,
+      "pnl_pct": -0.001,
+      "market_value": 5189.97
+    },
+    {
+      "symbol": "GEV",
+      "side": "PositionSide.LONG",
+      "qty": 5.0,
+      "avg_entry": 1121.84,
+      "current_price": 1127.56,
+      "pnl_pct": 0.0051,
+      "market_value": 5618.6
+    },
+    {
+      "symbol": "MU",
+      "side": "PositionSide.LONG",
+      "qty": 9.0,
+      "avg_entry": 476.6,
+      "current_price": 487.48,
+      "pnl_pct": 0.0228,
+      "market_value": 4320.0
+    },
+    {
+      "symbol": "VRT",
+      "side": "PositionSide.LONG",
+      "qty": 17.0,
+      "avg_entry": 302.64,
+      "current_price": 305.14,
+      "pnl_pct": 0.0083,
+      "market_value": 5151.0
+    }
+  ]
+}

@@ -1,0 +1,277 @@
+{
+  "ts": "2026-04-22T18:43:25.040933+00:00",
+  "equity": 99534.1,
+  "positions_count": 4,
+  "macro": {
+    "regime": "neutral",
+    "score": 0.173,
+    "spy_trend": 0.34,
+    "spy_vs_200ema": 0.071,
+    "vix_level": 28.42,
+    "vix_regime": "normal",
+    "breadth_pct_above_50": 0.54,
+    "notes": [
+      "spy_uptrend",
+      "vixy_ratio_0.9",
+      "breadth_54pct"
+    ]
+  },
+  "kill_switch": {
+    "halted": false,
+    "reasons": [],
+    "weekly_return": 0,
+    "daily_return": 0.0,
+    "trades_today": 4
+  },
+  "candidates_evaluated": 3,
+  "actionable_numeric": 0,
+  "ai_active": false,
+  "ai_verdicts": {},
+  "approved_for_execution": 0,
+  "exits": [],
+  "executions": [],
+  "decisions": [
+    {
+      "symbol": "ON",
+      "action": "hold",
+      "confidence": 0.411,
+      "combined_score": 0.311,
+      "signal_scores": {
+        "technical": 0.845,
+        "fundamental": -0.144,
+        "sentiment": 0.125,
+        "macro": 0.173,
+        "risk": 0.0
+      },
+      "signal_details": {
+        "technical": {
+          "symbol": "ON",
+          "score": 0.845,
+          "trend": 0.925,
+          "momentum": 0.983,
+          "volatility": -0.079,
+          "atr": 3.03,
+          "rsi": 85.2,
+          "price": 89.1,
+          "ema50": 67.35,
+          "ema200": 59.13,
+          "notes": [
+            "golden_cross_regime",
+            "rsi_overbought"
+          ]
+        },
+        "sentiment": {
+          "symbol": "ON",
+          "score": 0.125,
+          "article_count": 3,
+          "positive_hits": 2,
+          "negative_hits": 1,
+          "top_headlines": [
+            "Something Historic Is Happening In Chip ETFs: SOXX And SMH Shatter Records",
+            "This Week's Wolf Pick - ON Semiconductor; ON Gets 11x More Silicon Per Nvidia Rack",
+            "\"Despite A Slowdown In The U.S. Electric Vehicle Market Affecting Joint Ventures Of Automakers And Battery Makers, Domestic Lithium Battery "
+          ]
+        },
+        "macro": {
+          "regime": "neutral",
+          "score": 0.173,
+          "spy_trend": 0.34,
+          "spy_vs_200ema": 0.071,
+          "vix_level": 28.42,
+          "vix_regime": "normal",
+          "breadth_pct_above_50": 0.54,
+          "notes": [
+            "spy_uptrend",
+            "vixy_ratio_0.9",
+            "breadth_54pct"
+          ]
+        },
+        "fundamental": {
+          "symbol": "ON",
+          "score": -0.144,
+          "pe": 307.20688,
+          "peg": 0.32,
+          "rev_growth": -0.112,
+          "earnings_growth": -0.487,
+          "roe": 0.01498,
+          "debt_to_equity": 42.294,
+          "market_cap": 35103289344.0,
+          "notes": [
+            "expensive_pe",
+            "peg_attractive",
+            "rev_declining"
+          ]
+        }
+      },
+      "reasoning": [
+        "technical=+0.84",
+        "fundamental=-0.14",
+        "sentiment=+0.12",
+        "macro=+0.17",
+        "risk=+0.00",
+        "below_threshold (|combined|=0.31 < 0.40 or positive=3, negative=1)"
+      ]
+    },
+    {
+      "symbol": "MPWR",
+      "action": "hold",
+      "confidence": 0.442,
+      "combined_score": 0.342,
+      "signal_scores": {
+        "technical": 0.843,
+        "fundamental": -0.084,
+        "sentiment": 0.25,
+        "macro": 0.173,
+        "risk": 0.0
+      },
+      "signal_details": {
+        "technical": {
+          "symbol": "MPWR",
+          "score": 0.843,
+          "trend": 0.924,
+          "momentum": 0.976,
+          "volatility": -0.068,
+          "atr": 51.29,
+          "rsi": 81.0,
+          "price": 1534.6,
+          "ema50": 1208.66,
+          "ema200": 1006.81,
+          "notes": [
+            "golden_cross_regime",
+            "rsi_overbought"
+          ]
+        },
+        "sentiment": {
+          "symbol": "MPWR",
+          "score": 0.25,
+          "article_count": 1,
+          "positive_hits": 2,
+          "negative_hits": 0,
+          "top_headlines": [
+            "Something Historic Is Happening In Chip ETFs: SOXX And SMH Shatter Records"
+          ]
+        },
+        "macro": {
+          "regime": "neutral",
+          "score": 0.173,
+          "spy_trend": 0.34,
+          "spy_vs_200ema": 0.071,
+          "vix_level": 28.42,
+          "vix_regime": "normal",
+          "breadth_pct_above_50": 0.54,
+          "notes": [
+            "spy_uptrend",
+            "vixy_ratio_0.9",
+            "breadth_54pct"
+          ]
+        },
+        "fundamental": {
+          "symbol": "MPWR",
+          "score": -0.084,
+          "pe": 119.58457,
+          "peg": 2.45,
+          "rev_growth": 0.208,
+          "earnings_growth": -0.862,
+          "roe": 0.19173999,
+          "debt_to_equity": 0.683,
+          "market_cap": 75360272384.0,
+          "notes": [
+            "expensive_pe",
+            "high_rev_growth"
+          ]
+        }
+      },
+      "reasoning": [
+        "technical=+0.84",
+        "fundamental=-0.08",
+        "sentiment=+0.25",
+        "macro=+0.17",
+        "risk=+0.00",
+        "below_threshold (|combined|=0.34 < 0.40 or positive=3, negative=0)"
+      ]
+    },
+    {
+      "symbol": "STX",
+      "action": "hold",
+      "confidence": 0.449,
+      "combined_score": 0.349,
+      "signal_scores": {
+        "technical": 0.84,
+        "fundamental": 0.052,
+        "sentiment": 0.125,
+        "macro": 0.173,
+        "risk": 0.0
+      },
+      "signal_details": {
+        "technical": {
+          "symbol": "STX",
+          "score": 0.84,
+          "trend": 0.978,
+          "momentum": 0.962,
+          "volatility": -0.345,
+          "atr": 27.65,
+          "rsi": 74.6,
+          "price": 576.5,
+          "ema50": 440.98,
+          "ema200": 314.04,
+          "notes": [
+            "golden_cross_regime",
+            "rsi_overbought"
+          ]
+        },
+        "sentiment": {
+          "symbol": "STX",
+          "score": 0.125,
+          "article_count": 4,
+          "positive_hits": 1,
+          "negative_hits": 0,
+          "top_headlines": [
+            "What's Driving Seagate Technology Stock To All-Time Highs?",
+            "Barclays Upgrades Seagate Technology Hldgs to Overweight, Raises Price Target to $625",
+            "UBS Maintains Neutral on Seagate Technology Hldgs, Raises Price Target to $515",
+            "B of A Securities Maintains Buy on Seagate Technology Hldgs, Raises Price Target to $605"
+          ]
+        },
+        "macro": {
+          "regime": "neutral",
+          "score": 0.173,
+          "spy_trend": 0.34,
+          "spy_vs_200ema": 0.071,
+          "vix_level": 28.42,
+          "vix_regime": "normal",
+          "breadth_pct_above_50": 0.54,
+          "notes": [
+            "spy_uptrend",
+            "vixy_ratio_0.9",
+            "breadth_54pct"
+          ]
+        },
+        "fundamental": {
+          "symbol": "STX",
+          "score": 0.052,
+          "pe": 65.1435,
+          "peg": 0.82,
+          "rev_growth": 0.215,
+          "earnings_growth": 0.677,
+          "roe": null,
+          "debt_to_equity": 1046.623,
+          "market_cap": 129155112960.0,
+          "notes": [
+            "expensive_pe",
+            "peg_attractive",
+            "high_rev_growth",
+            "high_leverage"
+          ]
+        }
+      },
+      "reasoning": [
+        "technical=+0.84",
+        "fundamental=+0.05",
+        "sentiment=+0.12",
+        "macro=+0.17",
+        "risk=+0.00",
+        "below_threshold (|combined|=0.35 < 0.40 or positive=3, negative=0)"
+      ]
+    }
+  ]
+}

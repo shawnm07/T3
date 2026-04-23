@@ -1,0 +1,64 @@
+{
+  "date": "2026-04-22",
+  "equity": 99627.47,
+  "cash": 60501.1,
+  "daily_return": 0.0,
+  "daily_vs_spy": -0.0101,
+  "period_return": 0,
+  "period_vs_spy": -0.0422,
+  "spy_daily": 0.0101,
+  "spy_30d": 0.0422,
+  "positions_count": 7,
+  "trades_today": 7,
+  "positions": [
+    {
+      "symbol": "AMD",
+      "side": "PositionSide.LONG",
+      "qty": "17",
+      "mv": "5153.04",
+      "unrealized_pct": 0.0238
+    },
+    {
+      "symbol": "ARW",
+      "side": "PositionSide.LONG",
+      "qty": "47",
+      "mv": "8532.38",
+      "unrealized_pct": 0.0017
+    },
+    {
+      "symbol": "AVGO",
+      "side": "PositionSide.LONG",
+      "qty": "12",
+      "mv": "5070.12",
+      "unrealized_pct": 0.0335
+    },
+    {
+      "symbol": "FIX",
+      "side": "PositionSide.LONG",
+      "qty": "3",
+      "mv": "5173.47",
+      "unrealized_pct": -0.0009
+    },
+    {
+      "symbol": "GEV",
+      "side": "PositionSide.LONG",
+      "qty": "5",
+      "mv": "5634.4",
+      "unrealized_pct": 0.0045
+    },
+    {
+      "symbol": "MU",
+      "side": "PositionSide.LONG",
+      "qty": "9",
+      "mv": "4394.79",
+      "unrealized_pct": 0.0246
+    },
+    {
+      "symbol": "VRT",
+      "side": "PositionSide.LONG",
+      "qty": "17",
+      "mv": "5168.17",
+      "unrealized_pct": 0.0045
+    }
+  ]
+}

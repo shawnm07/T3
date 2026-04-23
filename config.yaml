@@ -1,0 +1,152 @@
+mode: paper
+risk_profile: balanced
+
+risk:
+  max_position_pct: 0.15
+  max_sector_pct: 0.35
+  max_leverage: 1.0
+  stop_loss_atr_mult: 2.0
+  take_profit_atr_mult: 4.0
+  min_confidence: 0.40
+  max_positions: 15
+  min_trade_usd: 500
+  # True-cash floor: operational buffer only (settlement, slippage, immediate response).
+  # Idle capital above this floor is parked in the cash_proxy (SPY) below, not left
+  # sitting as cash. High-conviction trades may dip to cash_reserve_min_pct.
+  cash_reserve_pct: 0.05
+  cash_reserve_min_pct: 0.02
+  high_conviction_threshold: 0.75
+  # Stall-out exit: close longs whose tech score has drifted below this (run is over).
+  # Symmetric for shorts.
+  exit_stall_threshold: 0.10
+
+kill_switch:
+  weekly_drawdown_pct: 0.05
+  daily_drawdown_pct: 0.025
+  approval_threshold_usd: 25000
+  max_daily_trades: 10
+
+universe:
+  include_sp500: true
+  # Russell 1000 superset (~1000 names incl. S&P 500 + mid-caps via iShares IWB).
+  # AI cost is unchanged — AI only runs on top `max_candidates_per_scan`.
+  include_russell_1000: true
+  custom_watchlist:
+    - NVDA
+    - TSLA
+    - AAPL
+    - MSFT
+    - GOOGL
+    - AMZN
+    - META
+    - AMD
+    - PLTR
+    - COIN
+    - AVGO
+    - LLY
+    - UNH
+    - V
+    - JPM
+  crypto:
+    - BTC/USD
+    - ETH/USD
+    - SOL/USD
+  exclude_tickers: []
+
+screener:
+  min_market_cap_usd: 2000000000
+  min_avg_volume: 1000000
+  min_price: 5
+
+signals:
+  weights:
+    macro: 0.15
+    technical: 0.35
+    fundamental: 0.20
+    sentiment: 0.15
+    risk: 0.15
+
+scheduling:
+  timezone: America/New_York
+  premarket_time: "08:30"
+  intraday_times:
+    - "10:00"
+    - "12:00"
+    - "14:00"
+    - "15:30"
+  eod_time: "16:15"
+  crypto_interval_hours: 4
+  weekly_review_day: friday
+  weekly_review_time: "17:00"
+
+overnight:
+  # Pre-close (~5 min before bell) overnight-hold decision.
+  hold_threshold: 0.0         # directional overnight score below this → close the position
+  buy_threshold: 0.35         # new-candidate overnight score must exceed this to open
+  max_new_positions: 3        # cap on fresh overnight buys per preclose run
+  size_multiplier: 0.5        # shrink normal sizing for overnight carry (0..1)
+  scan_candidates: 30         # top-N technical longs to score for overnight gap
+  enable_new_buys: true       # false = only close losers, don't open new overnight trades
+
+benchmark: SPY
+
+cash_proxy:
+  # Park idle cash (above cash_reserve_pct floor) in SPY so uninvested equity
+  # tracks the benchmark instead of sitting at 0% yield. SPY is treated like
+  # cash: auto-sold to fund new positions when real cash is insufficient, and
+  # auto-bought with proceeds from closed positions. SPY is excluded from
+  # max_positions, sector concentration, and normal exit logic.
+  enabled: true
+  symbol: SPY
+  min_rebalance_usd: 500        # don't churn on tiny deltas
+
+macro:
+  # Bearish-day halt: if macro score (SPY trend + VIX + breadth) is deeply negative,
+  # skip NEW entries for the day. Exits still run (close stalled/reversed positions).
+  bearish_halt_score: -0.55
+  # Also halt if VIX regime is 'spike' regardless of composite score.
+  bearish_halt_on_vix_spike: true
+
+rebalance:
+  # On every scan: re-evaluate held positions and redistribute equity toward
+  # higher-conviction names. Trims weak positions, scales up strong ones.
+  enabled: true
+  # Action gates
+  min_delta_pct: 0.15              # skip if |delta| < 15% of current position value
+  min_delta_usd: 500               # also require absolute delta >= $500
+  trim_confidence_floor: 0.40      # only TRIM a position when blended conf < 0.40
+  add_confidence_floor: 0.55       # only ADD to a position when blended conf >= 0.55
+  winner_profit_threshold: 0.03    # don't trim if unrealized pnl > +3% AND tech still positive
+  # AI budget for held-position analysis
+  rerun_ai_on_score_delta: 0.15    # re-ask AI when tech score has moved this much since last scan
+  max_ai_reruns_per_scan: 8        # cap AI reruns per scan to control cost
+  # Bearish-day override: allow add when AI conviction is exceptional
+  bearish_override_conf: 0.85
+
+halt_exits:
+  # On kill-switch halt: keep stop-losses live, no new entries, but still allow
+  # AI-recommended profit-taking or damage-control exits. Conservative mode.
+  enabled: true
+  min_ai_confidence: 0.60          # AI must be this confident that closing is right
+
+ai:
+  enabled: true                    # if true + ANTHROPIC_API_KEY set, runs subagents each scan
+  model: claude-sonnet-4-6         # arbiter + risk-manager (full reasoning)
+  haiku_model: claude-haiku-4-5-20251001  # technical/fundamental/sentiment analysts (fast, cheap)
+  max_candidates_per_scan: 5       # top-N by numeric score to send to AI
+  min_numeric_combined_for_ai: 0.30  # pre-filter: only analyze these
+  parallel_analyst_calls: true     # technical/fundamental/sentiment agents run concurrently
+  max_tokens_per_call: 1500
+  temperature: 0.3
+  weight: 0.6                      # AI confidence blend weight vs numeric (0..1)
+  timeout_seconds: 45
+
+telegram:
+  enabled: true                    # if true + TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID set, sends notifications
+  notify_premarket: true           # send premarket brief notifications
+  notify_scans: true               # send detailed scan execution summaries
+  notify_eod: true                 # send end-of-day P&L report
+  notify_weekly: true              # send weekly performance review
+  notify_errors: true              # send immediate alerts on errors/halts
+  include_ai_votes: true           # show AI agent approvals in scan notifications
+

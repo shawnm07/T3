@@ -1,0 +1,211 @@
+"""AI pipeline: for each top candidate, run analyst agents in parallel, then arbiter.
+
+Inputs come from the numeric pipeline (technicals, fundamentals, sentiment, macro).
+Output is a final {action, confidence, thesis, exit_conditions} dict that the
+orchestrator blends with the numeric score.
+"""
+from __future__ import annotations
+import asyncio
+import logging
+from dataclasses import dataclass, field
+from typing import Any
+
+from src.ai_research import AIResearcher
+from src.config import Config
+from src.decision import TradeDecision
+
+log = logging.getLogger(__name__)
+
+
+@dataclass
+class AIVerdict:
+    symbol: str
+    final_action: str            # "buy" | "sell_short" | "pass"
+    ai_confidence: float         # 0..1
+    agent_grades: dict[str, str] = field(default_factory=dict)
+    thesis: str = ""
+    exit_conditions: list[str] = field(default_factory=list)
+    disagreements: list[str] = field(default_factory=list)
+    errors: list[str] = field(default_factory=list)
+    raw_outputs: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "symbol": self.symbol,
+            "final_action": self.final_action,
+            "ai_confidence": round(self.ai_confidence, 3),
+            "agent_grades": self.agent_grades,
+            "thesis": self.thesis,
+            "exit_conditions": self.exit_conditions,
+            "disagreements": self.disagreements,
+            "errors": self.errors,
+        }
+
+
+def _truncate_headlines(headlines: list[str], limit: int = 8) -> list[str]:
+    return [h for h in headlines if h][:limit]
+
+
+class AIPipeline:
+    def __init__(self, config: Config, researcher: AIResearcher | None = None):
+        self.cfg = config
+        self.ai = researcher or AIResearcher(config)
+
+    async def analyze_candidate(
+        self,
+        symbol: str,
+        numeric_decision: TradeDecision,
+        macro_ctx: dict[str, Any],
+        portfolio_ctx: dict[str, Any],
+    ) -> AIVerdict:
+        """Run technical + fundamental + sentiment agents in parallel, then arbiter."""
+        details = numeric_decision.signal_details or {}
+        technical = details.get("technical", {})
+        fundamental = details.get("fundamental", {})
+        sentiment = details.get("sentiment", {})
+
+        tech_ctx = {
+            "symbol": symbol,
+            "direction_hypothesis": "long" if numeric_decision.combined_score > 0 else "short",
+            "technical_numbers": technical,
+            "macro_backdrop": {
+                "regime": macro_ctx.get("regime"),
+                "score": macro_ctx.get("score"),
+                "notes": macro_ctx.get("notes", []),
+            },
+        }
+        fund_ctx = {
+            "symbol": symbol,
+            "fundamentals_numbers": fundamental or {"note": "yfinance returned no data"},
+            "direction_hypothesis": tech_ctx["direction_hypothesis"],
+        }
+        sent_ctx = {
+            "symbol": symbol,
+            "sentiment_numbers": {
+                "score": sentiment.get("score"),
+                "article_count": sentiment.get("article_count"),
+                "positive_hits": sentiment.get("positive_hits"),
+                "negative_hits": sentiment.get("negative_hits"),
+            },
+            "recent_headlines": _truncate_headlines(sentiment.get("top_headlines", []), 8),
+        }
+
+        # Analyst agents use Haiku (fast, cheap); arbiter uses Sonnet (full reasoning).
+        haiku = self.ai.haiku_model
+        parallel = self.cfg.get("ai", "parallel_analyst_calls", default=True)
+        if parallel:
+            tech_task = self.ai.call_agent("technical-analyst", tech_ctx, model=haiku)
+            fund_task = self.ai.call_agent("fundamental-analyst", fund_ctx, model=haiku)
+            sent_task = self.ai.call_agent("sentiment-analyst", sent_ctx, model=haiku)
+            tech_out, fund_out, sent_out = await asyncio.gather(
+                tech_task, fund_task, sent_task, return_exceptions=True
+            )
+        else:
+            tech_out = await self.ai.call_agent("technical-analyst", tech_ctx, model=haiku)
+            fund_out = await self.ai.call_agent("fundamental-analyst", fund_ctx, model=haiku)
+            sent_out = await self.ai.call_agent("sentiment-analyst", sent_ctx, model=haiku)
+
+        errors: list[str] = []
+        outputs = {}
+        for name, out in (("technical", tech_out), ("fundamental", fund_out), ("sentiment", sent_out)):
+            if isinstance(out, Exception):
+                errors.append(f"{name}: {out}")
+                outputs[name] = {"_error": str(out)}
+            elif isinstance(out, dict) and out.get("_error"):
+                errors.append(f"{name}: {out['_error']}")
+                outputs[name] = out
+            else:
+                outputs[name] = out
+
+        arbiter_ctx = {
+            "symbol": symbol,
+            "numeric_decision": numeric_decision.to_dict(),
+            "technical_analyst": outputs["technical"],
+            "fundamental_analyst": outputs["fundamental"],
+            "sentiment_analyst": outputs["sentiment"],
+            "macro": macro_ctx,
+            "portfolio": portfolio_ctx,
+        }
+        arbiter_out = await self.ai.call_agent("decision-arbiter", arbiter_ctx)
+        if isinstance(arbiter_out, dict) and arbiter_out.get("_error"):
+            errors.append(f"arbiter: {arbiter_out['_error']}")
+
+        # Extract final verdict from arbiter
+        final_action = (arbiter_out or {}).get("final_action", "pass")
+        if final_action not in ("buy", "sell_short", "pass"):
+            final_action = "pass"
+        ai_confidence = float((arbiter_out or {}).get("confidence", 0.0) or 0.0)
+        agent_grades = (arbiter_out or {}).get("agent_grades", {}) or {}
+        thesis = (arbiter_out or {}).get("thesis", "") or ""
+        exits = (arbiter_out or {}).get("exit_conditions", []) or []
+        disagreements = (arbiter_out or {}).get("disagreements", []) or []
+
+        return AIVerdict(
+            symbol=symbol,
+            final_action=final_action,
+            ai_confidence=ai_confidence,
+            agent_grades=agent_grades,
+            thesis=thesis,
+            exit_conditions=exits if isinstance(exits, list) else [str(exits)],
+            disagreements=disagreements if isinstance(disagreements, list) else [str(disagreements)],
+            errors=errors,
+            raw_outputs=outputs | {"arbiter": arbiter_out},
+        )
+
+    async def portfolio_risk_check(
+        self,
+        portfolio_ctx: dict[str, Any],
+        proposed_trades: list[dict[str, Any]],
+        kill_state: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Ask risk-manager agent to review the proposed book."""
+        ctx = {
+            "portfolio": portfolio_ctx,
+            "proposed_trades": proposed_trades,
+            "kill_switch_state": kill_state,
+        }
+        return await self.ai.call_agent("risk-manager", ctx)
+
+
+def run_ai_on_candidates(
+    config: Config,
+    candidates: list[TradeDecision],
+    macro_ctx: dict[str, Any],
+    portfolio_ctx: dict[str, Any],
+) -> dict[str, AIVerdict]:
+    """Synchronous entry point that executes the async pipeline and returns verdicts."""
+    ai = AIResearcher(config)
+    if not ai.available():
+        log.info("AI research unavailable (enabled=%s, key=%s) — skipping",
+                 ai.enabled, bool(ai.api_key))
+        return {}
+
+    max_n = config.get("ai", "max_candidates_per_scan", default=5)
+    min_score = config.get("ai", "min_numeric_combined_for_ai", default=0.30)
+    filtered = [
+        c for c in candidates
+        if abs(c.combined_score) >= min_score and c.action in ("buy", "sell_short", "hold")
+    ]
+    filtered.sort(key=lambda c: abs(c.combined_score), reverse=True)
+    filtered = filtered[:max_n]
+    if not filtered:
+        log.info("No candidates meet AI threshold (min combined=%s)", min_score)
+        return {}
+
+    pipeline = AIPipeline(config, ai)
+
+    async def _all() -> dict[str, AIVerdict]:
+        tasks = [
+            pipeline.analyze_candidate(c.symbol, c, macro_ctx, portfolio_ctx)
+            for c in filtered
+        ]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        out: dict[str, AIVerdict] = {}
+        for c, r in zip(filtered, results):
+            if isinstance(r, Exception):
+                log.warning("AI analysis for %s failed: %s", c.symbol, r)
+                continue
+            out[c.symbol] = r
+        return out
+
+    return asyncio.run(_all())

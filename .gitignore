@@ -1,0 +1,13 @@
+.env
+.env.*
+!.env.example
+*.log
+__pycache__/
+*.pyc
+.venv/
+venv/
+data/cache/
+data/research/*.json
+data/trades.jsonl
+data/state/
+.pytest_cache/

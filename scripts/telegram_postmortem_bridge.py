@@ -204,8 +204,18 @@ def handle_reject(branch: str, token: str, chat_id: str) -> None:
 
 
 def process_replies(state: dict, token: str, chat_id: str) -> None:
+    first_run = state.get("last_update_id", 0) == 0 and not state.get("seeded")
     offset = state.get("last_update_id", 0)
     updates = tg_poll(token, offset)
+    # On the very first run (no prior offset), don't retro-act on historical
+    # messages — just seed the offset to the current max and return.
+    if first_run and updates:
+        state["last_update_id"] = max((u.get("update_id", 0) for u in updates), default=0)
+        state["seeded"] = True
+        log.info("seeded bridge state to update_id=%s (skipping historical replies)",
+                 state["last_update_id"])
+        return
+    state["seeded"] = True
     cutoff = datetime.now(timezone.utc).timestamp() - 48 * 3600
     max_seen = offset
     for u in updates:

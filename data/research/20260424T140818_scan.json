@@ -1,0 +1,2199 @@
+{
+  "ts": "2026-04-24T14:08:18.914661+00:00",
+  "equity": 101216.33,
+  "positions_count": 8,
+  "macro": {
+    "regime": "neutral",
+    "score": 0.216,
+    "spy_trend": 0.333,
+    "spy_vs_200ema": 0.069,
+    "vix_level": 28.495,
+    "vix_regime": "normal",
+    "breadth_pct_above_50": 0.6326530612244898,
+    "notes": [
+      "spy_uptrend",
+      "vixy_ratio_0.92",
+      "breadth_63pct"
+    ]
+  },
+  "kill_switch": {
+    "halted": false,
+    "reasons": [],
+    "weekly_return": 0.004258988194756563,
+    "daily_return": 0.005067232272614852,
+    "trades_today": 0
+  },
+  "candidates_evaluated": 25,
+  "actionable_numeric": 6,
+  "ai_active": true,
+  "ai_verdicts": {
+    "VRT": {
+      "symbol": "VRT",
+      "final_action": "pass",
+      "ai_confidence": 0.0,
+      "agent_grades": {},
+      "thesis": "",
+      "exit_conditions": [],
+      "disagreements": [],
+      "errors": [
+        "arbiter: Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': '`temperature` is deprecated for this model.'}, 'request_id': 'req_011CaNj9LunMgkSJEsKthhAw'}"
+      ]
+    },
+    "FIX": {
+      "symbol": "FIX",
+      "final_action": "pass",
+      "ai_confidence": 0.0,
+      "agent_grades": {},
+      "thesis": "",
+      "exit_conditions": [],
+      "disagreements": [],
+      "errors": [
+        "arbiter: Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': '`temperature` is deprecated for this model.'}, 'request_id': 'req_011CaNj9MZj4pmJugKFbvH1a'}"
+      ]
+    },
+    "MU": {
+      "symbol": "MU",
+      "final_action": "pass",
+      "ai_confidence": 0.0,
+      "agent_grades": {},
+      "thesis": "",
+      "exit_conditions": [],
+      "disagreements": [],
+      "errors": [
+        "arbiter: Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': '`temperature` is deprecated for this model.'}, 'request_id': 'req_011CaNj9aR8gq6So5et563cA'}"
+      ]
+    },
+    "SNDK": {
+      "symbol": "SNDK",
+      "final_action": "pass",
+      "ai_confidence": 0.0,
+      "agent_grades": {},
+      "thesis": "",
+      "exit_conditions": [],
+      "disagreements": [],
+      "errors": [
+        "arbiter: Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': '`temperature` is deprecated for this model.'}, 'request_id': 'req_011CaNj9P2Xb1YaBhyEtxqJW'}"
+      ]
+    },
+    "DELL": {
+      "symbol": "DELL",
+      "final_action": "pass",
+      "ai_confidence": 0.0,
+      "agent_grades": {},
+      "thesis": "",
+      "exit_conditions": [],
+      "disagreements": [],
+      "errors": [
+        "arbiter: Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': '`temperature` is deprecated for this model.'}, 'request_id': 'req_011CaNj9QDxza97kmUocJPUQ'}"
+      ]
+    }
+  },
+  "approved_for_execution": 0,
+  "exits": [],
+  "rebalance": [
+    {
+      "dry_run": true,
+      "symbol": "FIX",
+      "side": "buy",
+      "delta_notional": 2677.09,
+      "current_notional": 12674.54,
+      "target_notional": 15351.63,
+      "blended_confidence": 0.732,
+      "tech_score": 0.83,
+      "unrealized_plpc": 0.0179,
+      "reason": "add -> 15.2% (conf=0.73, tech=+0.83, pnl=+1.8%)",
+      "ai_used": false,
+      "ai_grades": {}
+    },
+    {
+      "dry_run": true,
+      "symbol": "IRDM",
+      "side": "buy",
+      "delta_notional": 972.04,
+      "current_notional": 3888.15,
+      "target_notional": 13820.72,
+      "blended_confidence": 0.695,
+      "tech_score": 0.736,
+      "unrealized_plpc": -0.0938,
+      "reason": "add -> 13.7% (conf=0.69, tech=+0.74, pnl=-9.4%)",
+      "ai_used": false,
+      "ai_grades": {}
+    },
+    {
+      "dry_run": true,
+      "symbol": "VRT",
+      "side": "buy",
+      "delta_notional": 2520.04,
+      "current_notional": 12386.72,
+      "target_notional": 14906.76,
+      "blended_confidence": 0.721,
+      "tech_score": 0.803,
+      "unrealized_plpc": 0.0198,
+      "reason": "add -> 14.7% (conf=0.72, tech=+0.80, pnl=+2.0%)",
+      "ai_used": false,
+      "ai_grades": {}
+    }
+  ],
+  "executions": [],
+  "cash_proxy": null,
+  "decisions": [
+    {
+      "symbol": "LCID",
+      "action": "hold",
+      "confidence": 0.285,
+      "combined_score": -0.285,
+      "signal_scores": {
+        "technical": -0.951,
+        "fundamental": -0.018,
+        "sentiment": 0.125,
+        "macro": 0.216,
+        "risk": 0.0
+      },
+      "signal_details": {
+        "technical": {
+          "symbol": "LCID",
+          "score": -0.951,
+          "trend": -0.952,
+          "momentum": -0.964,
+          "volatility": -0.895,
+          "atr": 0.64,
+          "rsi": 26.9,
+          "price": 6.21,
+          "ema50": 9.23,
+          "ema200": 14.29,
+          "notes": [
+            "below_200ema_regime",
+            "rsi_oversold"
+          ]
+        },
+        "sentiment": {
+          "symbol": "LCID",
+          "score": 0.125,
+          "article_count": 8,
+          "positive_hits": 2,
+          "negative_hits": 1,
+          "top_headlines": [
+            "Intel, AMD, Palantir, Skillz Inc. And Lucid Group: Why These 5 Stocks Are On Investors' Radars Today",
+            "10 Consumer Discretionary Stocks Whale Activity In Today's Session",
+            "Lucid Stock Hits New All-Time Low As Dilution Fears Overshadow Uber Robotaxi Deal",
+            "Lucid Stock Rebounds From All-Time Low As Uber Reveals Major Ownership Stake",
+            "Opendoor (OPEN) And Offerpad (OPAD) Spike In After-Hours Trading: What's Going On?"
+          ]
+        },
+        "macro": {
+          "regime": "neutral",
+          "score": 0.216,
+          "spy_trend": 0.333,
+          "spy_vs_200ema": 0.069,
+          "vix_level": 28.495,
+          "vix_regime": "normal",
+          "breadth_pct_above_50": 0.6326530612244898,
+          "notes": [
+            "spy_uptrend",
+            "vixy_ratio_0.92",
+            "breadth_63pct"
+          ]
+        },
+        "fundamental": {
+          "symbol": "LCID",
+          "score": -0.018,
+          "pe": null,
+          "peg": null,
+          "rev_growth": 1.229,
+          "earnings_growth": null,
+          "roe": -0.66019994,
+          "debt_to_equity": 106.529,
+          "market_cap": 2272285952.0,
+          "notes": [
+            "high_rev_growth"
+          ]
+        },
+        "earnings": {
+          "symbol": "LCID",
+          "next_earnings_date": "2026-05-05",
+          "days_until_earnings": 11
+        }
+      },
+      "reasoning": [
+        "technical=-0.95",
+        "fundamental=-0.02",
+        "sentiment=+0.12",
+        "macro=+0.22",
+        "risk=+0.00",
+        "below_threshold (|combined|=0.29 < 0.40 or positive=2, negative=1)"
+      ]
+    },
+    {
+      "symbol": "ONTO",
+      "action": "hold",
+      "confidence": 0.336,
+      "combined_score": 0.286,
+      "signal_scores": {
+        "technical": 0.842,
+        "fundamental": -0.204,
+        "sentiment": 0.0,
+        "macro": 0.216,
+        "risk": 0.0
+      },
+      "signal_details": {
+        "technical": {
+          "symbol": "ONTO",
+          "score": 0.842,
+          "trend": 0.966,
+          "momentum": 0.98,
+          "volatility": -0.324,
+          "atr": 14.08,
+          "rsi": 74.2,
+          "price": 300.8,
+          "ema50": 232.28,
+          "ema200": 181.01,
+          "notes": [
+            "golden_cross_regime",
+            "rsi_overbought"
+          ]
+        },
+        "sentiment": {
+          "symbol": "ONTO",
+          "score": 0.0,
+          "article_count": 0,
+          "positive_hits": 0,
+          "negative_hits": 0,
+          "top_headlines": []
+        },
+        "macro": {
+          "regime": "neutral",
+          "score": 0.216,
+          "spy_trend": 0.333,
+          "spy_vs_200ema": 0.069,
+          "vix_level": 28.495,
+          "vix_regime": "normal",
+          "breadth_pct_above_50": 0.6326530612244898,
+          "notes": [
+            "spy_uptrend",
+            "vixy_ratio_0.92",
+            "breadth_63pct"
+          ]
+        },
+        "fundamental": {
+          "symbol": "ONTO",
+          "score": -0.204,
+          "pe": 108.3777,
+          "peg": 1.43,
+          "rev_growth": 0.011,
+          "earnings_growth": -0.782,
+          "roe": 0.067930005,
+          "debt_to_equity": 0.832,
+          "market_cap": 14987240448.0,
+          "notes": [
+            "expensive_pe"
+          ]
+        },
+        "earnings": {
+          "symbol": "ONTO",
+          "next_earnings_date": "2026-05-05",
+          "days_until_earnings": 11
+        }
+      },
+      "reasoning": [
+        "technical=+0.84",
+        "fundamental=-0.20",
+        "sentiment=+0.00",
+        "macro=+0.22",
+        "risk=+0.00",
+        "below_threshold (|combined|=0.29 < 0.40 or positive=2, negative=1)"
+      ]
+    },
+    {
+      "symbol": "SNDK",
+      "action": "buy",
+      "confidence": 0.535,
+      "combined_score": 0.435,
+      "signal_scores": {
+        "technical": 0.841,
+        "fundamental": 0.447,
+        "sentiment": 0.125,
+        "macro": 0.216,
+        "risk": 0.0
+      },
+      "signal_details": {
+        "technical": {
+          "symbol": "SNDK",
+          "score": 0.841,
+          "trend": 0.997,
+          "momentum": 0.989,
+          "volatility": -0.534,
+          "atr": 58.5,
+          "rsi": 67.1,
+          "price": 978.03,
+          "ema50": 728.68,
+          "ema200": 416.16,
+          "notes": [
+            "golden_cross_regime"
+          ]
+        },
+        "sentiment": {
+          "symbol": "SNDK",
+          "score": 0.125,
+          "article_count": 7,
+          "positive_hits": 2,
+          "negative_hits": 1,
+          "top_headlines": [
+            "These 6 S&P 500 Stocks Are Up Over 100% In 2026: They're All In The Same Trade",
+            "Cramer Names 'The Stocks That Got Away' \u2014 SanDisk Is Number 1",
+            "Why SanDisk Stock Is Retreating From Wednesday's All-Time Highs",
+            "Sandisk, Lumentum Rally Sparks Bearish Plays As Tradr Rolls Out 2X Short ETFs",
+            "AI Memory Shortage Sparking 'Red-Hot' Rally: Why Jim Cramer Says Micron is Just Getting Started"
+          ]
+        },
+        "macro": {
+          "regime": "neutral",
+          "score": 0.216,
+          "spy_trend": 0.333,
+          "spy_vs_200ema": 0.069,
+          "vix_level": 28.495,
+          "vix_regime": "normal",
+          "breadth_pct_above_50": 0.6326530612244898,
+          "notes": [
+            "spy_uptrend",
+            "vixy_ratio_0.92",
+            "breadth_63pct"
+          ]
+        },
+        "fundamental": {
+          "symbol": "SNDK",
+          "score": 0.447,
+          "pe": null,
+          "peg": null,
+          "rev_growth": 0.612,
+          "earnings_growth": 6.18,
+          "roe": -0.09372,
+          "debt_to_equity": 7.96,
+          "market_cap": 144501358592.0,
+          "notes": [
+            "high_rev_growth"
+          ]
+        },
+        "earnings": {
+          "symbol": "SNDK",
+          "next_earnings_date": "2026-04-30",
+          "days_until_earnings": 6
+        }
+      },
+      "reasoning": [
+        "technical=+0.84",
+        "fundamental=+0.45",
+        "sentiment=+0.12",
+        "macro=+0.22",
+        "risk=+0.00"
+      ]
+    },
+    {
+      "symbol": "FIX",
+      "action": "buy",
+      "confidence": 0.586,
+      "combined_score": 0.486,
+      "signal_scores": {
+        "technical": 0.831,
+        "fundamental": 0.253,
+        "sentiment": 0.75,
+        "macro": 0.216,
+        "risk": 0.0
+      },
+      "signal_details": {
+        "technical": {
+          "symbol": "FIX",
+          "score": 0.831,
+          "trend": 0.936,
+          "momentum": 0.95,
+          "volatility": -0.17,
+          "atr": 69.04,
+          "rsi": 73.9,
+          "price": 1790.0,
+          "ema50": 1463.2,
+          "ema200": 1085.6,
+          "notes": [
+            "golden_cross_regime",
+            "rsi_overbought"
+          ]
+        },
+        "sentiment": {
+          "symbol": "FIX",
+          "score": 0.75,
+          "article_count": 9,
+          "positive_hits": 6,
+          "negative_hits": 0,
+          "top_headlines": [
+            "Market-Moving News for April 24th",
+            "Comfort Systems Stock Hits 52-Week High - Here's Why",
+            "12 Industrials Stocks Moving In Thursday's After-Market Session",
+            "Comfort Systems USA Q1 EPS $10.51 Beats $6.78 Estimate, Sales $2.865B Beat $2.384B Estimate",
+            "Here's How Much You Would Have Made Owning Comfort Systems USA Stock In The Last 5 Years"
+          ]
+        },
+        "macro": {
+          "regime": "neutral",
+          "score": 0.216,
+          "spy_trend": 0.333,
+          "spy_vs_200ema": 0.069,
+          "vix_level": 28.495,
+          "vix_regime": "normal",
+          "breadth_pct_above_50": 0.6326530612244898,
+          "notes": [
+            "spy_uptrend",
+            "vixy_ratio_0.92",
+            "breadth_63pct"
+          ]
+        },
+        "fundamental": {
+          "symbol": "FIX",
+          "score": 0.253,
+          "pe": 62.01591,
+          "peg": 1.44,
+          "rev_growth": 0.01,
+          "earnings_growth": 0.388,
+          "roe": 0.49238998,
+          "debt_to_equity": 45.489,
+          "market_cap": 63080632320.0,
+          "notes": [
+            "expensive_pe",
+            "high_roe"
+          ]
+        },
+        "earnings": {
+          "symbol": "FIX",
+          "next_earnings_date": "2026-04-23",
+          "days_until_earnings": -1
+        }
+      },
+      "reasoning": [
+        "technical=+0.83",
+        "fundamental=+0.25",
+        "sentiment=+0.75",
+        "macro=+0.22",
+        "risk=+0.00"
+      ]
+    },
+    {
+      "symbol": "INGM",
+      "action": "hold",
+      "confidence": 0.482,
+      "combined_score": 0.382,
+      "signal_scores": {
+        "technical": 0.827,
+        "fundamental": 0.209,
+        "sentiment": 0.125,
+        "macro": 0.216,
+        "risk": 0.0
+      },
+      "signal_details": {
+        "technical": {
+          "symbol": "INGM",
+          "score": 0.827,
+          "trend": 0.892,
+          "momentum": 0.961,
+          "volatility": -0.0,
+          "atr": 0.91,
+          "rsi": 79.0,
+          "price": 30.42,
+          "ema50": 25.21,
+          "ema200": 22.43,
+          "notes": [
+            "golden_cross_regime",
+            "rsi_overbought"
+          ]
+        },
+        "sentiment": {
+          "symbol": "INGM",
+          "score": 0.125,
+          "article_count": 2,
+          "positive_hits": 1,
+          "negative_hits": 0,
+          "top_headlines": [
+            "Goldman Sachs Maintains Neutral on Ingram Micro Holding, Raises Price Target to $30",
+            "RBC Capital Maintains Outperform on Ingram Micro Holding, Raises Price Target to $33"
+          ]
+        },
+        "macro": {
+          "regime": "neutral",
+          "score": 0.216,
+          "spy_trend": 0.333,
+          "spy_vs_200ema": 0.069,
+          "vix_level": 28.495,
+          "vix_regime": "normal",
+          "breadth_pct_above_50": 0.6326530612244898,
+          "notes": [
+            "spy_uptrend",
+            "vixy_ratio_0.92",
+            "breadth_63pct"
+          ]
+        },
+        "fundamental": {
+          "symbol": "INGM",
+          "score": 0.209,
+          "pe": 21.920862,
+          "peg": null,
+          "rev_growth": 0.115,
+          "earnings_growth": 0.406,
+          "roe": 0.082150005,
+          "debt_to_equity": 86.12,
+          "market_cap": 7058269696.0,
+          "notes": []
+        },
+        "earnings": {
+          "symbol": "INGM",
+          "next_earnings_date": "2026-04-30",
+          "days_until_earnings": 6
+        }
+      },
+      "reasoning": [
+        "technical=+0.83",
+        "fundamental=+0.21",
+        "sentiment=+0.12",
+        "macro=+0.22",
+        "risk=+0.00",
+        "below_threshold (|combined|=0.38 < 0.40 or positive=4, negative=0)"
+      ]
+    },
+    {
+      "symbol": "FLEX",
+      "action": "hold",
+      "confidence": 0.468,
+      "combined_score": 0.368,
+      "signal_scores": {
+        "technical": 0.824,
+        "fundamental": 0.145,
+        "sentiment": 0.125,
+        "macro": 0.216,
+        "risk": 0.0
+      },
+      "signal_details": {
+        "technical": {
+          "symbol": "FLEX",
+          "score": 0.824,
+          "trend": 0.902,
+          "momentum": 0.968,
+          "volatility": -0.111,
+          "atr": 3.16,
+          "rsi": 77.4,
+          "price": 88.8,
+          "ema50": 71.57,
+          "ema200": 61.46,
+          "notes": [
+            "golden_cross_regime",
+            "rsi_overbought"
+          ]
+        },
+        "sentiment": {
+          "symbol": "FLEX",
+          "score": 0.125,
+          "article_count": 1,
+          "positive_hits": 1,
+          "negative_hits": 0,
+          "top_headlines": [
+            "Flex And Teradyne Expand Partnership To Scale Global Robotics Automation And Manufacturing"
+          ]
+        },
+        "macro": {
+          "regime": "neutral",
+          "score": 0.216,
+          "spy_trend": 0.333,
+          "spy_vs_200ema": 0.069,
+          "vix_level": 28.495,
+          "vix_regime": "normal",
+          "breadth_pct_above_50": 0.6326530612244898,
+          "notes": [
+            "spy_uptrend",
+            "vixy_ratio_0.92",
+            "breadth_63pct"
+          ]
+        },
+        "fundamental": {
+          "symbol": "FLEX",
+          "score": 0.145,
+          "pe": 39.82063,
+          "peg": 0.94,
+          "rev_growth": 0.077,
+          "earnings_growth": -0.045,
+          "roe": 0.1685,
+          "debt_to_equity": 97.989,
+          "market_cap": 32649445376.0,
+          "notes": [
+            "peg_attractive"
+          ]
+        },
+        "earnings": {
+          "symbol": "FLEX",
+          "next_earnings_date": "2026-05-06",
+          "days_until_earnings": 12
+        }
+      },
+      "reasoning": [
+        "technical=+0.82",
+        "fundamental=+0.14",
+        "sentiment=+0.12",
+        "macro=+0.22",
+        "risk=+0.00",
+        "below_threshold (|combined|=0.37 < 0.40 or positive=4, negative=0)"
+      ]
+    },
+    {
+      "symbol": "UI",
+      "action": "buy",
+      "confidence": 0.509,
+      "combined_score": 0.409,
+      "signal_scores": {
+        "technical": 0.817,
+        "fundamental": 0.452,
+        "sentiment": 0.0,
+        "macro": 0.216,
+        "risk": 0.0
+      },
+      "signal_details": {
+        "technical": {
+          "symbol": "UI",
+          "score": 0.817,
+          "trend": 0.955,
+          "momentum": 0.936,
+          "volatility": -0.352,
+          "atr": 50.55,
+          "rsi": 68.6,
+          "price": 1044.35,
+          "ema50": 848.17,
+          "ema200": 657.07,
+          "notes": [
+            "golden_cross_regime"
+          ]
+        },
+        "sentiment": {
+          "symbol": "UI",
+          "score": 0.0,
+          "article_count": 0,
+          "positive_hits": 0,
+          "negative_hits": 0,
+          "top_headlines": []
+        },
+        "macro": {
+          "regime": "neutral",
+          "score": 0.216,
+          "spy_trend": 0.333,
+          "spy_vs_200ema": 0.069,
+          "vix_level": 28.495,
+          "vix_regime": "normal",
+          "breadth_pct_above_50": 0.6326530612244898,
+          "notes": [
+            "spy_uptrend",
+            "vixy_ratio_0.92",
+            "breadth_63pct"
+          ]
+        },
+        "fundamental": {
+          "symbol": "UI",
+          "score": 0.452,
+          "pe": 71.3838,
+          "peg": 1.1,
+          "rev_growth": 0.358,
+          "earnings_growth": 0.708,
+          "roe": 1.36083,
+          "debt_to_equity": 11.461,
+          "market_cap": 63204585472.0,
+          "notes": [
+            "expensive_pe",
+            "high_rev_growth",
+            "high_roe"
+          ]
+        },
+        "earnings": {
+          "symbol": "UI",
+          "next_earnings_date": "2026-05-08",
+          "days_until_earnings": 14
+        }
+      },
+      "reasoning": [
+        "technical=+0.82",
+        "fundamental=+0.45",
+        "sentiment=+0.00",
+        "macro=+0.22",
+        "risk=+0.00"
+      ]
+    },
+    {
+      "symbol": "JBL",
+      "action": "hold",
+      "confidence": 0.467,
+      "combined_score": 0.367,
+      "signal_scores": {
+        "technical": 0.817,
+        "fundamental": 0.242,
+        "sentiment": 0.0,
+        "macro": 0.216,
+        "risk": 0.0
+      },
+      "signal_details": {
+        "technical": {
+          "symbol": "JBL",
+          "score": 0.817,
+          "trend": 0.888,
+          "momentum": 0.953,
+          "volatility": -0.047,
+          "atr": 11.08,
+          "rsi": 78.7,
+          "price": 342.67,
+          "ema50": 281.69,
+          "ema200": 236.56,
+          "notes": [
+            "golden_cross_regime",
+            "rsi_overbought"
+          ]
+        },
+        "sentiment": {
+          "symbol": "JBL",
+          "score": 0.0,
+          "article_count": 0,
+          "positive_hits": 0,
+          "negative_hits": 0,
+          "top_headlines": []
+        },
+        "macro": {
+          "regime": "neutral",
+          "score": 0.216,
+          "spy_trend": 0.333,
+          "spy_vs_200ema": 0.069,
+          "vix_level": 28.495,
+          "vix_regime": "normal",
+          "breadth_pct_above_50": 0.6326530612244898,
+          "notes": [
+            "spy_uptrend",
+            "vixy_ratio_0.92",
+            "breadth_63pct"
+          ]
+        },
+        "fundamental": {
+          "symbol": "JBL",
+          "score": 0.242,
+          "pe": 46.226723,
+          "peg": 0.82,
+          "rev_growth": 0.231,
+          "earnings_growth": 0.962,
+          "roe": 0.59696996,
+          "debt_to_equity": 328.91,
+          "market_cap": 36138868736.0,
+          "notes": [
+            "expensive_pe",
+            "peg_attractive",
+            "high_rev_growth",
+            "high_roe",
+            "high_leverage"
+          ]
+        },
+        "earnings": {
+          "symbol": "JBL",
+          "next_earnings_date": "2026-06-16",
+          "days_until_earnings": 53
+        }
+      },
+      "reasoning": [
+        "technical=+0.82",
+        "fundamental=+0.24",
+        "sentiment=+0.00",
+        "macro=+0.22",
+        "risk=+0.00",
+        "below_threshold (|combined|=0.37 < 0.40 or positive=3, negative=0)"
+      ]
+    },
+    {
+      "symbol": "RVMD",
+      "action": "hold",
+      "confidence": 0.389,
+      "combined_score": 0.289,
+      "signal_scores": {
+        "technical": 0.814,
+        "fundamental": -0.234,
+        "sentiment": 0.125,
+        "macro": 0.216,
+        "risk": 0.0
+      },
+      "signal_details": {
+        "technical": {
+          "symbol": "RVMD",
+          "score": 0.814,
+          "trend": 0.942,
+          "momentum": 0.96,
+          "volatility": -0.401,
+          "atr": 6.83,
+          "rsi": 61.1,
+          "price": 133.38,
+          "ema50": 111.97,
+          "ema200": 82.78,
+          "notes": [
+            "golden_cross_regime"
+          ]
+        },
+        "sentiment": {
+          "symbol": "RVMD",
+          "score": 0.125,
+          "article_count": 5,
+          "positive_hits": 1,
+          "negative_hits": 0,
+          "top_headlines": [
+            "Leerink Partners Maintains Outperform on Revolution Medicines, Raises Price Target to $171",
+            "HC Wainwright & Co. Reiterates Buy on Revolution Medicines, Maintains $169 Price Target",
+            "Revolution Medicines To Reveal Updated Phase 1/2 Clinical Data For Daraxonrasib In First Line Metastatic Pancreatic Cancer Across Monotherap",
+            "Revolution Medicines To Reveal Preclinical Data on Innovative Mutant-Targeted Catalytic RAS(ON) Inhibitor At The 2026 AACR Annual Meeting",
+            "Revolution Medicines To Present Results From Phase 3 Clinical Trial For Daraxonrasib Treatment During American Society Of Clinical Oncology "
+          ]
+        },
+        "macro": {
+          "regime": "neutral",
+          "score": 0.216,
+          "spy_trend": 0.333,
+          "spy_vs_200ema": 0.069,
+          "vix_level": 28.495,
+          "vix_regime": "normal",
+          "breadth_pct_above_50": 0.6326530612244898,
+          "notes": [
+            "spy_uptrend",
+            "vixy_ratio_0.92",
+            "breadth_63pct"
+          ]
+        },
+        "fundamental": {
+          "symbol": "RVMD",
+          "score": -0.234,
+          "pe": null,
+          "peg": null,
+          "rev_growth": null,
+          "earnings_growth": null,
+          "roe": -0.58068,
+          "debt_to_equity": 26.185,
+          "market_cap": 28258564096.0,
+          "notes": []
+        },
+        "earnings": {
+          "symbol": "RVMD",
+          "next_earnings_date": "2026-05-06",
+          "days_until_earnings": 12
+        }
+      },
+      "reasoning": [
+        "technical=+0.81",
+        "fundamental=-0.23",
+        "sentiment=+0.12",
+        "macro=+0.22",
+        "risk=+0.00",
+        "below_threshold (|combined|=0.29 < 0.40 or positive=3, negative=1)"
+      ]
+    },
+    {
+      "symbol": "DELL",
+      "action": "buy",
+      "confidence": 0.524,
+      "combined_score": 0.424,
+      "signal_scores": {
+        "technical": 0.813,
+        "fundamental": 0.538,
+        "sentiment": 0.0,
+        "macro": 0.216,
+        "risk": 0.0
+      },
+      "signal_details": {
+        "technical": {
+          "symbol": "DELL",
+          "score": 0.813,
+          "trend": 0.95,
+          "momentum": 0.891,
+          "volatility": -0.214,
+          "atr": 8.65,
+          "rsi": 70.5,
+          "price": 211.59,
+          "ema50": 168.44,
+          "ema200": 141.36,
+          "notes": [
+            "golden_cross_regime",
+            "rsi_overbought"
+          ]
+        },
+        "sentiment": {
+          "symbol": "DELL",
+          "score": 0.0,
+          "article_count": 4,
+          "positive_hits": 0,
+          "negative_hits": 0,
+          "top_headlines": [
+            "IREN Stock Is Trending Overnight: What's Going On?",
+            "Cramer Names 'The Stocks That Got Away' \u2014 SanDisk Is Number 1",
+            "Why Super Micro Computer Shares Are Falling On Thursday?",
+            "Jim Cramer Reveals Trick That Could Change How You Buy High-Flying Stocks\u2014 'Would It Really Kill You...'"
+          ]
+        },
+        "macro": {
+          "regime": "neutral",
+          "score": 0.216,
+          "spy_trend": 0.333,
+          "spy_vs_200ema": 0.069,
+          "vix_level": 28.495,
+          "vix_regime": "normal",
+          "breadth_pct_above_50": 0.6326530612244898,
+          "notes": [
+            "spy_uptrend",
+            "vixy_ratio_0.92",
+            "breadth_63pct"
+          ]
+        },
+        "fundamental": {
+          "symbol": "DELL",
+          "score": 0.538,
+          "pe": 24.350243,
+          "peg": 0.89,
+          "rev_growth": 0.395,
+          "earnings_growth": 0.573,
+          "roe": null,
+          "debt_to_equity": null,
+          "market_cap": 137423962112.0,
+          "notes": [
+            "peg_attractive",
+            "high_rev_growth"
+          ]
+        },
+        "earnings": {
+          "symbol": "DELL",
+          "next_earnings_date": "2026-05-28",
+          "days_until_earnings": 34
+        }
+      },
+      "reasoning": [
+        "technical=+0.81",
+        "fundamental=+0.54",
+        "sentiment=+0.00",
+        "macro=+0.22",
+        "risk=+0.00"
+      ]
+    },
+    {
+      "symbol": "VRT",
+      "action": "buy",
+      "confidence": 0.642,
+      "combined_score": 0.542,
+      "signal_scores": {
+        "technical": 0.805,
+        "fundamental": 0.39,
+        "sentiment": 1.0,
+        "macro": 0.216,
+        "risk": 0.0
+      },
+      "signal_details": {
+        "technical": {
+          "symbol": "VRT",
+          "score": 0.805,
+          "trend": 0.93,
+          "momentum": 0.912,
+          "volatility": -0.261,
+          "atr": 13.93,
+          "rsi": 67.0,
+          "price": 321.25,
+          "ema50": 266.44,
+          "ema200": 200.54,
+          "notes": [
+            "golden_cross_regime"
+          ]
+        },
+        "sentiment": {
+          "symbol": "VRT",
+          "score": 1.0,
+          "article_count": 20,
+          "positive_hits": 9,
+          "negative_hits": 0,
+          "top_headlines": [
+            "AI Did What Trump's Tariffs Didn't: Revive US Manufacturing",
+            "Cramer Names 'The Stocks That Got Away' \u2014 SanDisk Is Number 1",
+            "RBC Capital Maintains Outperform on Vertiv Holdings, Raises Price Target to $356",
+            "TD Cowen Maintains Buy on Vertiv Holdings, Raises Price Target to $347",
+            "Citigroup Maintains Buy on Vertiv Holdings, Raises Price Target to $353"
+          ]
+        },
+        "macro": {
+          "regime": "neutral",
+          "score": 0.216,
+          "spy_trend": 0.333,
+          "spy_vs_200ema": 0.069,
+          "vix_level": 28.495,
+          "vix_regime": "normal",
+          "breadth_pct_above_50": 0.6326530612244898,
+          "notes": [
+            "spy_uptrend",
+            "vixy_ratio_0.92",
+            "breadth_63pct"
+          ]
+        },
+        "fundamental": {
+          "symbol": "VRT",
+          "score": 0.39,
+          "pe": 80.487465,
+          "peg": 1.98,
+          "rev_growth": 0.301,
+          "earnings_growth": 1.357,
+          "roe": 0.45097,
+          "debt_to_equity": 75.21,
+          "market_cap": 123354619904.0,
+          "notes": [
+            "expensive_pe",
+            "high_rev_growth",
+            "high_roe"
+          ]
+        },
+        "earnings": {
+          "symbol": "VRT",
+          "next_earnings_date": "2026-07-29",
+          "days_until_earnings": 96
+        }
+      },
+      "reasoning": [
+        "technical=+0.80",
+        "fundamental=+0.39",
+        "sentiment=+1.00",
+        "macro=+0.22",
+        "risk=+0.00"
+      ]
+    },
+    {
+      "symbol": "KLAC",
+      "action": "hold",
+      "confidence": 0.441,
+      "combined_score": 0.341,
+      "signal_scores": {
+        "technical": 0.802,
+        "fundamental": 0.138,
+        "sentiment": 0.0,
+        "macro": 0.216,
+        "risk": 0.0
+      },
+      "signal_details": {
+        "technical": {
+          "symbol": "KLAC",
+          "score": 0.802,
+          "trend": 0.871,
+          "momentum": 0.94,
+          "volatility": -0.062,
+          "atr": 62.53,
+          "rsi": 73.5,
+          "price": 1889.87,
+          "ema50": 1588.76,
+          "ema200": 1289.08,
+          "notes": [
+            "golden_cross_regime",
+            "rsi_overbought"
+          ]
+        },
+        "sentiment": {
+          "symbol": "KLAC",
+          "score": 0.0,
+          "article_count": 1,
+          "positive_hits": 0,
+          "negative_hits": 0,
+          "top_headlines": [
+            "UBS Maintains Neutral on KLA, Raises Price Target to $1835"
+          ]
+        },
+        "macro": {
+          "regime": "neutral",
+          "score": 0.216,
+          "spy_trend": 0.333,
+          "spy_vs_200ema": 0.069,
+          "vix_level": 28.495,
+          "vix_regime": "normal",
+          "breadth_pct_above_50": 0.6326530612244898,
+          "notes": [
+            "spy_uptrend",
+            "vixy_ratio_0.92",
+            "breadth_63pct"
+          ]
+        },
+        "fundamental": {
+          "symbol": "KLAC",
+          "score": 0.138,
+          "pe": 55.132904,
+          "peg": 2.01,
+          "rev_growth": 0.072,
+          "earnings_growth": 0.409,
+          "roe": 1.00726,
+          "debt_to_equity": 111.778,
+          "market_cap": 248543051776.0,
+          "notes": [
+            "expensive_pe",
+            "high_roe"
+          ]
+        },
+        "earnings": {
+          "symbol": "KLAC",
+          "next_earnings_date": "2026-04-29",
+          "days_until_earnings": 5
+        }
+      },
+      "reasoning": [
+        "technical=+0.80",
+        "fundamental=+0.14",
+        "sentiment=+0.00",
+        "macro=+0.22",
+        "risk=+0.00",
+        "below_threshold (|combined|=0.34 < 0.40 or positive=3, negative=0)"
+      ]
+    },
+    {
+      "symbol": "MTZ",
+      "action": "hold",
+      "confidence": 0.437,
+      "combined_score": 0.337,
+      "signal_scores": {
+        "technical": 0.798,
+        "fundamental": 0.126,
+        "sentiment": 0.0,
+        "macro": 0.216,
+        "risk": 0.0
+      },
+      "signal_details": {
+        "technical": {
+          "symbol": "MTZ",
+          "score": 0.798,
+          "trend": 0.921,
+          "momentum": 0.852,
+          "volatility": -0.068,
+          "atr": 12.68,
+          "rsi": 72.8,
+          "price": 379.67,
+          "ema50": 322.44,
+          "ema200": 247.34,
+          "notes": [
+            "golden_cross_regime",
+            "rsi_overbought"
+          ]
+        },
+        "sentiment": {
+          "symbol": "MTZ",
+          "score": 0.0,
+          "article_count": 0,
+          "positive_hits": 0,
+          "negative_hits": 0,
+          "top_headlines": []
+        },
+        "macro": {
+          "regime": "neutral",
+          "score": 0.216,
+          "spy_trend": 0.333,
+          "spy_vs_200ema": 0.069,
+          "vix_level": 28.495,
+          "vix_regime": "normal",
+          "breadth_pct_above_50": 0.6326530612244898,
+          "notes": [
+            "spy_uptrend",
+            "vixy_ratio_0.92",
+            "breadth_63pct"
+          ]
+        },
+        "fundamental": {
+          "symbol": "MTZ",
+          "score": 0.126,
+          "pe": 74.90297,
+          "peg": 2.29,
+          "rev_growth": 0.158,
+          "earnings_growth": 0.928,
+          "roe": 0.13351,
+          "debt_to_equity": 83.945,
+          "market_cap": 29817403392.0,
+          "notes": [
+            "expensive_pe"
+          ]
+        },
+        "earnings": {
+          "symbol": "MTZ",
+          "next_earnings_date": "2026-04-30",
+          "days_until_earnings": 6
+        }
+      },
+      "reasoning": [
+        "technical=+0.80",
+        "fundamental=+0.13",
+        "sentiment=+0.00",
+        "macro=+0.22",
+        "risk=+0.00",
+        "below_threshold (|combined|=0.34 < 0.40 or positive=3, negative=0)"
+      ]
+    },
+    {
+      "symbol": "CCC",
+      "action": "hold",
+      "confidence": 0.246,
+      "combined_score": -0.246,
+      "signal_scores": {
+        "technical": -0.797,
+        "fundamental": 0.001,
+        "sentiment": 0.0,
+        "macro": 0.216,
+        "risk": 0.0
+      },
+      "signal_details": {
+        "technical": {
+          "symbol": "CCC",
+          "score": -0.797,
+          "trend": -0.788,
+          "momentum": -0.873,
+          "volatility": -0.584,
+          "atr": 0.31,
+          "rsi": 33.6,
+          "price": 4.83,
+          "ema50": 5.86,
+          "ema200": 7.48,
+          "notes": [
+            "below_200ema_regime"
+          ]
+        },
+        "sentiment": {
+          "symbol": "CCC",
+          "score": 0.0,
+          "article_count": 0,
+          "positive_hits": 0,
+          "negative_hits": 0,
+          "top_headlines": []
+        },
+        "macro": {
+          "regime": "neutral",
+          "score": 0.216,
+          "spy_trend": 0.333,
+          "spy_vs_200ema": 0.069,
+          "vix_level": 28.495,
+          "vix_regime": "normal",
+          "breadth_pct_above_50": 0.6326530612244898,
+          "notes": [
+            "spy_uptrend",
+            "vixy_ratio_0.92",
+            "breadth_63pct"
+          ]
+        },
+        "fundamental": {
+          "symbol": "CCC",
+          "score": 0.001,
+          "pe": Infinity,
+          "peg": null,
+          "rev_growth": 0.127,
+          "earnings_growth": 0.35,
+          "roe": 0.00089,
+          "debt_to_equity": 78.022,
+          "market_cap": 2837528320.0,
+          "notes": [
+            "expensive_pe"
+          ]
+        },
+        "earnings": {
+          "symbol": "CCC",
+          "next_earnings_date": "2026-04-30",
+          "days_until_earnings": 6
+        }
+      },
+      "reasoning": [
+        "technical=-0.80",
+        "fundamental=+0.00",
+        "sentiment=+0.00",
+        "macro=+0.22",
+        "risk=+0.00",
+        "below_threshold (|combined|=0.25 < 0.40 or positive=1, negative=1)"
+      ]
+    },
+    {
+      "symbol": "AVT",
+      "action": "hold",
+      "confidence": 0.346,
+      "combined_score": 0.296,
+      "signal_scores": {
+        "technical": 0.797,
+        "fundamental": -0.078,
+        "sentiment": 0.0,
+        "macro": 0.216,
+        "risk": 0.0
+      },
+      "signal_details": {
+        "technical": {
+          "symbol": "AVT",
+          "score": 0.797,
+          "trend": 0.834,
+          "momentum": 0.946,
+          "volatility": 0.075,
+          "atr": 2.06,
+          "rsi": 77.2,
+          "price": 78.43,
+          "ema50": 65.53,
+          "ema200": 57.45,
+          "notes": [
+            "golden_cross_regime",
+            "rsi_overbought"
+          ]
+        },
+        "sentiment": {
+          "symbol": "AVT",
+          "score": 0.0,
+          "article_count": 0,
+          "positive_hits": 0,
+          "negative_hits": 0,
+          "top_headlines": []
+        },
+        "macro": {
+          "regime": "neutral",
+          "score": 0.216,
+          "spy_trend": 0.333,
+          "spy_vs_200ema": 0.069,
+          "vix_level": 28.495,
+          "vix_regime": "normal",
+          "breadth_pct_above_50": 0.6326530612244898,
+          "notes": [
+            "spy_uptrend",
+            "vixy_ratio_0.92",
+            "breadth_63pct"
+          ]
+        },
+        "fundamental": {
+          "symbol": "AVT",
+          "score": -0.078,
+          "pe": 31.817072,
+          "peg": 2.65,
+          "rev_growth": 0.116,
+          "earnings_growth": -0.242,
+          "roe": 0.04242,
+          "debt_to_equity": 64.144,
+          "market_cap": 6407414272.0,
+          "notes": []
+        },
+        "earnings": {
+          "symbol": "AVT",
+          "next_earnings_date": "2026-04-29",
+          "days_until_earnings": 5
+        }
+      },
+      "reasoning": [
+        "technical=+0.80",
+        "fundamental=-0.08",
+        "sentiment=+0.00",
+        "macro=+0.22",
+        "risk=+0.00",
+        "below_threshold (|combined|=0.30 < 0.40 or positive=2, negative=0)"
+      ]
+    },
+    {
+      "symbol": "COHR",
+      "action": "hold",
+      "confidence": 0.455,
+      "combined_score": 0.355,
+      "signal_scores": {
+        "technical": 0.794,
+        "fundamental": 0.222,
+        "sentiment": 0.0,
+        "macro": 0.216,
+        "risk": 0.0
+      },
+      "signal_details": {
+        "technical": {
+          "symbol": "COHR",
+          "score": 0.794,
+          "trend": 0.955,
+          "momentum": 0.943,
+          "volatility": -0.618,
+          "atr": 21.82,
+          "rsi": 62.5,
+          "price": 330.06,
+          "ema50": 273.39,
+          "ema200": 193.53,
+          "notes": [
+            "golden_cross_regime"
+          ]
+        },
+        "sentiment": {
+          "symbol": "COHR",
+          "score": 0.0,
+          "article_count": 1,
+          "positive_hits": 0,
+          "negative_hits": 0,
+          "top_headlines": [
+            "Citigroup Maintains Buy on Coherent, Raises Price Target to $420"
+          ]
+        },
+        "macro": {
+          "regime": "neutral",
+          "score": 0.216,
+          "spy_trend": 0.333,
+          "spy_vs_200ema": 0.069,
+          "vix_level": 28.495,
+          "vix_regime": "normal",
+          "breadth_pct_above_50": 0.6326530612244898,
+          "notes": [
+            "spy_uptrend",
+            "vixy_ratio_0.92",
+            "breadth_63pct"
+          ]
+        },
+        "fundamental": {
+          "symbol": "COHR",
+          "score": 0.222,
+          "pe": 326.9109,
+          "peg": 0.92,
+          "rev_growth": 0.175,
+          "earnings_growth": 0.73,
+          "roe": 0.032360002,
+          "debt_to_equity": 39.901,
+          "market_cap": 61902757888.0,
+          "notes": [
+            "expensive_pe",
+            "peg_attractive"
+          ]
+        },
+        "earnings": {
+          "symbol": "COHR",
+          "next_earnings_date": "2026-05-06",
+          "days_until_earnings": 12
+        }
+      },
+      "reasoning": [
+        "technical=+0.79",
+        "fundamental=+0.22",
+        "sentiment=+0.00",
+        "macro=+0.22",
+        "risk=+0.00",
+        "below_threshold (|combined|=0.35 < 0.40 or positive=3, negative=0)"
+      ]
+    },
+    {
+      "symbol": "ENTG",
+      "action": "hold",
+      "confidence": 0.317,
+      "combined_score": 0.267,
+      "signal_scores": {
+        "technical": 0.792,
+        "fundamental": -0.215,
+        "sentiment": 0.0,
+        "macro": 0.216,
+        "risk": 0.0
+      },
+      "signal_details": {
+        "technical": {
+          "symbol": "ENTG",
+          "score": 0.792,
+          "trend": 0.864,
+          "momentum": 0.956,
+          "volatility": -0.174,
+          "atr": 5.98,
+          "rsi": 74.7,
+          "price": 154.16,
+          "ema50": 127.06,
+          "ema200": 107.29,
+          "notes": [
+            "golden_cross_regime",
+            "rsi_overbought"
+          ]
+        },
+        "sentiment": {
+          "symbol": "ENTG",
+          "score": 0.0,
+          "article_count": 2,
+          "positive_hits": 0,
+          "negative_hits": 0,
+          "top_headlines": [
+            "Live On CNBC, Bill Baruch Announces Bought Entegris",
+            "UBS Maintains Buy on Entegris, Raises Price Target to $185"
+          ]
+        },
+        "macro": {
+          "regime": "neutral",
+          "score": 0.216,
+          "spy_trend": 0.333,
+          "spy_vs_200ema": 0.069,
+          "vix_level": 28.495,
+          "vix_regime": "normal",
+          "breadth_pct_above_50": 0.6326530612244898,
+          "notes": [
+            "spy_uptrend",
+            "vixy_ratio_0.92",
+            "breadth_63pct"
+          ]
+        },
+        "fundamental": {
+          "symbol": "ENTG",
+          "score": -0.215,
+          "pe": 99.148384,
+          "peg": 1.89,
+          "rev_growth": -0.03,
+          "earnings_growth": -0.519,
+          "roe": 0.06164,
+          "debt_to_equity": 96.423,
+          "market_cap": 23397609472.0,
+          "notes": [
+            "expensive_pe",
+            "rev_declining"
+          ]
+        },
+        "earnings": {
+          "symbol": "ENTG",
+          "next_earnings_date": "2026-04-30",
+          "days_until_earnings": 6
+        }
+      },
+      "reasoning": [
+        "technical=+0.79",
+        "fundamental=-0.21",
+        "sentiment=+0.00",
+        "macro=+0.22",
+        "risk=+0.00",
+        "below_threshold (|combined|=0.27 < 0.40 or positive=2, negative=1)"
+      ]
+    },
+    {
+      "symbol": "LSCC",
+      "action": "hold",
+      "confidence": 0.439,
+      "combined_score": 0.339,
+      "signal_scores": {
+        "technical": 0.792,
+        "fundamental": 0.147,
+        "sentiment": 0.0,
+        "macro": 0.216,
+        "risk": 0.0
+      },
+      "signal_details": {
+        "technical": {
+          "symbol": "LSCC",
+          "score": 0.792,
+          "trend": 0.899,
+          "momentum": 0.931,
+          "volatility": -0.29,
+          "atr": 5.46,
+          "rsi": 70.5,
+          "price": 121.57,
+          "ema50": 100.03,
+          "ema200": 81.41,
+          "notes": [
+            "golden_cross_regime",
+            "rsi_overbought"
+          ]
+        },
+        "sentiment": {
+          "symbol": "LSCC",
+          "score": 0.0,
+          "article_count": 0,
+          "positive_hits": 0,
+          "negative_hits": 0,
+          "top_headlines": []
+        },
+        "macro": {
+          "regime": "neutral",
+          "score": 0.216,
+          "spy_trend": 0.333,
+          "spy_vs_200ema": 0.069,
+          "vix_level": 28.495,
+          "vix_regime": "normal",
+          "breadth_pct_above_50": 0.6326530612244898,
+          "notes": [
+            "spy_uptrend",
+            "vixy_ratio_0.92",
+            "breadth_63pct"
+          ]
+        },
+        "fundamental": {
+          "symbol": "LSCC",
+          "score": 0.147,
+          "pe": 6097.0005,
+          "peg": 0.59,
+          "rev_growth": 0.242,
+          "earnings_growth": null,
+          "roe": 0.00433,
+          "debt_to_equity": 5.897,
+          "market_cap": 16689857536.0,
+          "notes": [
+            "expensive_pe",
+            "peg_attractive",
+            "high_rev_growth"
+          ]
+        },
+        "earnings": {
+          "symbol": "LSCC",
+          "next_earnings_date": "2026-05-04",
+          "days_until_earnings": 10
+        }
+      },
+      "reasoning": [
+        "technical=+0.79",
+        "fundamental=+0.15",
+        "sentiment=+0.00",
+        "macro=+0.22",
+        "risk=+0.00",
+        "below_threshold (|combined|=0.34 < 0.40 or positive=3, negative=0)"
+      ]
+    },
+    {
+      "symbol": "MU",
+      "action": "buy",
+      "confidence": 0.586,
+      "combined_score": 0.486,
+      "signal_scores": {
+        "technical": 0.79,
+        "fundamental": 0.699,
+        "sentiment": 0.25,
+        "macro": 0.216,
+        "risk": 0.0
+      },
+      "signal_details": {
+        "technical": {
+          "symbol": "MU",
+          "score": 0.79,
+          "trend": 0.899,
+          "momentum": 0.965,
+          "volatility": -0.418,
+          "atr": 25.98,
+          "rsi": 68.9,
+          "price": 497.02,
+          "ema50": 411.43,
+          "ema200": 297.97,
+          "notes": [
+            "golden_cross_regime"
+          ]
+        },
+        "sentiment": {
+          "symbol": "MU",
+          "score": 0.25,
+          "article_count": 17,
+          "positive_hits": 4,
+          "negative_hits": 2,
+          "top_headlines": [
+            "Insights Into Micron Technology's Performance Versus Peers In Semiconductors &amp; Semiconductor Equipment Sector",
+            "Micron Technology Shares Climb Over 3% After Key Trading Signal",
+            "Cramer Names 'The Stocks That Got Away' \u2014 SanDisk Is Number 1",
+            "AI Memory Shortage Sparking 'Red-Hot' Rally: Why Jim Cramer Says Micron is Just Getting Started",
+            "Stock Of The Day: Is Micron Headed Higher?"
+          ]
+        },
+        "macro": {
+          "regime": "neutral",
+          "score": 0.216,
+          "spy_trend": 0.333,
+          "spy_vs_200ema": 0.069,
+          "vix_level": 28.495,
+          "vix_regime": "normal",
+          "breadth_pct_above_50": 0.6326530612244898,
+          "notes": [
+            "spy_uptrend",
+            "vixy_ratio_0.92",
+            "breadth_63pct"
+          ]
+        },
+        "fundamental": {
+          "symbol": "MU",
+          "score": 0.699,
+          "pe": 23.4783,
+          "peg": 0.28,
+          "rev_growth": 1.963,
+          "earnings_growth": 7.56,
+          "roe": 0.39823002,
+          "debt_to_equity": 14.902,
+          "market_cap": 561318330368.0,
+          "notes": [
+            "peg_attractive",
+            "high_rev_growth",
+            "high_roe"
+          ]
+        },
+        "earnings": {
+          "symbol": "MU",
+          "next_earnings_date": "2026-06-24",
+          "days_until_earnings": 61
+        }
+      },
+      "reasoning": [
+        "technical=+0.79",
+        "fundamental=+0.70",
+        "sentiment=+0.25",
+        "macro=+0.22",
+        "risk=+0.00"
+      ]
+    },
+    {
+      "symbol": "PVH",
+      "action": "hold",
+      "confidence": 0.349,
+      "combined_score": 0.299,
+      "signal_scores": {
+        "technical": 0.788,
+        "fundamental": -0.044,
+        "sentiment": 0.0,
+        "macro": 0.216,
+        "risk": 0.0
+      },
+      "signal_details": {
+        "technical": {
+          "symbol": "PVH",
+          "score": 0.788,
+          "trend": 0.874,
+          "momentum": 0.937,
+          "volatility": -0.203,
+          "atr": 3.74,
+          "rsi": 65.4,
+          "price": 92.75,
+          "ema50": 78.13,
+          "ema200": 75.87,
+          "notes": [
+            "golden_cross_regime"
+          ]
+        },
+        "sentiment": {
+          "symbol": "PVH",
+          "score": 0.0,
+          "article_count": 0,
+          "positive_hits": 0,
+          "negative_hits": 0,
+          "top_headlines": []
+        },
+        "macro": {
+          "regime": "neutral",
+          "score": 0.216,
+          "spy_trend": 0.333,
+          "spy_vs_200ema": 0.069,
+          "vix_level": 28.495,
+          "vix_regime": "normal",
+          "breadth_pct_above_50": 0.6326530612244898,
+          "notes": [
+            "spy_uptrend",
+            "vixy_ratio_0.92",
+            "breadth_63pct"
+          ]
+        },
+        "fundamental": {
+          "symbol": "PVH",
+          "score": -0.044,
+          "pe": 177.90385,
+          "peg": 0.07,
+          "rev_growth": 0.056,
+          "earnings_growth": null,
+          "roe": 0.00509,
+          "debt_to_equity": 89.761,
+          "market_cap": 4238024448.0,
+          "notes": [
+            "expensive_pe",
+            "peg_attractive"
+          ]
+        },
+        "earnings": {
+          "symbol": "PVH",
+          "next_earnings_date": "2026-06-04",
+          "days_until_earnings": 41
+        }
+      },
+      "reasoning": [
+        "technical=+0.79",
+        "fundamental=-0.04",
+        "sentiment=+0.00",
+        "macro=+0.22",
+        "risk=+0.00",
+        "below_threshold (|combined|=0.30 < 0.40 or positive=2, negative=0)"
+      ]
+    },
+    {
+      "symbol": "CIEN",
+      "action": "hold",
+      "confidence": 0.445,
+      "combined_score": 0.345,
+      "signal_scores": {
+        "technical": 0.786,
+        "fundamental": 0.187,
+        "sentiment": 0.0,
+        "macro": 0.216,
+        "risk": 0.0
+      },
+      "signal_details": {
+        "technical": {
+          "symbol": "CIEN",
+          "score": 0.786,
+          "trend": 0.991,
+          "momentum": 0.84,
+          "volatility": -0.532,
+          "atr": 30.7,
+          "rsi": 66.6,
+          "price": 514.76,
+          "ema50": 407.17,
+          "ema200": 261.59,
+          "notes": [
+            "golden_cross_regime"
+          ]
+        },
+        "sentiment": {
+          "symbol": "CIEN",
+          "score": 0.0,
+          "article_count": 2,
+          "positive_hits": 0,
+          "negative_hits": 0,
+          "top_headlines": [
+            "These 6 S&P 500 Stocks Are Up Over 100% In 2026: They're All In The Same Trade",
+            "Cramer Names 'The Stocks That Got Away' \u2014 SanDisk Is Number 1"
+          ]
+        },
+        "macro": {
+          "regime": "neutral",
+          "score": 0.216,
+          "spy_trend": 0.333,
+          "spy_vs_200ema": 0.069,
+          "vix_level": 28.495,
+          "vix_regime": "normal",
+          "breadth_pct_above_50": 0.6326530612244898,
+          "notes": [
+            "spy_uptrend",
+            "vixy_ratio_0.92",
+            "breadth_63pct"
+          ]
+        },
+        "fundamental": {
+          "symbol": "CIEN",
+          "score": 0.187,
+          "pe": 331.5839,
+          "peg": 2.08,
+          "rev_growth": 0.331,
+          "earnings_growth": 2.323,
+          "roe": 0.08201,
+          "debt_to_equity": 56.931,
+          "market_cap": 72672436224.0,
+          "notes": [
+            "expensive_pe",
+            "high_rev_growth"
+          ]
+        },
+        "earnings": {
+          "symbol": "CIEN",
+          "next_earnings_date": "2026-06-04",
+          "days_until_earnings": 41
+        }
+      },
+      "reasoning": [
+        "technical=+0.79",
+        "fundamental=+0.19",
+        "sentiment=+0.00",
+        "macro=+0.22",
+        "risk=+0.00",
+        "below_threshold (|combined|=0.34 < 0.40 or positive=3, negative=0)"
+      ]
+    },
+    {
+      "symbol": "ALGM",
+      "action": "hold",
+      "confidence": 0.447,
+      "combined_score": 0.347,
+      "signal_scores": {
+        "technical": 0.784,
+        "fundamental": 0.2,
+        "sentiment": 0.0,
+        "macro": 0.216,
+        "risk": 0.0
+      },
+      "signal_details": {
+        "technical": {
+          "symbol": "ALGM",
+          "score": 0.784,
+          "trend": 0.842,
+          "momentum": 0.975,
+          "volatility": -0.202,
+          "atr": 1.78,
+          "rsi": 76.4,
+          "price": 44.27,
+          "ema50": 35.89,
+          "ema200": 31.9,
+          "notes": [
+            "golden_cross_regime",
+            "rsi_overbought"
+          ]
+        },
+        "sentiment": {
+          "symbol": "ALGM",
+          "score": 0.0,
+          "article_count": 0,
+          "positive_hits": 0,
+          "negative_hits": 0,
+          "top_headlines": []
+        },
+        "macro": {
+          "regime": "neutral",
+          "score": 0.216,
+          "spy_trend": 0.333,
+          "spy_vs_200ema": 0.069,
+          "vix_level": 28.495,
+          "vix_regime": "normal",
+          "breadth_pct_above_50": 0.6326530612244898,
+          "notes": [
+            "spy_uptrend",
+            "vixy_ratio_0.92",
+            "breadth_63pct"
+          ]
+        },
+        "fundamental": {
+          "symbol": "ALGM",
+          "score": 0.2,
+          "pe": null,
+          "peg": null,
+          "rev_growth": 0.289,
+          "earnings_growth": null,
+          "roe": -0.01365,
+          "debt_to_equity": 31.956,
+          "market_cap": 8197267968.0,
+          "notes": [
+            "high_rev_growth"
+          ]
+        },
+        "earnings": {
+          "symbol": "ALGM",
+          "next_earnings_date": "2026-05-07",
+          "days_until_earnings": 13
+        }
+      },
+      "reasoning": [
+        "technical=+0.78",
+        "fundamental=+0.20",
+        "sentiment=+0.00",
+        "macro=+0.22",
+        "risk=+0.00",
+        "below_threshold (|combined|=0.35 < 0.40 or positive=3, negative=0)"
+      ]
+    },
+    {
+      "symbol": "MTSI",
+      "action": "hold",
+      "confidence": 0.367,
+      "combined_score": 0.317,
+      "signal_scores": {
+        "technical": 0.778,
+        "fundamental": 0.064,
+        "sentiment": 0.0,
+        "macro": 0.216,
+        "risk": 0.0
+      },
+      "signal_details": {
+        "technical": {
+          "symbol": "MTSI",
+          "score": 0.778,
+          "trend": 0.869,
+          "momentum": 0.922,
+          "volatility": -0.231,
+          "atr": 12.04,
+          "rsi": 69.7,
+          "price": 288.38,
+          "ema50": 242.92,
+          "ema200": 193.51,
+          "notes": [
+            "golden_cross_regime"
+          ]
+        },
+        "sentiment": {
+          "symbol": "MTSI",
+          "score": 0.0,
+          "article_count": 0,
+          "positive_hits": 0,
+          "negative_hits": 0,
+          "top_headlines": []
+        },
+        "macro": {
+          "regime": "neutral",
+          "score": 0.216,
+          "spy_trend": 0.333,
+          "spy_vs_200ema": 0.069,
+          "vix_level": 28.495,
+          "vix_regime": "normal",
+          "breadth_pct_above_50": 0.6326530612244898,
+          "notes": [
+            "spy_uptrend",
+            "vixy_ratio_0.92",
+            "breadth_63pct"
+          ]
+        },
+        "fundamental": {
+          "symbol": "MTSI",
+          "score": 0.064,
+          "pe": 129.90315,
+          "peg": 2.05,
+          "rev_growth": 0.245,
+          "earnings_growth": null,
+          "roe": 0.12946,
+          "debt_to_equity": 42.486,
+          "market_cap": 21632327680.0,
+          "notes": [
+            "expensive_pe",
+            "high_rev_growth"
+          ]
+        },
+        "earnings": {
+          "symbol": "MTSI",
+          "next_earnings_date": "2026-05-07",
+          "days_until_earnings": 13
+        }
+      },
+      "reasoning": [
+        "technical=+0.78",
+        "fundamental=+0.06",
+        "sentiment=+0.00",
+        "macro=+0.22",
+        "risk=+0.00",
+        "below_threshold (|combined|=0.32 < 0.40 or positive=2, negative=0)"
+      ]
+    },
+    {
+      "symbol": "GLW",
+      "action": "hold",
+      "confidence": 0.448,
+      "combined_score": 0.348,
+      "signal_scores": {
+        "technical": 0.777,
+        "fundamental": 0.22,
+        "sentiment": 0.0,
+        "macro": 0.216,
+        "risk": 0.0
+      },
+      "signal_details": {
+        "technical": {
+          "symbol": "GLW",
+          "score": 0.777,
+          "trend": 0.946,
+          "momentum": 0.833,
+          "volatility": -0.35,
+          "atr": 8.4,
+          "rsi": 67.4,
+          "price": 174.13,
+          "ema50": 145.32,
+          "ema200": 105.73,
+          "notes": [
+            "golden_cross_regime"
+          ]
+        },
+        "sentiment": {
+          "symbol": "GLW",
+          "score": 0.0,
+          "article_count": 1,
+          "positive_hits": 0,
+          "negative_hits": 0,
+          "top_headlines": [
+            "Congresswoman Discloses Hundreds Of Thousands In Stock Trades, Here's What She Bought"
+          ]
+        },
+        "macro": {
+          "regime": "neutral",
+          "score": 0.216,
+          "spy_trend": 0.333,
+          "spy_vs_200ema": 0.069,
+          "vix_level": 28.495,
+          "vix_regime": "normal",
+          "breadth_pct_above_50": 0.6326530612244898,
+          "notes": [
+            "spy_uptrend",
+            "vixy_ratio_0.92",
+            "breadth_63pct"
+          ]
+        },
+        "fundamental": {
+          "symbol": "GLW",
+          "score": 0.22,
+          "pe": 95.51366,
+          "peg": 1.88,
+          "rev_growth": 0.204,
+          "earnings_growth": 0.774,
+          "roe": 0.14904,
+          "debt_to_equity": 76.192,
+          "market_cap": 150147203072.0,
+          "notes": [
+            "expensive_pe",
+            "high_rev_growth"
+          ]
+        },
+        "earnings": {
+          "symbol": "GLW",
+          "next_earnings_date": "2026-04-28",
+          "days_until_earnings": 4
+        }
+      },
+      "reasoning": [
+        "technical=+0.78",
+        "fundamental=+0.22",
+        "sentiment=+0.00",
+        "macro=+0.22",
+        "risk=+0.00",
+        "below_threshold (|combined|=0.35 < 0.40 or positive=3, negative=0)"
+      ]
+    },
+    {
+      "symbol": "ANET",
+      "action": "hold",
+      "confidence": 0.441,
+      "combined_score": 0.341,
+      "signal_scores": {
+        "technical": 0.777,
+        "fundamental": 0.183,
+        "sentiment": 0.0,
+        "macro": 0.216,
+        "risk": 0.0
+      },
+      "signal_details": {
+        "technical": {
+          "symbol": "ANET",
+          "score": 0.777,
+          "trend": 0.811,
+          "momentum": 0.974,
+          "volatility": -0.099,
+          "atr": 6.11,
+          "rsi": 73.3,
+          "price": 174.83,
+          "ema50": 144.2,
+          "ema200": 132.26,
+          "notes": [
+            "golden_cross_regime",
+            "rsi_overbought"
+          ]
+        },
+        "sentiment": {
+          "symbol": "ANET",
+          "score": 0.0,
+          "article_count": 0,
+          "positive_hits": 0,
+          "negative_hits": 0,
+          "top_headlines": []
+        },
+        "macro": {
+          "regime": "neutral",
+          "score": 0.216,
+          "spy_trend": 0.333,
+          "spy_vs_200ema": 0.069,
+          "vix_level": 28.495,
+          "vix_regime": "normal",
+          "breadth_pct_above_50": 0.6326530612244898,
+          "notes": [
+            "spy_uptrend",
+            "vixy_ratio_0.92",
+            "breadth_63pct"
+          ]
+        },
+        "fundamental": {
+          "symbol": "ANET",
+          "score": 0.183,
+          "pe": 63.9635,
+          "peg": 2.47,
+          "rev_growth": 0.289,
+          "earnings_growth": 0.191,
+          "roe": 0.314,
+          "debt_to_equity": 0.732,
+          "market_cap": 220682027008.0,
+          "notes": [
+            "expensive_pe",
+            "high_rev_growth",
+            "high_roe"
+          ]
+        },
+        "earnings": {
+          "symbol": "ANET",
+          "next_earnings_date": "2026-05-05",
+          "days_until_earnings": 11
+        }
+      },
+      "reasoning": [
+        "technical=+0.78",
+        "fundamental=+0.18",
+        "sentiment=+0.00",
+        "macro=+0.22",
+        "risk=+0.00",
+        "below_threshold (|combined|=0.34 < 0.40 or positive=3, negative=0)"
+      ]
+    }
+  ]
+}

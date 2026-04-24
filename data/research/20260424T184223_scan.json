@@ -1,0 +1,35 @@
+{
+  "ts": "2026-04-24T18:42:23.457901+00:00",
+  "equity": 101743.03,
+  "positions_count": 10,
+  "halted": true,
+  "macro": {
+    "regime": "neutral",
+    "score": 0.217,
+    "spy_trend": 0.358,
+    "spy_vs_200ema": 0.075,
+    "vix_level": 28.48,
+    "vix_regime": "normal",
+    "breadth_pct_above_50": 0.6122448979591837,
+    "notes": [
+      "spy_uptrend",
+      "vixy_ratio_0.92",
+      "breadth_61pct"
+    ]
+  },
+  "kill_switch": {
+    "halted": true,
+    "reasons": [
+      "max_daily_trades 11/10"
+    ],
+    "weekly_return": 0.004258988194756563,
+    "daily_return": 0.005067232272614852,
+    "trades_today": 11
+  },
+  "halt_exits": [],
+  "cash_proxy": {
+    "action": "buy_proxy",
+    "symbol": "SPY",
+    "notional": 3049.0
+  }
+}

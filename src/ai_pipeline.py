@@ -7,6 +7,7 @@ orchestrator blends with the numeric score.
 from __future__ import annotations
 import asyncio
 import logging
+import time
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -215,26 +216,163 @@ class AIPipeline:
         )
 
 
+_REQUIRED_PER_SYMBOL_FIELDS = (
+    "target_pct", "action", "opportunity_score", "one_sentence_reason",
+)
+_REQUIRED_SPY_FIELDS = (
+    "target_pct", "action", "opportunity_score", "one_sentence_reason",
+)
+_VALID_ACTIONS = {"BUY", "SELL", "HOLD", "EXIT", "INCREASE", "REDUCE"}
+
+
+def validate_arbiter_response(
+    result: dict[str, Any] | None,
+    held_symbols: list[str] | None = None,
+) -> tuple[bool, list[str]]:
+    """Validate that the arbiter response carries every field the executor
+    needs. Returns (is_valid, list_of_problems). The bot rejects the response
+    on ANY problem and executes NO trades.
+    """
+    problems: list[str] = []
+    if not isinstance(result, dict) or result.get("_error"):
+        return False, [f"non-dict or error: {(result or {}).get('_error') if isinstance(result, dict) else type(result).__name__}"]
+
+    if "spy_target_pct" not in result:
+        problems.append("missing spy_target_pct")
+    if "cash_target_pct" not in result:
+        problems.append("missing cash_target_pct")
+
+    spy_dec = result.get("spy_decision")
+    if not isinstance(spy_dec, dict):
+        problems.append("missing spy_decision")
+    else:
+        for f in _REQUIRED_SPY_FIELDS:
+            if f not in spy_dec or spy_dec[f] in (None, ""):
+                problems.append(f"spy_decision.{f} missing")
+
+    target_weights = result.get("target_weights")
+    if not isinstance(target_weights, dict):
+        problems.append("target_weights missing or not a dict")
+        target_weights = {}
+
+    per_symbol = result.get("per_symbol")
+    if not isinstance(per_symbol, dict):
+        problems.append("per_symbol missing or not a dict")
+        per_symbol = {}
+
+    ranking = result.get("opportunity_ranking")
+    if not isinstance(ranking, list):
+        problems.append("opportunity_ranking missing or not a list")
+
+    held = set(held_symbols or [])
+    # Every held symbol must show up in target_weights, per_symbol, ranking
+    for sym in held:
+        if sym not in target_weights:
+            problems.append(f"target_weights missing held symbol {sym}")
+        info = per_symbol.get(sym) if isinstance(per_symbol, dict) else None
+        if not isinstance(info, dict):
+            problems.append(f"per_symbol missing held symbol {sym}")
+            continue
+        for f in _REQUIRED_PER_SYMBOL_FIELDS:
+            if f not in info or info[f] in (None, ""):
+                problems.append(f"per_symbol[{sym}].{f} missing")
+        action = str(info.get("action", "")).upper()
+        if action and action not in _VALID_ACTIONS:
+            problems.append(f"per_symbol[{sym}].action invalid ({action!r})")
+        reason = info.get("one_sentence_reason", "")
+        if isinstance(reason, str) and reason and ";" in reason:
+            problems.append(f"per_symbol[{sym}].one_sentence_reason contains ';'")
+
+    # Numeric sanity: weights sum + spy + cash ∈ [0.99, 1.01]
+    try:
+        weight_sum = sum(float(v) for v in target_weights.values())
+        spy_t = float(result.get("spy_target_pct", 0) or 0)
+        cash_t = float(result.get("cash_target_pct", 0) or 0)
+        total = weight_sum + spy_t + cash_t
+        if not (0.99 <= total <= 1.01):
+            problems.append(f"weights+spy+cash sum out of bounds: {total:.3f}")
+    except (TypeError, ValueError):
+        problems.append("weights/spy/cash not numeric")
+
+    return (len(problems) == 0), problems
+
+
 def run_portfolio_arbiter(
     config: Config,
     context: dict[str, Any],
+    held_symbols: list[str] | None = None,
+    max_attempts: int = 3,
 ) -> dict[str, Any] | None:
     """Synchronous entry point for the portfolio rebalance arbiter.
-    Returns None if AI unavailable or the arbiter errored/returned unparseable output.
+
+    Hard rule: the bot has NO non-AI fallback. We retry with exponential
+    backoff and validate the response. If every attempt fails or every
+    response is incomplete, return None — the caller MUST treat None as
+    'execute no trades this scan'.
     """
     ai = AIResearcher(config)
     if not ai.available():
+        log.critical(
+            "PORTFOLIO ARBITER: AI unavailable (enabled=%s, key=%s) — "
+            "no rebalance trades will execute (fail-safe)",
+            ai.enabled, bool(ai.api_key),
+        )
         return None
+
     pipeline = AIPipeline(config, ai)
+    last_error: str = ""
+    last_problems: list[str] = []
+    for attempt in range(1, max_attempts + 1):
+        try:
+            result = asyncio.run(pipeline.portfolio_rebalance_arbiter(context))
+        except Exception as e:
+            last_error = f"{type(e).__name__}: {e}"
+            log.warning(
+                "PORTFOLIO ARBITER attempt %d/%d raised: %s",
+                attempt, max_attempts, last_error,
+            )
+            result = None
+
+        if isinstance(result, dict) and not result.get("_error"):
+            ok, problems = validate_arbiter_response(result, held_symbols)
+            if ok:
+                if attempt > 1:
+                    log.info("PORTFOLIO ARBITER succeeded on attempt %d/%d", attempt, max_attempts)
+                return result
+            last_problems = problems
+            log.warning(
+                "PORTFOLIO ARBITER attempt %d/%d returned incomplete response: %s",
+                attempt, max_attempts, problems[:5],
+            )
+        elif isinstance(result, dict):
+            last_error = str(result.get("_error", "unknown"))
+            log.warning(
+                "PORTFOLIO ARBITER attempt %d/%d returned error: %s",
+                attempt, max_attempts, last_error,
+            )
+
+        if attempt < max_attempts:
+            backoff = 2 ** attempt  # 2s, 4s, 8s ...
+            log.info("PORTFOLIO ARBITER retrying in %ds", backoff)
+            time.sleep(backoff)
+
+    log.critical(
+        "PORTFOLIO ARBITER FAILED after %d attempts — NO trades will execute "
+        "this scan (last_error=%s, last_validation_problems=%s)",
+        max_attempts, last_error, last_problems[:5],
+    )
     try:
-        result = asyncio.run(pipeline.portfolio_rebalance_arbiter(context))
-    except Exception as e:
-        log.warning("Portfolio arbiter failed: %s", e)
-        return None
-    if not isinstance(result, dict) or result.get("_error"):
-        log.warning("Portfolio arbiter returned error: %s", (result or {}).get("_error"))
-        return None
-    return result
+        from src.journal import log_decision
+        log_decision({
+            "event": "ai_failure",
+            "agent": "portfolio-arbiter",
+            "attempts": max_attempts,
+            "last_error": last_error,
+            "last_problems": last_problems,
+        })
+    except Exception:
+        pass
+    return None
 
 
 def run_exit_arbiter(

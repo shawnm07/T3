@@ -1,8 +1,11 @@
-"""Conviction-weighted portfolio rebalance.
+"""AI-driven portfolio rebalance.
 
-Each scan, held positions are re-scored (technical + sentiment, optionally AI).
-Weak positions are trimmed toward their conviction-proportional target size;
-strong positions are scaled up. Winners in profit are protected from trimming.
+The Opus 4.7 portfolio arbiter is the SOLE authority on capital allocation.
+This module is a thin executor: it converts the arbiter's `target_weights` +
+`per_symbol` block into per-symbol delta actions. There is NO non-AI fallback,
+NO post-AI override (no winner protection, no risk-grade veto, no underwater
+dampener, no add/trim confidence floors). Every per-symbol entry is required
+to carry `one_sentence_reason` and `opportunity_score` from the arbiter.
 """
 from __future__ import annotations
 import json
@@ -21,16 +24,20 @@ CACHE_FILE = Path(__file__).resolve().parents[1] / "data" / "state" / "held_tech
 @dataclass
 class RebalanceAction:
     symbol: str
-    side: str                     # "buy" (add) or "sell" (trim)
+    side: str                     # "buy" (add) or "sell" (trim/exit)
     delta_notional: float         # always positive
     current_notional: float
     target_notional: float
-    blended_confidence: float
     tech_score: float
     unrealized_plpc: float
     reason: str
-    ai_used: bool = False
-    ai_grades: dict[str, str] = field(default_factory=dict)
+    # AI-arbiter-mandatory fields (validated upstream — present here)
+    one_sentence_reason: str = ""
+    opportunity_score: float = 0.0
+    ai_action: str = ""           # raw arbiter action (BUY/SELL/HOLD/EXIT/INCREASE/REDUCE)
+    ai_confidence: float = 0.0
+    target_pct: float = 0.0
+    target_qty: float | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -38,12 +45,16 @@ class RebalanceAction:
             "delta_notional": round(self.delta_notional, 2),
             "current_notional": round(self.current_notional, 2),
             "target_notional": round(self.target_notional, 2),
-            "blended_confidence": round(self.blended_confidence, 3),
             "tech_score": round(self.tech_score, 3),
             "unrealized_plpc": round(self.unrealized_plpc, 4),
             "reason": self.reason,
-            "ai_used": self.ai_used,
-            "ai_grades": self.ai_grades,
+            "one_sentence_reason": self.one_sentence_reason,
+            "opportunity_score": round(float(self.opportunity_score), 1),
+            "ai_action": self.ai_action,
+            "ai_confidence": round(float(self.ai_confidence), 3),
+            "target_pct": round(float(self.target_pct), 4),
+            "target_qty": (round(float(self.target_qty), 4)
+                           if self.target_qty is not None else None),
         }
 
 
@@ -80,7 +91,6 @@ def select_ai_rerun_symbols(
             continue
         cached = cache.get(sym)
         if cached is None:
-            # New to cache — always rerun
             candidates.append((sym, 1.0))
             continue
         delta = abs(current - cached)
@@ -92,87 +102,41 @@ def select_ai_rerun_symbols(
 
 def compute_rebalance_plan(
     positions: list,
-    tech_map: dict,                       # symbol -> TechnicalSignal
-    sent_map: dict,                       # symbol -> SentimentSignal | None
-    numeric_decisions: dict,              # symbol -> TradeDecision (from DecisionEngine)
-    ai_verdicts: dict,                    # symbol -> AIVerdict (subset, only AI-rerun'd)
+    tech_map: dict,                       # symbol -> TechnicalSignal (informational only)
+    sent_map: dict,                       # symbol -> SentimentSignal | None (unused, kept for API)
+    numeric_decisions: dict,              # symbol -> TradeDecision (informational only)
+    ai_verdicts: dict,                    # unused, kept for API compatibility
     equity: float,
     config: Config,
     cash_proxy_symbol: str | None = None,
-    ai_target_weights: dict[str, float] | None = None,  # symbol -> fraction of equity (from portfolio arbiter)
-    ai_per_symbol: dict[str, dict] | None = None,        # symbol -> {action, rationale, ...}
+    ai_target_weights: dict[str, float] | None = None,  # REQUIRED — None → no actions
+    ai_per_symbol: dict[str, dict] | None = None,        # REQUIRED — None → no actions
 ) -> list[RebalanceAction]:
-    """Build the list of partial buys/sells that move each position toward its
-    conviction-proportional target. Does not execute — caller applies.
+    """Translate the arbiter's targets into per-symbol delta actions.
+
+    Hard rules:
+      * AI is the sole authority. If `ai_target_weights` / `ai_per_symbol` are
+        absent, return [] (no trades).
+      * Every action carries `one_sentence_reason` + `opportunity_score` from
+        the arbiter — these come back through to the journal and Telegram.
+      * No deterministic post-filter (winner protection, risk-grade veto,
+        underwater dampener, confidence floors) — those are pre-AI inputs, not
+        post-AI overrides.
+      * Action gates: `min_delta_pct` and `min_delta_usd` from config still
+        apply (they are execution-cost floors, not opinion overrides).
     """
     if not bool(config.get("rebalance", "enabled", default=True)):
+        return []
+    if not ai_target_weights or not ai_per_symbol:
+        log.warning(
+            "compute_rebalance_plan: AI arbiter targets missing — returning "
+            "no actions (no fallback)."
+        )
         return []
 
     max_position_pct = float(config.get("risk", "max_position_pct", default=0.50))
     min_delta_pct = float(config.get("rebalance", "min_delta_pct", default=0.15))
     min_delta_usd = float(config.get("rebalance", "min_delta_usd", default=500))
-    trim_floor = float(config.get("rebalance", "trim_confidence_floor", default=0.40))
-    add_floor = float(config.get("rebalance", "add_confidence_floor", default=0.55))
-    winner_threshold = float(config.get("rebalance", "winner_profit_threshold", default=0.03))
-    ai_weight = float(config.get("ai", "weight", default=0.6))
-    block_on_risk_reject = bool(config.get("rebalance", "block_on_risk_reject", default=True))
-    concentration_k = float(config.get("rebalance", "concentration_k", default=2.0))
-    use_ai_arbiter = ai_target_weights is not None and len(ai_target_weights) > 0
-    underwater_plpc_thr = float(config.get("rebalance", "underwater_plpc_threshold", default=-0.005))
-    underwater_cap_mult = float(config.get("rebalance", "underwater_add_cap_multiplier", default=1.25))
-
-    # --- Pre-compute per-position conviction (used for fallback softmax and logging) ---
-    convictions: dict[str, float] = {}
-    tech_aligned_map: dict[str, float] = {}
-    for p in positions:
-        sym = p.symbol
-        if cash_proxy_symbol and sym == cash_proxy_symbol:
-            continue
-        if "/" in sym:
-            continue
-        tech = tech_map.get(sym)
-        if tech is None:
-            continue
-        is_long = (p.side.value == "long") if hasattr(p.side, "value") else (p.side == "long")
-        tech_aligned = tech.score if is_long else -tech.score
-        tech_aligned_map[sym] = tech_aligned
-        numeric = numeric_decisions.get(sym)
-        numeric_conf = 0.0
-        if numeric is not None:
-            num_aligned = (
-                (is_long and numeric.combined_score > 0)
-                or (not is_long and numeric.combined_score < 0)
-            )
-            numeric_conf = numeric.confidence if num_aligned else 0.0
-        ai_v = ai_verdicts.get(sym)
-        if ai_v is not None:
-            ai_side_ok = (
-                (is_long and ai_v.final_action == "buy")
-                or (not is_long and ai_v.final_action == "sell_short")
-                or ai_v.final_action == "pass"
-            )
-            ai_conf = ai_v.ai_confidence if ai_side_ok else 0.0
-            if ai_v.final_action == "pass":
-                ai_conf = min(ai_conf, 0.4)
-            blended = ai_weight * ai_conf + (1 - ai_weight) * numeric_conf
-        else:
-            blended = numeric_conf
-        if tech_aligned > 0.5:
-            blended = max(blended, 0.4 + 0.4 * min(1.0, tech_aligned))
-        convictions[sym] = max(0.0, min(1.0, blended))
-
-    # --- Fallback softmax targets (only used when AI arbiter is absent) ---
-    softmax_targets: dict[str, float] = {}
-    if not use_ai_arbiter and convictions:
-        # Raw weights ∝ conviction^k. Budget = 1 - cash_reserve.
-        cash_reserve = float(config.get("risk", "cash_reserve_pct", default=0.05))
-        budget = max(0.0, 1.0 - cash_reserve)
-        raw = {s: (c ** concentration_k) for s, c in convictions.items() if c > 0}
-        total = sum(raw.values())
-        if total > 0:
-            for s, r in raw.items():
-                w = (r / total) * budget
-                softmax_targets[s] = min(max_position_pct, w)
 
     actions: list[RebalanceAction] = []
     for p in positions:
@@ -181,116 +145,97 @@ def compute_rebalance_plan(
             continue
         if "/" in sym:
             continue
-        tech = tech_map.get(sym)
-        if tech is None:
-            continue
         is_long = (p.side.value == "long") if hasattr(p.side, "value") else (p.side == "long")
         plpc = float(p.unrealized_plpc) if hasattr(p, "unrealized_plpc") else 0.0
         current_notional = abs(float(p.market_value))
-        blended = convictions.get(sym, 0.0)
-        tech_aligned = tech_aligned_map.get(sym, 0.0)
-        ai_v = ai_verdicts.get(sym)
-        ai_used = ai_v is not None
-        ai_grades = (ai_v.agent_grades or {}) if ai_used else {}
+        tech = tech_map.get(sym)
+        tech_score = float(tech.score) if tech else 0.0
 
-        # --- Determine target weight ---
-        ai_rationale = ""
-        ai_action_hint = ""
-        if use_ai_arbiter:
-            target_weight = ai_target_weights.get(sym)
-            if target_weight is None:
-                # AI didn't name this symbol — leave it alone (conservative).
-                log.info("[%s] arbiter did not set target weight — holding", sym)
-                continue
-            target_weight = max(0.0, min(max_position_pct, float(target_weight)))
-            if ai_per_symbol and sym in ai_per_symbol:
-                info = ai_per_symbol[sym] or {}
-                ai_rationale = str(info.get("rationale", ""))[:200]
-                ai_action_hint = str(info.get("action", ""))
-        else:
-            target_weight = softmax_targets.get(sym, 0.0)
+        target_weight = ai_target_weights.get(sym)
+        if target_weight is None:
+            log.info("[%s] arbiter omitted target weight — holding", sym)
+            continue
+        target_weight = max(0.0, min(max_position_pct, float(target_weight)))
+
+        info = ai_per_symbol.get(sym) or {}
+        ai_action_raw = str(info.get("action", "")).upper()
+        one_sentence = str(info.get("one_sentence_reason") or "").strip()
+        try:
+            opportunity_score = float(info.get("opportunity_score", 0) or 0)
+        except (TypeError, ValueError):
+            opportunity_score = 0.0
+        try:
+            ai_confidence = float(info.get("confidence", 0) or 0)
+        except (TypeError, ValueError):
+            ai_confidence = 0.0
+        target_qty = info.get("target_qty")
+        try:
+            target_qty_f = float(target_qty) if target_qty is not None else None
+        except (TypeError, ValueError):
+            target_qty_f = None
 
         target_notional = target_weight * equity
-        delta = target_notional - current_notional  # positive = ADD, negative = TRIM
+        delta = target_notional - current_notional  # positive = ADD, negative = TRIM/EXIT
         abs_delta = abs(delta)
-        if abs_delta < min_delta_usd:
-            continue
-        if current_notional > 0 and (abs_delta / current_notional) < min_delta_pct:
-            continue
 
-        if delta < 0:  # TRIM
-            if use_ai_arbiter:
-                reason = (
-                    f"arbiter trim -> {target_weight*100:.1f}% "
-                    f"(from {(current_notional/equity)*100:.1f}%): {ai_rationale}"
-                    if ai_rationale else
-                    f"arbiter trim -> {target_weight*100:.1f}%"
-                )
-            else:
-                if plpc > winner_threshold and tech_aligned > 0:
-                    log.info("[%s] winner-protected: pnl=%+.1f%% tech=%+.2f — skip trim",
-                             sym, plpc * 100, tech_aligned)
-                    continue
-                if blended >= trim_floor:
-                    continue
-                reason = (
-                    f"trim -> {target_weight*100:.1f}% (conf={blended:.2f}, "
-                    f"tech={tech_aligned:+.2f}, pnl={plpc:+.1%})"
-                )
-            actions.append(RebalanceAction(
-                symbol=sym, side="sell", delta_notional=abs_delta,
-                current_notional=current_notional, target_notional=target_notional,
-                blended_confidence=blended, tech_score=tech.score,
-                unrealized_plpc=plpc, reason=reason,
-                ai_used=ai_used or use_ai_arbiter, ai_grades=ai_grades,
-            ))
+        # Execution-cost floors (NOT opinion overrides). EXIT (target=0) bypasses
+        # the floors so the arbiter can always close a position.
+        is_exit = ai_action_raw == "EXIT" or target_weight == 0.0
+        if not is_exit:
+            if abs_delta < min_delta_usd:
+                continue
+            if current_notional > 0 and (abs_delta / current_notional) < min_delta_pct:
+                continue
+
+        # On an EXIT we sell the entire current notional even if target_notional
+        # rounds to a tiny residual.
+        if is_exit and current_notional > 0:
+            abs_delta = current_notional
+            delta = -current_notional
+            target_notional = 0.0
+
+        if delta < 0:  # TRIM / EXIT
+            side = "sell"
         else:  # ADD
-            if not use_ai_arbiter:
-                if blended < add_floor:
-                    continue
-                if block_on_risk_reject and ai_used:
-                    risk_grade = (ai_grades.get("risk") or ai_grades.get("risk_manager") or "").strip().lower()
-                    if risk_grade in ("reject", "f", "fail", "d", "d-"):
-                        log.info("[%s] rebalance add blocked: AI risk grade=%s", sym, risk_grade)
-                        continue
-            # Underwater dampener: cap growth when position is in a loss to avoid
-            # doubling down on names the market is rejecting.
-            if plpc < underwater_plpc_thr:
-                max_add = current_notional * (underwater_cap_mult - 1.0)
-                if abs_delta > max_add:
-                    log.info("[%s] underwater add dampened: pnl=%+.1f%% capping add at $%.0f (was $%.0f)",
-                             sym, plpc * 100, max_add, abs_delta)
-                    delta = min(delta, max_add)
-                    abs_delta = delta
-                    if abs_delta < min_delta_usd:
-                        continue
             max_notional = equity * max_position_pct
-            if current_notional >= max_notional:
+            if current_notional >= max_notional and not is_exit:
                 continue
             capped_delta = min(abs_delta, max_notional - current_notional)
             if capped_delta < min_delta_usd:
                 continue
-            if use_ai_arbiter:
-                reason = (
-                    f"arbiter add -> {target_weight*100:.1f}% "
-                    f"(from {(current_notional/equity)*100:.1f}%): {ai_rationale}"
-                    if ai_rationale else
-                    f"arbiter add -> {target_weight*100:.1f}%"
-                )
-            else:
-                reason = (
-                    f"add -> {target_weight*100:.1f}% (conf={blended:.2f}, "
-                    f"tech={tech_aligned:+.2f}, pnl={plpc:+.1%})"
-                )
+            abs_delta = capped_delta
             side = "buy" if is_long else "sell"
-            actions.append(RebalanceAction(
-                symbol=sym, side=side, delta_notional=capped_delta,
-                current_notional=current_notional, target_notional=target_notional,
-                blended_confidence=blended, tech_score=tech.score,
-                unrealized_plpc=plpc, reason=reason,
-                ai_used=ai_used or use_ai_arbiter, ai_grades=ai_grades,
-            ))
 
-    # Trims first, adds second — so freed cash (or SPY sale) funds adds.
+        if abs_delta <= 0:
+            continue
+
+        # Compose human-readable reason. The arbiter's `one_sentence_reason` is
+        # always preserved verbatim alongside.
+        if one_sentence:
+            reason = (
+                f"arbiter {ai_action_raw or ('add' if delta > 0 else 'trim')} "
+                f"-> {target_weight*100:.1f}% (from {(current_notional/equity)*100:.1f}%): "
+                f"{one_sentence}"
+            )
+        else:
+            reason = (
+                f"arbiter {ai_action_raw or ('add' if delta > 0 else 'trim')} "
+                f"-> {target_weight*100:.1f}% (from {(current_notional/equity)*100:.1f}%)"
+            )
+
+        actions.append(RebalanceAction(
+            symbol=sym, side=side, delta_notional=abs_delta,
+            current_notional=current_notional, target_notional=target_notional,
+            tech_score=tech_score, unrealized_plpc=plpc,
+            reason=reason,
+            one_sentence_reason=one_sentence,
+            opportunity_score=opportunity_score,
+            ai_action=ai_action_raw,
+            ai_confidence=ai_confidence,
+            target_pct=target_weight,
+            target_qty=target_qty_f,
+        ))
+
+    # Trims/exits first, adds second — so freed cash funds adds.
     actions.sort(key=lambda a: 0 if a.side == "sell" and a.current_notional > a.target_notional else 1)
     return actions

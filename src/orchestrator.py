@@ -636,6 +636,133 @@ class TradingOrchestrator:
         except Exception:
             return None
 
+    @staticmethod
+    def _intraday_chart_for(intraday_df, symbol: str) -> dict[str, Any] | None:
+        """Build the full intraday chart structure expected by the portfolio
+        arbiter. Returns a dict containing:
+
+          current_price, open, day_high, day_low, vwap,
+          distance_from_high_pct, distance_from_low_pct, intraday_change_pct,
+          recent_trend (rising|falling|flat), volume_trend (rising|falling|flat),
+          classification (near_high|near_low|breaking_out|fading|consolidating|recovering)
+
+        Returns None when bars are unavailable.
+        """
+        if intraday_df is None:
+            return None
+        try:
+            if "symbol" in intraday_df.index.names:
+                slc = intraday_df.xs(symbol, level="symbol")
+            else:
+                slc = intraday_df
+            if slc is None or slc.empty:
+                return None
+            # Restrict to today's session bars
+            try:
+                last_ts = slc.index[-1]
+                today = last_ts.date() if hasattr(last_ts, "date") else None
+                if today is not None:
+                    same_day = slc[slc.index.map(lambda t: t.date() == today)]
+                    if not same_day.empty:
+                        slc = same_day
+            except Exception:
+                pass
+            if slc.empty:
+                return None
+
+            opens = slc["open"]
+            highs = slc["high"] if "high" in slc.columns else slc["close"]
+            lows = slc["low"] if "low" in slc.columns else slc["close"]
+            closes = slc["close"]
+            volumes = slc["volume"] if "volume" in slc.columns else None
+
+            opn = float(opens.iloc[0])
+            cur = float(closes.iloc[-1])
+            day_high = float(highs.max())
+            day_low = float(lows.min())
+
+            # VWAP across the session bars (typical price * volume / volume)
+            vwap_val: float | None = None
+            try:
+                if volumes is not None and float(volumes.sum()) > 0:
+                    typical = (highs + lows + closes) / 3.0
+                    vwap_val = float((typical * volumes).sum() / volumes.sum())
+            except Exception:
+                vwap_val = None
+
+            dist_from_high = (cur - day_high) / day_high if day_high > 0 else None
+            dist_from_low = (cur - day_low) / day_low if day_low > 0 else None
+            intraday_chg = (cur - opn) / opn if opn > 0 else None
+
+            # Recent trend: slope of the last ~6 bars' close
+            def _slope(series) -> float:
+                n = len(series)
+                if n < 2:
+                    return 0.0
+                first = float(series.iloc[0])
+                last = float(series.iloc[-1])
+                if first == 0:
+                    return 0.0
+                return (last - first) / abs(first)
+
+            recent_n = min(6, len(closes))
+            recent = closes.iloc[-recent_n:]
+            slope = _slope(recent)
+            if slope > 0.0015:
+                recent_trend = "rising"
+            elif slope < -0.0015:
+                recent_trend = "falling"
+            else:
+                recent_trend = "flat"
+
+            # Volume trend: recent 6-bar mean vs prior 6-bar mean
+            volume_trend = "flat"
+            try:
+                if volumes is not None and len(volumes) >= 4:
+                    half = max(3, min(6, len(volumes) // 2))
+                    recent_v = float(volumes.iloc[-half:].mean())
+                    prior_v = float(volumes.iloc[-2 * half : -half].mean()) if len(volumes) >= 2 * half else float(volumes.iloc[:-half].mean() if len(volumes) > half else recent_v)
+                    if prior_v > 0:
+                        ratio = recent_v / prior_v
+                        if ratio >= 1.10:
+                            volume_trend = "rising"
+                        elif ratio <= 0.90:
+                            volume_trend = "falling"
+            except Exception:
+                volume_trend = "flat"
+
+            # Classification
+            near_high = dist_from_high is not None and dist_from_high >= -0.005
+            near_low = dist_from_low is not None and dist_from_low <= 0.005
+            if near_high and recent_trend == "rising" and volume_trend == "rising":
+                classification = "breaking_out"
+            elif near_high:
+                classification = "near_high"
+            elif near_low and recent_trend == "rising":
+                classification = "recovering"
+            elif near_low:
+                classification = "near_low"
+            elif recent_trend == "falling":
+                classification = "fading"
+            else:
+                classification = "consolidating"
+
+            return {
+                "current_price": round(cur, 4),
+                "open": round(opn, 4),
+                "day_high": round(day_high, 4),
+                "day_low": round(day_low, 4),
+                "vwap": round(vwap_val, 4) if vwap_val is not None else None,
+                "distance_from_high_pct": round(dist_from_high, 4) if dist_from_high is not None else None,
+                "distance_from_low_pct": round(dist_from_low, 4) if dist_from_low is not None else None,
+                "intraday_change_pct": round(intraday_chg, 4) if intraday_chg is not None else None,
+                "recent_trend": recent_trend,
+                "volume_trend": volume_trend,
+                "classification": classification,
+            }
+        except Exception:
+            return None
+
     def _build_arbiter_context(
         self,
         holdings: list,

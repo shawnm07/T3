@@ -1,4 +1,12 @@
-"""Decision engine: weighted multi-signal consensus → BUY / SELL_SHORT / HOLD."""
+"""Numeric signal consensus — INPUT LAYER ONLY.
+
+This module produces a weighted consensus view across technical, fundamental,
+sentiment, macro, and risk signals. The `action` field on TradeDecision is a
+*hypothesis* consumed by the Opus 4.7 AI arbiters — it is NEVER permitted to
+directly trigger an order. Every trade in the bot (entry, exit, rebalance,
+earnings close, preclose, crypto) must be approved by AI before execution.
+See src/ai_pipeline.py and src/ai_research.py for the enforcement layer.
+"""
 from __future__ import annotations
 import logging
 from dataclasses import dataclass, field

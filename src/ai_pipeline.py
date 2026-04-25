@@ -126,7 +126,11 @@ class AIPipeline:
             "macro": macro_ctx,
             "portfolio": portfolio_ctx,
         }
-        arbiter_out = await self.ai.call_agent("decision-arbiter", arbiter_ctx)
+        # decision-arbiter is the FINAL trade-critical decision for entries.
+        # Model is forced to Opus 4.7 inside call_agent (trade-critical gate).
+        arbiter_out = await self.ai.call_agent(
+            "decision-arbiter", arbiter_ctx, task_type="trade_critical",
+        )
         if isinstance(arbiter_out, dict) and arbiter_out.get("_error"):
             errors.append(f"arbiter: {arbiter_out['_error']}")
 
@@ -152,6 +156,33 @@ class AIPipeline:
             raw_outputs=outputs | {"arbiter": arbiter_out},
         )
 
+    async def portfolio_rebalance_arbiter(
+        self,
+        context: dict[str, Any],
+    ) -> dict[str, Any]:
+        """One AI call for the entire portfolio rebalance. Returns:
+        {
+          "portfolio_thesis": str,
+          "cash_target_pct": float,
+          "target_weights": {symbol: weight_fraction, ...},
+          "per_symbol": {symbol: {target_pct, action, conviction, rationale}, ...},
+          "risk_flags": [str, ...],
+          "_error": str (on failure)
+        }
+        """
+        return await self.ai.call_agent(
+            "portfolio-arbiter", context, task_type="trade_critical",
+        )
+
+    async def earnings_gate_verdict(
+        self,
+        context: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Decide close / trim_50 / hold for a single position entering earnings window."""
+        return await self.ai.call_agent(
+            "earnings-gate", context, task_type="trade_critical",
+        )
+
     async def portfolio_risk_check(
         self,
         portfolio_ctx: dict[str, Any],
@@ -164,7 +195,125 @@ class AIPipeline:
             "proposed_trades": proposed_trades,
             "kill_switch_state": kill_state,
         }
-        return await self.ai.call_agent("risk-manager", ctx)
+        return await self.ai.call_agent(
+            "risk-manager", ctx, task_type="trade_critical",
+        )
+
+    async def exit_arbiter_verdict(
+        self,
+        context: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Ask Opus 4.7 whether to close / reduce / hold a specific open position.
+        ALL exits (including stall, technical-flip, bad-news, preclose, crypto)
+        must route through this. Returns:
+          { "action": "exit" | "reduce" | "hold",
+            "confidence": 0..1, "reasoning": str,
+            "size_fraction": 0..1 (if action=reduce) }
+        """
+        return await self.ai.call_agent(
+            "exit-arbiter", context, task_type="trade_critical",
+        )
+
+
+def run_portfolio_arbiter(
+    config: Config,
+    context: dict[str, Any],
+) -> dict[str, Any] | None:
+    """Synchronous entry point for the portfolio rebalance arbiter.
+    Returns None if AI unavailable or the arbiter errored/returned unparseable output.
+    """
+    ai = AIResearcher(config)
+    if not ai.available():
+        return None
+    pipeline = AIPipeline(config, ai)
+    try:
+        result = asyncio.run(pipeline.portfolio_rebalance_arbiter(context))
+    except Exception as e:
+        log.warning("Portfolio arbiter failed: %s", e)
+        return None
+    if not isinstance(result, dict) or result.get("_error"):
+        log.warning("Portfolio arbiter returned error: %s", (result or {}).get("_error"))
+        return None
+    return result
+
+
+def run_exit_arbiter(
+    config: Config,
+    context: dict[str, Any],
+) -> dict[str, Any] | None:
+    """Synchronous Opus 4.7 exit decision. Returns None if AI unavailable or
+    the arbiter errored — callers MUST treat None as 'do not close' (fail-safe:
+    never execute a trade without AI approval).
+    """
+    ai = AIResearcher(config)
+    if not ai.available():
+        log.critical(
+            "EXIT ARBITER: AI unavailable (enabled=%s, key=%s) — "
+            "cannot approve exit; holding position (fail-safe)",
+            ai.enabled, bool(ai.api_key),
+        )
+        return None
+    pipeline = AIPipeline(config, ai)
+    try:
+        result = asyncio.run(pipeline.exit_arbiter_verdict(context))
+    except Exception as e:
+        log.critical("EXIT ARBITER call failed: %s — holding position (fail-safe)", e)
+        return None
+    if not isinstance(result, dict) or result.get("_error"):
+        log.critical(
+            "EXIT ARBITER returned error: %s — holding position (fail-safe)",
+            (result or {}).get("_error"),
+        )
+        return None
+    return result
+
+
+def run_entry_arbiter_single(
+    config: Config,
+    context: dict[str, Any],
+) -> dict[str, Any] | None:
+    """Synchronous Opus 4.7 single-symbol entry decision (used by crypto and
+    any other path where we have one candidate and need a go/no-go).
+    Returns None on failure; caller must treat None as 'do not trade'.
+    """
+    ai = AIResearcher(config)
+    if not ai.available():
+        log.critical(
+            "ENTRY ARBITER: AI unavailable — no trade approved (fail-safe)",
+        )
+        return None
+    try:
+        result = asyncio.run(ai.call_agent(
+            "decision-arbiter", context, task_type="trade_critical",
+        ))
+    except Exception as e:
+        log.critical("ENTRY ARBITER call failed: %s — no trade approved", e)
+        return None
+    if not isinstance(result, dict) or result.get("_error"):
+        log.critical("ENTRY ARBITER returned error: %s — no trade approved",
+                     (result or {}).get("_error"))
+        return None
+    return result
+
+
+def run_earnings_gate(
+    config: Config,
+    context: dict[str, Any],
+) -> dict[str, Any] | None:
+    """Synchronous entry point for a single-symbol earnings-gate decision."""
+    ai = AIResearcher(config)
+    if not ai.available():
+        return None
+    pipeline = AIPipeline(config, ai)
+    try:
+        result = asyncio.run(pipeline.earnings_gate_verdict(context))
+    except Exception as e:
+        log.warning("Earnings gate failed: %s", e)
+        return None
+    if not isinstance(result, dict) or result.get("_error"):
+        log.warning("Earnings gate returned error: %s", (result or {}).get("_error"))
+        return None
+    return result
 
 
 def run_ai_on_candidates(

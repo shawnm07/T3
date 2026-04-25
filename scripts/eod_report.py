@@ -22,13 +22,14 @@ def main() -> int:
     client = AlpacaClient(cfg)
 
     try:
-        account = client.get_account()
-        positions = client.get_positions()
+        # get_account() / get_positions() return independently-valued views —
+        # equity, market_value, unrealized_pl[pc], current_price are recomputed
+        # from independently fetched prices (not Alpaca's unreliable fields).
+        account, positions = client.get_snapshot()
         hist = client.get_portfolio_history(period="1M", timeframe="1D")
 
-        # Daily return: use account.equity / account.last_equity (prior day's close).
-        # More reliable than portfolio_history, which may not have today's bar yet
-        # when EOD runs right after the bell.
+        # Daily return: use computed equity vs account.last_equity (prior day's close).
+        # Falls back to portfolio_history below if last_equity is unavailable.
         current_equity = float(account.equity)
         last_equity = float(getattr(account, "last_equity", 0) or 0)
         if last_equity > 0:
@@ -64,40 +65,18 @@ def main() -> int:
         today = datetime.now(timezone.utc).date().isoformat()
         today_trades = [t for t in trades if t["ts"].startswith(today)]
 
-        # Alpaca paper's unrealized_plpc is unreliable — compute pnl from
-        # avg_entry_price vs latest close bar instead.
-        equity_syms = [p.symbol for p in positions if "/" not in p.symbol]
-        current_prices: dict[str, float] = {}
-        if equity_syms:
-            try:
-                bars = client.get_stock_bars(equity_syms, lookback_days=5)
-                for s in equity_syms:
-                    try:
-                        sbars = bars.xs(s, level="symbol") if "symbol" in bars.index.names else bars
-                        current_prices[s] = float(sbars["close"].iloc[-1])
-                    except (KeyError, IndexError):
-                        pass
-            except Exception as e:
-                log.warning("current-price fetch failed: %s", e)
-
+        # All P/L comes from the independent valuation (see src/valuation.py).
         def _pos_record(p):
-            sym = p.symbol
-            avg_entry = float(p.avg_entry_price) if getattr(p, "avg_entry_price", None) else 0.0
-            curr = current_prices.get(sym, 0.0)
-            is_long = (str(p.side).lower().endswith("long"))
-            if avg_entry > 0 and curr > 0:
-                raw = (curr - avg_entry) / avg_entry
-                pnl_pct = raw if is_long else -raw
-            else:
-                pnl_pct = 0.0
             return {
-                "symbol": sym,
+                "symbol": p.symbol,
                 "side": str(p.side),
                 "qty": float(p.qty),
-                "avg_entry": round(avg_entry, 4),
-                "current_price": round(curr, 4),
-                "pnl_pct": round(pnl_pct, 4),
-                "market_value": float(p.market_value) if getattr(p, "market_value", None) else 0.0,
+                "avg_entry": round(float(p.avg_entry_price), 4),
+                "current_price": round(float(p.current_price), 4),
+                "pnl_pct": round(float(p.unrealized_plpc), 4),
+                "pnl_dollars": round(float(p.unrealized_pl), 2),
+                "market_value": round(float(p.market_value), 2),
+                "price_source": getattr(p, "price_source", ""),
             }
 
         report = {

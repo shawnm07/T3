@@ -50,13 +50,11 @@ def main() -> int:
             len(result.get("executions", [])),
         )
 
-        # Fetch P&L data for notification
+        # Fetch P&L data for notification. Uses independent valuation
+        # (see src/valuation.py) — not Alpaca's equity / unrealized_pl.
         client = AlpacaClient(cfg)
-        current_account = client.get_account()
+        current_account, current_positions = client.get_snapshot()
         current_equity = float(current_account.equity)
-
-        # Get open P&L from positions (current unrealized gains/losses)
-        current_positions = client.get_positions()
         daily_pnl = sum(float(p.unrealized_pl) for p in current_positions) if current_positions else 0.0
 
         # Calculate daily return % using open P&L

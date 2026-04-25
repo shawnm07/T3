@@ -21,8 +21,9 @@ console = Console()
 def main() -> int:
     cfg = Config.load()
     client = AlpacaClient(cfg)
-    account = client.get_account()
-    positions = client.get_positions()
+    # Independent valuation: equity / market_value / P&L recomputed from
+    # Alpha-Vantage-sourced prices, not Alpaca's reported fields.
+    account, positions = client.get_snapshot()
     clock = client.get_clock()
 
     header = (

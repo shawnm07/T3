@@ -110,6 +110,17 @@ def compute_technicals(symbol: str, df: pd.DataFrame) -> TechnicalSignal | None:
 
     # Combine: 0.55 trend + 0.35 momentum + 0.10 volatility
     score = 0.55 * trend + 0.35 * momentum + 0.10 * volatility
+
+    # Chase penalty: discount late-momentum entries when RSI is extreme AND
+    # price is already far extended above the 200-EMA.
+    # Doesn't disqualify the name — just reduces ranking priority.
+    if rsi_last > 75 and price_vs_200 > 0.50:   # e.g. MRVL RSI=89, 82% above 200-EMA
+        score -= 0.20
+        notes.append("chase_penalty")
+    elif rsi_last > 80:
+        score -= 0.10
+        notes.append("rsi_extreme")
+
     score = float(max(-1.0, min(1.0, score)))
 
     return TechnicalSignal(

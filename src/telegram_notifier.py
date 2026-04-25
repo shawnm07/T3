@@ -26,6 +26,11 @@ def _get_phoenix_timestamp() -> str:
     return phoenix_now.strftime("%Y-%m-%d %H:%M:%S")
 
 
+def _esc(s: Any) -> str:
+    """Escape a value for Telegram HTML parse_mode (<, >, &)."""
+    return (str(s).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;"))
+
+
 def _format_number(val: float) -> str:
     """Format number with sign and 2 decimals."""
     if val >= 0:
@@ -152,8 +157,8 @@ class TelegramNotifier:
             for exit_item in exits:
                 sym = exit_item.get("symbol", "?")
                 reason = exit_item.get("reason", "?")
-                msg += f"\n⊘ CLOSE {sym}\n"
-                msg += f"  Reason: {reason}\n"
+                msg += f"\n⊘ CLOSE {_esc(sym)}\n"
+                msg += f"  Reason: {_esc(reason)}\n"
 
             msg += "\n"
 
@@ -347,7 +352,7 @@ class TelegramNotifier:
             for ex in exits:
                 sym = ex.get("symbol", "?")
                 reason = ex.get("reason", ex.get("message", "?"))
-                msg += f"  ⊘ {sym} — {reason}\n"
+                msg += f"  ⊘ {_esc(sym)} — {_esc(reason)}\n"
 
         if new_executions:
             msg += "\n<b>NEW OVERNIGHT BUYS</b>\n"
@@ -380,7 +385,7 @@ class TelegramNotifier:
         msg += "─" * 20 + "\n\n"
         msg += f"{message}\n"
         if error_details:
-            msg += f"\nDetails:\n<code>{error_details[:500]}</code>\n"
+            msg += f"\nDetails:\n<code>{_esc(error_details[:500])}</code>\n"
 
         return self._send(msg)
 

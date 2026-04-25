@@ -16,8 +16,12 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+from dotenv import load_dotenv
 
 from src.config import Config
+
+# Load .env so ANTHROPIC_API_KEY is available regardless of shell environment.
+load_dotenv(Path(__file__).resolve().parents[1] / ".env", override=True)
 
 # Global semaphore to limit concurrent API requests (avoid 429 rate limits).
 # Allow 2 concurrent requests; queue the rest.
@@ -26,6 +30,45 @@ _api_semaphore = asyncio.Semaphore(2)
 log = logging.getLogger(__name__)
 
 AGENTS_DIR = Path(__file__).resolve().parents[1] / ".claude" / "agents"
+
+# ---------------------------------------------------------------------------
+# MODEL ROUTER — centralized selection for all AI calls in the bot.
+#
+# HARD RULE: Any AI output that can directly lead to buying, selling, sizing,
+# or otherwise modifying exposure MUST use TRADE_CRITICAL_MODEL (Opus 4.7).
+# Cheaper models are permitted ONLY for pure input agents (technical/
+# fundamental/sentiment analysts whose structured output is fed into the
+# Opus arbiter) or for non-critical summarization / formatting.
+# ---------------------------------------------------------------------------
+TRADE_CRITICAL_MODEL_DEFAULT = "claude-opus-4-7"
+NON_CRITICAL_MODEL_DEFAULT = "claude-haiku-4-5-20251001"
+
+# Agents whose output directly authorizes or modifies capital allocation.
+# These MUST be invoked with the trade-critical model. No downgrades allowed.
+TRADE_CRITICAL_AGENTS = frozenset({
+    "decision-arbiter",
+    "portfolio-arbiter",
+    "earnings-gate",
+    "risk-manager",
+    "exit-arbiter",
+})
+
+
+def get_ai_model(task_type: str, config: "Config | None" = None) -> str:
+    """Return the model id to use for a given task_type.
+
+    task_type in {"trade_critical", "non_critical"}.
+    trade_critical → Opus 4.7 (any decision that can move money).
+    non_critical  → cheap/fast model (analyst inputs, logging, UI).
+    """
+    if task_type == "trade_critical":
+        if config is not None:
+            return config.get("ai", "trade_critical_model", default=TRADE_CRITICAL_MODEL_DEFAULT)
+        return TRADE_CRITICAL_MODEL_DEFAULT
+    if config is not None:
+        return config.get("ai", "non_critical_model",
+                          default=config.get("ai", "haiku_model", default=NON_CRITICAL_MODEL_DEFAULT))
+    return NON_CRITICAL_MODEL_DEFAULT
 
 # Autonomous-mode prompt suffix appended to every agent system message.
 AUTONOMOUS_SUFFIX = """
@@ -111,8 +154,18 @@ class AIResearcher:
     def __init__(self, config: Config):
         self.cfg = config
         self.enabled = bool(config.get("ai", "enabled", default=False))
-        self.model = config.get("ai", "model", default="claude-sonnet-4-6")
-        self.haiku_model = config.get("ai", "haiku_model", default="claude-haiku-4-5-20251001")
+        # Trade-critical (Opus 4.7) — any decision that can move money.
+        self.trade_critical_model = config.get(
+            "ai", "trade_critical_model",
+            default=config.get("ai", "model", default=TRADE_CRITICAL_MODEL_DEFAULT),
+        )
+        # Legacy alias: self.model always points at the trade-critical model so
+        # any unqualified caller ends up on Opus by default.
+        self.model = self.trade_critical_model
+        self.haiku_model = config.get("ai", "haiku_model", default=NON_CRITICAL_MODEL_DEFAULT)
+        self.non_critical_model = config.get(
+            "ai", "non_critical_model", default=self.haiku_model,
+        )
         self.max_tokens = config.get("ai", "max_tokens_per_call", default=1500)
         self.temperature = config.get("ai", "temperature", default=0.3)
         self.timeout = config.get("ai", "timeout_seconds", default=45)
@@ -131,15 +184,38 @@ class AIResearcher:
             self._client = AsyncAnthropic(api_key=self.api_key, timeout=self.timeout)
         return self._client
 
+    def model_for(self, task_type: str) -> str:
+        """Return the model id this researcher uses for a given task_type.
+        Thin wrapper around module-level get_ai_model() that prefers config.
+        """
+        if task_type == "trade_critical":
+            return self.trade_critical_model
+        return self.non_critical_model
+
     async def call_agent(
         self,
         agent_name: str,
         context: dict[str, Any],
         extra_instructions: str | None = None,
         model: str | None = None,
+        task_type: str | None = None,
     ) -> dict[str, Any]:
-        """Invoke one agent with a context dict; return parsed JSON response."""
+        """Invoke one agent with a context dict; return parsed JSON response.
+
+        If the agent is in TRADE_CRITICAL_AGENTS, the model is FORCED to the
+        trade-critical model regardless of what was passed in — this is the
+        central enforcement point of the 'all trade decisions → Opus 4.7' rule.
+        """
         agent = load_agent(agent_name)
+        # Hard enforcement: any trade-critical agent must run on Opus 4.7.
+        if agent_name in TRADE_CRITICAL_AGENTS or task_type == "trade_critical":
+            forced = self.trade_critical_model
+            if model is not None and model != forced:
+                log.warning(
+                    "Agent %s is trade-critical; overriding requested model %r -> %r",
+                    agent_name, model, forced,
+                )
+            model = forced
 
         # System prompt as cached content block — stable per agent, so cache hits
         # after the first call cut input token cost ~90% for the system prompt.
@@ -162,17 +238,21 @@ class AIResearcher:
 
         client = self._get_client()
         effective_model = model or self.model
+        # claude-opus-4-7 (extended thinking) does not accept the temperature param.
+        supports_temperature = "opus-4-7" not in effective_model
+        create_kwargs: dict = dict(
+            model=effective_model,
+            max_tokens=self.max_tokens,
+            system=system_blocks,
+            messages=[{"role": "user", "content": user_content}],
+        )
+        if supports_temperature:
+            create_kwargs["temperature"] = self.temperature
         try:
             # Limit concurrent API requests to avoid 429 rate limits.
             # Up to 2 requests run in parallel; others queue.
             async with _api_semaphore:
-                resp = await client.messages.create(
-                    model=effective_model,
-                    max_tokens=self.max_tokens,
-                    temperature=self.temperature,
-                    system=system_blocks,
-                    messages=[{"role": "user", "content": user_content}],
-                )
+                resp = await client.messages.create(**create_kwargs)
         except Exception as e:
             log.warning("Agent %s call failed: %s", agent_name, e)
             return {"_error": str(e), "_agent": agent_name}

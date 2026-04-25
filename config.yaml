@@ -2,8 +2,9 @@ mode: paper
 risk_profile: balanced
 
 risk:
-  max_position_pct: 0.15
-  max_sector_pct: 0.35
+  # Hard ceiling per single position. AI arbiter chooses actual size up to this.
+  max_position_pct: 0.50
+  max_sector_pct: 0.40
   max_leverage: 1.0
   stop_loss_atr_mult: 2.0
   take_profit_atr_mult: 4.0
@@ -16,6 +17,9 @@ risk:
   cash_reserve_pct: 0.05
   cash_reserve_min_pct: 0.02
   high_conviction_threshold: 0.75
+  # NEW entries are sized conservatively. AI arbiter grows them up to
+  # max_position_pct (0.50) over subsequent scans based on conviction.
+  initial_entry_cap_pct: 0.15
   # Stall-out exit: close longs whose tech score has drifted below this (run is over).
   # Symmetric for shorts.
   exit_stall_threshold: 0.10
@@ -24,7 +28,7 @@ kill_switch:
   weekly_drawdown_pct: 0.05
   daily_drawdown_pct: 0.025
   approval_threshold_usd: 25000
-  max_daily_trades: 10
+  max_daily_trades: 50
 
 universe:
   include_sp500: true
@@ -91,6 +95,12 @@ overnight:
   scan_candidates: 30         # top-N technical longs to score for overnight gap
   enable_new_buys: true       # false = only close losers, don't open new overnight trades
 
+execution:
+  # After submitting an order, poll Alpaca for terminal status before continuing.
+  # Prevents subsequent buys from assuming a sell freed cash that never landed.
+  fill_timeout_s: 30
+  fill_poll_s: 1.0
+
 benchmark: SPY
 
 cash_proxy:
@@ -114,6 +124,12 @@ rebalance:
   # On every scan: re-evaluate held positions and redistribute equity toward
   # higher-conviction names. Trims weak positions, scales up strong ones.
   enabled: true
+  # Use AI portfolio arbiter (one Opus call seeing the full book) to set target
+  # weights. When false (or AI unavailable), falls back to softmax-weighted
+  # allocation across held positions concentrated by conviction^k.
+  use_ai_arbiter: true
+  # Concentration exponent for the softmax fallback. Higher = more concentrated.
+  concentration_k: 2.0
   # Action gates
   min_delta_pct: 0.15              # skip if |delta| < 15% of current position value
   min_delta_usd: 500               # also require absolute delta >= $500
@@ -126,6 +142,18 @@ rebalance:
   max_ai_reruns_per_scan: 8        # cap AI reruns per scan to control cost
   # Bearish-day override: allow add when AI conviction is exceptional
   bearish_override_conf: 0.85
+  # Block large adds when AI arbiter is unavailable (prevents doubling positions on rules alone)
+  require_ai_above_confidence: 0.75  # block no-arbiter adds when blended conf >= this
+  require_ai_above_delta_usd: 5000   # or when the add is >= $5k
+  # Underwater position dampener: cap how fast we can add to losing positions
+  underwater_plpc_threshold: -0.005  # trigger when unrealized P&L < -0.5%
+  underwater_add_cap_multiplier: 1.25  # max target = current * 1.25 (25% add cap)
+
+exit_arbiter:
+  # Opus 4.7 AI must explicitly approve every position close. Deterministic
+  # exit triggers (technical flip, bad news, stall, preclose bias) are only
+  # *inputs* to this decision — they never fire a trade on their own.
+  min_confidence: 0.55
 
 halt_exits:
   # On kill-switch halt: keep stop-losses live, no new entries, but still allow
@@ -135,17 +163,33 @@ halt_exits:
 
 earnings:
   # Avoid the binary-event lottery around earnings. Block new entries within
-  # block_entry_days of a report; close held positions within trim_exit_days
-  # UNLESS blended confidence clears the high-conviction override.
+  # block_entry_days of a report; held-position close decisions go through the
+  # AI earnings-gate agent (close / trim_50 / hold) — falls back to numeric
+  # high_conviction_override if AI is unavailable.
   enabled: true
-  block_entry_days: 5              # no new entries if earnings within N calendar days
-  trim_exit_days: 3                # close held positions within N calendar days of earnings
-  high_conviction_override: 0.85   # override both gates if blended conf >= this
+  use_ai_gate: true                # AI decides close/trim/hold for earnings-window holds
+  block_entry_days: 5              # legacy — kept for reference; new_entry_earnings_blackout_days is used for entries
+  new_entry_earnings_blackout_days: 7   # no NEW entries if earnings within 7 calendar days
+  new_entry_earnings_override_confidence: 0.85  # allow entry only if conf >= this
+  trim_exit_days: 3                # within N days, AI gate decides hold/trim/close
+  high_conviction_override: 0.85   # numeric fallback threshold when AI unavailable
   cache_ttl_hours: 24              # how long to cache an earnings-date lookup
 
 ai:
   enabled: true                    # if true + ANTHROPIC_API_KEY set, runs subagents each scan
-  model: claude-sonnet-4-6         # arbiter + risk-manager (full reasoning)
+  # ================================================================
+  # MODEL ROUTER
+  # ----------------------------------------------------------------
+  # HARD RULE: every AI decision that can directly lead to buying,
+  # selling, sizing, or modifying exposure MUST use Opus 4.7. The
+  # central router in src/ai_research.py enforces this: agents listed
+  # in TRADE_CRITICAL_AGENTS have their model forced to
+  # trade_critical_model regardless of what the caller passes in.
+  # ================================================================
+  trade_critical_model: claude-opus-4-7      # Opus 4.7 for ALL trade-critical reasoning
+  non_critical_model: claude-haiku-4-5-20251001  # analysts / logging / summaries only
+  # Legacy aliases — retained for callers that haven't migrated yet.
+  model: claude-opus-4-7
   haiku_model: claude-haiku-4-5-20251001  # technical/fundamental/sentiment analysts (fast, cheap)
   max_candidates_per_scan: 5       # top-N by numeric score to send to AI
   min_numeric_combined_for_ai: 0.30  # pre-filter: only analyze these

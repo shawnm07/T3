@@ -41,7 +41,10 @@ class SizingDecision:
 class RiskManager:
     def __init__(self, config: Config):
         self.cfg = config
-        self.max_position_pct = config.get("risk", "max_position_pct", default=0.07)
+        self.max_position_pct = config.get("risk", "max_position_pct", default=0.50)
+        # New entries cap at this lower fraction; AI arbiter scales them up over
+        # subsequent scans toward max_position_pct based on conviction.
+        self.initial_entry_cap_pct = config.get("risk", "initial_entry_cap_pct", default=0.15)
         self.max_sector_pct = config.get("risk", "max_sector_pct", default=0.30)
         self.max_leverage = config.get("risk", "max_leverage", default=1.0)
         self.stop_atr_mult = config.get("risk", "stop_loss_atr_mult", default=2.0)
@@ -95,9 +98,10 @@ class RiskManager:
                     return None
                 reasons.append(f"sector={sector}")
 
-        # Base position size: confidence-scaled within cap
-        cap_pct = self.max_position_pct
-        size_pct = cap_pct * (0.4 + 0.6 * confidence)  # 40%-100% of cap by confidence
+        # Base position size: confidence-scaled within ENTRY cap (smaller than the
+        # absolute per-position cap; AI rebalance arbiter grows winners later).
+        cap_pct = min(self.initial_entry_cap_pct, self.max_position_pct)
+        size_pct = cap_pct * (0.4 + 0.6 * confidence)  # 40%-100% of entry cap by confidence
         notional = size_pct * equity
         if notional < self.min_trade:
             log.info("Skipping %s: notional $%.0f below min", symbol, notional)

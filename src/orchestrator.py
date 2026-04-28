@@ -80,6 +80,10 @@ class TradingOrchestrator:
         # Most-recent arbiter outputs surfaced for the scan summary (Telegram).
         self._last_opportunity_ranking: list[str] = []
         self._last_arbiter_skipped: str | None = None
+        self._last_ai_target_weights: dict[str, float] | None = None
+        self._last_ai_per_symbol: dict[str, dict[str, Any]] = {}
+        self._last_ai_spy_target_pct: float | None = None
+        self._last_ai_cash_target_pct: float | None = None
 
     def _is_cash_proxy(self, symbol: str) -> bool:
         return self.cash_proxy_enabled and symbol == self.cash_proxy_symbol
@@ -90,38 +94,138 @@ class TradingOrchestrator:
                 return p
         return None
 
-    def _ensure_cash_for(self, notional: float, equity: float) -> bool:
+    def _wait_order_ok(self, order) -> bool:
+        """Wait for an order to fill enough to count as usable funding."""
+        order_id = str(getattr(order, "id", "") or "")
+        if not order_id:
+            return False
+        _, ok = self.client.wait_for_order_fill(
+            order_id,
+            timeout_s=float(self.cfg.get("execution", "fill_timeout_s", default=30)),
+            poll_s=float(self.cfg.get("execution", "fill_poll_s", default=1.0)),
+        )
+        try:
+            self.client.invalidate_snapshot()
+        except Exception:
+            pass
+        return bool(ok)
+
+    def _available_cash_above_floor(self, equity: float, floor_pct: float) -> float:
+        try:
+            account = self.client.get_account()
+            cash = float(account.cash)
+        except Exception as e:
+            log.warning("cash budget: account fetch failed: %s", e)
+            return 0.0
+        return max(0.0, cash - (equity * max(0.0, floor_pct)))
+
+    def _sell_cash_proxy_for(self, notional: float, reason: str) -> bool:
+        """Sell SPY cash-proxy by qty/percentage, avoiding stale notional oversells."""
+        if not self.cash_proxy_enabled or notional <= 0:
+            return False
+        positions = self.client.get_positions()
+        proxy = self._get_proxy_position(positions)
+        if not proxy:
+            log.info("cash proxy: no %s held for %s", self.cash_proxy_symbol, reason)
+            return False
+        proxy_value = abs(float(proxy.market_value))
+        proxy_qty = abs(float(proxy.qty))
+        if proxy_value <= 0 or proxy_qty <= 0:
+            return False
+        sell_value = min(notional, proxy_value)
+        try:
+            if sell_value >= proxy_value * 0.98:
+                order = self.client.close_position(self.cash_proxy_symbol, percentage=100)
+                log.info("Cash-proxy funding: closing all %s for %s (need $%.0f)",
+                         self.cash_proxy_symbol, reason, notional)
+            else:
+                sell_qty = min(proxy_qty * 0.999, (sell_value / proxy_value) * proxy_qty)
+                sell_qty = round(max(0.0, sell_qty), 6)
+                if sell_qty <= 0:
+                    return False
+                order = self.client.close_position(self.cash_proxy_symbol, qty=sell_qty)
+                log.info("Cash-proxy funding: selling %.6f %s for %s (need $%.0f)",
+                         sell_qty, self.cash_proxy_symbol, reason, notional)
+            return self._wait_order_ok(order)
+        except Exception as e:
+            log.warning("Cash-proxy sell failed: %s", e)
+            return False
+
+    def _ensure_cash_for(
+        self,
+        notional: float,
+        equity: float,
+        floor_pct: float | None = None,
+        buffer_usd: float = 50.0,
+    ) -> bool:
         """Before opening a new position: if real cash is below (notional + floor),
         sell enough cash-proxy (SPY) to cover. Returns True if funding is now ok."""
-        if not self.cash_proxy_enabled:
-            return True
+        notional = max(0.0, float(notional or 0.0))
+        reserve_pct = (
+            float(floor_pct)
+            if floor_pct is not None
+            else float(self.risk.cash_reserve_min_pct)
+        )
         try:
             account = self.client.get_account()
             cash = float(account.cash)
         except Exception as e:
             log.warning("ensure_cash: account fetch failed: %s", e)
-            return True  # let downstream order fail if truly insufficient
-        floor = equity * self.risk.cash_reserve_min_pct
+            return False
+        floor = equity * max(0.0, reserve_pct)
         shortfall = (notional + floor) - cash
         if shortfall <= 0:
             return True
-        positions = self.client.get_positions()
-        proxy = self._get_proxy_position(positions)
-        if not proxy:
-            log.info("ensure_cash: shortfall $%.0f but no %s held", shortfall, self.cash_proxy_symbol)
-            return cash >= notional  # might still be ok if floor is the only issue
-        proxy_value = abs(float(proxy.market_value))
-        sell_amt = min(shortfall + 50, proxy_value)  # tiny buffer
-        if sell_amt < 1:
-            return True
-        try:
-            self.client.submit_notional(self.cash_proxy_symbol, sell_amt, side="sell")
-            log.info("Sold $%.0f of %s to fund trade (shortfall=$%.0f)",
-                     sell_amt, self.cash_proxy_symbol, shortfall)
-            return True
-        except Exception as e:
-            log.warning("Cash-proxy sell failed: %s", e)
+        if not self.cash_proxy_enabled:
+            log.warning("ensure_cash: need $%.0f but cash is $%.0f and cash-proxy disabled",
+                        notional + floor, cash)
             return False
+        sold = self._sell_cash_proxy_for(shortfall + buffer_usd, "fund trade")
+        if not sold:
+            log.warning("ensure_cash: unable to fund $%.0f shortfall before buy", shortfall)
+            return False
+        try:
+            account = self.client.get_account()
+            cash = float(account.cash)
+        except Exception as e:
+            log.warning("ensure_cash: post-funding account fetch failed: %s", e)
+            return False
+        ok = cash >= (notional + floor)
+        if not ok:
+            log.warning(
+                "ensure_cash: confirmed cash $%.0f still below required $%.0f "
+                "(notional=$%.0f floor=$%.0f)",
+                cash, notional + floor, notional, floor,
+            )
+        return ok
+
+    def _funded_buy_notional(
+        self,
+        symbol: str,
+        requested_notional: float,
+        equity: float,
+        floor_pct: float,
+        context: str,
+    ) -> float:
+        """Return the buy notional allowed by confirmed cash after funding attempts."""
+        requested = round(max(0.0, float(requested_notional or 0.0)), 2)
+        if requested <= 0:
+            return 0.0
+        funding_ok = self._ensure_cash_for(requested, equity, floor_pct=floor_pct)
+        if not funding_ok:
+            log.warning("%s: funding incomplete; capping %s buy to confirmed cash",
+                        context, symbol)
+        available = self._available_cash_above_floor(equity, floor_pct)
+        allowed = round(min(requested, available), 2)
+        min_trade = float(self.cfg.get("risk", "min_trade_usd", default=500))
+        if allowed + 0.01 < requested:
+            log.warning("%s: capped %s buy $%.0f -> $%.0f to preserve %.1f%% cash floor",
+                        context, symbol, requested, allowed, floor_pct * 100)
+        if allowed < min_trade:
+            log.warning("%s: skipping %s buy; allowed $%.0f below min trade $%.0f",
+                        context, symbol, allowed, min_trade)
+            return 0.0
+        return allowed
 
     def _sweep_cash_to_proxy(self, equity: float) -> dict[str, Any] | None:
         """After a scan's trades settle: park cash above the true-cash floor in SPY."""
@@ -151,34 +255,12 @@ class TradingOrchestrator:
         """If cash has dipped below the minimum reserve, immediately sell SPY proxy
         to restore it. Called at the top of each scan and rebalance so we never
         start a session with a negative or dangerously thin cash balance."""
-        if not self.cash_proxy_enabled:
-            return
-        try:
-            account = self.client.get_account()
-            cash = float(account.cash)
-        except Exception as e:
-            log.warning("restore_cash_floor: account fetch failed: %s", e)
-            return
-        floor = equity * self.risk.cash_reserve_min_pct
-        if cash >= floor:
-            return
-        shortfall = floor - cash
-        positions = self.client.get_positions()
-        proxy = self._get_proxy_position(positions)
-        if not proxy:
-            log.warning("Cash below floor ($%.0f < $%.0f) but no %s proxy to sell",
-                        cash, floor, self.cash_proxy_symbol)
-            return
-        proxy_value = abs(float(proxy.market_value))
-        sell_amt = min(shortfall + 100, proxy_value)  # small buffer above exact shortfall
-        if sell_amt < 1:
-            return
-        try:
-            self.client.submit_notional(self.cash_proxy_symbol, sell_amt, side="sell")
-            log.info("Cash floor restore: sold $%.0f of %s (cash was $%.0f, floor $%.0f)",
-                     sell_amt, self.cash_proxy_symbol, cash, floor)
-        except Exception as e:
-            log.warning("Cash floor restore sell failed: %s", e)
+        self._ensure_cash_for(
+            0.0,
+            equity,
+            floor_pct=float(self.risk.cash_reserve_min_pct),
+            buffer_usd=100.0,
+        )
 
     # ---------- macro ----------
     def macro_brief(self) -> MacroSignal:
@@ -1276,6 +1358,10 @@ class TradingOrchestrator:
                  f"{ai_spy_target_pct*100:.1f}" if ai_spy_target_pct is not None else "n/a",
                  f"{ai_cash_target_pct*100:.1f}" if ai_cash_target_pct is not None else "n/a",
                  (arbiter_result.get("spy_vs_cash_reasoning") or "")[:200])
+        cash_floor_pct = max(
+            float(ai_cash_target_pct or 0.0),
+            float(self.risk.cash_reserve_pct),
+        )
         log.info("Arbiter opportunity ranking: %s", ai_opportunity_ranking)
         # Stash for the post-execution Sonnet verifier (run by orchestrator after
         # rebalance + entries + cash sweep complete). The verifier needs Opus's
@@ -1348,14 +1434,35 @@ class TradingOrchestrator:
             # to the short — consumes buying power.)
             grows_exposure = a.current_notional < a.target_notional
             if grows_exposure:
-                # Verify cash before adding
-                self._ensure_cash_for(a.delta_notional, equity)
-            exec_result = self.executor.partial_trade(
-                symbol=a.symbol, side=a.side,
-                delta_notional=a.delta_notional,
-                reason=a.reason,
-            )
-            results.append({**a.to_dict(), "execution": exec_result.to_dict()})
+                funded_notional = self._funded_buy_notional(
+                    a.symbol, a.delta_notional, equity, cash_floor_pct,
+                    "rebalance",
+                )
+                if funded_notional <= 0:
+                    results.append({**a.to_dict(), "skipped": "insufficient_confirmed_cash"})
+                    continue
+                exec_result = self.executor.partial_trade(
+                    symbol=a.symbol, side=a.side,
+                    delta_notional=funded_notional,
+                    reason=a.reason,
+                )
+                action_dict = a.to_dict()
+                if funded_notional != round(float(a.delta_notional), 2):
+                    action_dict["requested_delta_notional"] = action_dict["delta_notional"]
+                    action_dict["delta_notional"] = funded_notional
+                    action_dict["cash_capped"] = True
+            elif a.side == "sell" and (a.target_notional <= 0 or a.target_pct <= 0 or a.ai_action == "EXIT"):
+                exec_result = self.executor.close_position(a.symbol, reason=a.reason)
+                action_dict = a.to_dict()
+                action_dict["full_exit_via_close_position"] = True
+            else:
+                exec_result = self.executor.partial_trade(
+                    symbol=a.symbol, side=a.side,
+                    delta_notional=a.delta_notional,
+                    reason=a.reason,
+                )
+                action_dict = a.to_dict()
+            results.append({**action_dict, "execution": exec_result.to_dict()})
             if not exec_result.ok:
                 log.warning("[%s] rebalance action did not fill — skipping further dependent actions for safety",
                             a.symbol)
@@ -1454,8 +1561,8 @@ class TradingOrchestrator:
         # If buying SPY, ensure cash is available; if selling, no cash check needed.
         if side == "sell":
             sell_amt = min(abs(delta), current_value)
-            try:
-                self.client.submit_notional(self.cash_proxy_symbol, sell_amt, side="sell")
+            ok = self._sell_cash_proxy_for(sell_amt, "SPY target rebalance")
+            if ok:
                 log.info("SPY rebalance SELL $%.0f: %s %.1f%% → target %.1f%% of equity",
                          sell_amt, self.cash_proxy_symbol,
                          current_value / equity * 100, float(target_pct) * 100)
@@ -1466,9 +1573,11 @@ class TradingOrchestrator:
                     "target_value": round(target_value, 2),
                     "ai_target_pct": round(float(target_pct), 4),
                 }
-            except Exception as e:
-                log.warning("SPY rebalance sell failed: %s", e)
-                return {"symbol": self.cash_proxy_symbol, "action": "sell_failed", "error": str(e)}
+            return {
+                "symbol": self.cash_proxy_symbol,
+                "action": "sell_failed",
+                "requested_delta_usd": round(-sell_amt, 2),
+            }
         # BUY: only buy with cash above the hard floor
         try:
             acct = self.client.get_account()
@@ -1775,7 +1884,15 @@ class TradingOrchestrator:
                 rejected.append({"symbol": sym, "reason": "capped delta below min_corrective"})
                 continue
             try:
-                self._ensure_cash_for(capped_delta if side == "buy" else 0.0, live_equity)
+                if side == "buy":
+                    floor_pct = max(float(cash_target or 0.0), float(self.risk.cash_reserve_pct))
+                    funded_delta = self._funded_buy_notional(
+                        sym, capped_delta, live_equity, floor_pct, "verifier",
+                    )
+                    if funded_delta < min_corrective_usd:
+                        rejected.append({"symbol": sym, "reason": "insufficient_confirmed_cash"})
+                        continue
+                    capped_delta = funded_delta
                 exec_res = self.executor.partial_trade(
                     symbol=sym, side=side, delta_notional=capped_delta,
                     reason=f"verifier reconcile to Opus target {row['target_weight']*100:.1f}% "
@@ -2076,6 +2193,11 @@ class TradingOrchestrator:
           8. apply SPY target, run verifier
         """
         log.info("=== Starting scan via portfolio-selector (dry_run=%s) ===", dry_run)
+        self._last_arbiter_set_spy_target = False
+        self._last_ai_target_weights = None
+        self._last_ai_per_symbol = {}
+        self._last_ai_spy_target_pct = None
+        self._last_ai_cash_target_pct = None
         kill = check_kill_switch(self.client, self.cfg)
         account, positions = self.client.get_snapshot(force_refresh=True, log_detail=True)
         equity = float(account.equity)
@@ -2263,6 +2385,16 @@ class TradingOrchestrator:
         # 7. Translate to rebalance plan + execute
         target_weights = result.get("target_weights") or {}
         per_symbol = result.get("per_symbol") or {}
+        spy_target_pct = float(result.get("spy_target_pct", 0) or 0)
+        cash_target_pct = float(result.get("cash_target_pct", 0) or 0)
+        selector_cash_floor_pct = max(
+            cash_target_pct,
+            float(self.risk.cash_reserve_pct),
+        )
+        self._last_ai_target_weights = dict(target_weights)
+        self._last_ai_per_symbol = dict(per_symbol) if isinstance(per_symbol, dict) else {}
+        self._last_ai_spy_target_pct = spy_target_pct
+        self._last_ai_cash_target_pct = cash_target_pct
         # compute_rebalance_plan iterates over CURRENT positions only — it
         # produces trim/exit/grow actions for held names. New entries (selected
         # symbols not currently held) need a separate buy loop below.
@@ -2288,14 +2420,33 @@ class TradingOrchestrator:
                 executions.append({"dry_run": True, **a.to_dict()})
                 continue
             grows_exposure = a.current_notional < a.target_notional
-            if grows_exposure:
-                self._ensure_cash_for(a.delta_notional, equity)
             try:
-                exec_result = self.executor.partial_trade(
-                    symbol=a.symbol, side=a.side,
-                    delta_notional=a.delta_notional, reason=a.reason,
-                )
-                executions.append({**a.to_dict(), "execution": exec_result.to_dict()})
+                action_dict = a.to_dict()
+                if grows_exposure:
+                    funded_notional = self._funded_buy_notional(
+                        a.symbol, a.delta_notional, equity,
+                        selector_cash_floor_pct, "[selector] rebalance",
+                    )
+                    if funded_notional <= 0:
+                        executions.append({**action_dict, "skipped": "insufficient_confirmed_cash"})
+                        continue
+                    if funded_notional != round(float(a.delta_notional), 2):
+                        action_dict["requested_delta_notional"] = action_dict["delta_notional"]
+                        action_dict["delta_notional"] = funded_notional
+                        action_dict["cash_capped"] = True
+                    exec_result = self.executor.partial_trade(
+                        symbol=a.symbol, side=a.side,
+                        delta_notional=funded_notional, reason=a.reason,
+                    )
+                elif a.side == "sell" and (a.target_notional <= 0 or a.target_pct <= 0 or a.ai_action == "EXIT"):
+                    exec_result = self.executor.close_position(a.symbol, reason=a.reason)
+                    action_dict["full_exit_via_close_position"] = True
+                else:
+                    exec_result = self.executor.partial_trade(
+                        symbol=a.symbol, side=a.side,
+                        delta_notional=a.delta_notional, reason=a.reason,
+                    )
+                executions.append({**action_dict, "execution": exec_result.to_dict()})
                 if not exec_result.ok:
                     log.warning("[selector] rebalance %s did not fill", a.symbol)
             except Exception as e:
@@ -2323,13 +2474,25 @@ class TradingOrchestrator:
                                    "delta_notional": notional, "reason": reason,
                                    "is_new_entry": True})
                 continue
-            self._ensure_cash_for(notional, equity)
-            try:
-                exec_result = self.executor.partial_trade(
-                    symbol=sym, side="buy", delta_notional=notional, reason=reason,
-                )
+            funded_notional = self._funded_buy_notional(
+                sym, notional, equity, selector_cash_floor_pct,
+                "[selector] new-entry",
+            )
+            if funded_notional <= 0:
                 executions.append({"symbol": sym, "side": "buy",
                                    "delta_notional": notional, "reason": reason,
+                                   "is_new_entry": True,
+                                   "skipped": "insufficient_confirmed_cash"})
+                continue
+            try:
+                exec_result = self.executor.partial_trade(
+                    symbol=sym, side="buy", delta_notional=funded_notional, reason=reason,
+                )
+                executions.append({"symbol": sym, "side": "buy",
+                                   "delta_notional": funded_notional,
+                                   "requested_delta_notional": notional,
+                                   "cash_capped": funded_notional != notional,
+                                   "reason": reason,
                                    "is_new_entry": True,
                                    "execution": exec_result.to_dict()})
             except Exception as e:
@@ -2339,7 +2502,6 @@ class TradingOrchestrator:
                                    "is_new_entry": True, "_error": str(e)})
 
         # 8. Apply SPY target + verifier
-        spy_target_pct = float(result.get("spy_target_pct", 0) or 0)
         cash_proxy_action = None
         if not dry_run and self.cash_proxy_enabled:
             try:
@@ -2676,7 +2838,15 @@ class TradingOrchestrator:
                 # Ensure real cash covers the notional; sell SPY cash-proxy if short.
                 # Re-fetched per-iteration so a prior unfilled trade doesn't leave
                 # us thinking we have cash we don't.
-                self._ensure_cash_for(sizing.notional, equity)
+                if not self._ensure_cash_for(sizing.notional, equity):
+                    log.warning("[%s] entry skipped: insufficient confirmed cash", d.symbol)
+                    executions.append({
+                        "sizing": sizing.to_dict(),
+                        "decision": d.to_dict(),
+                        "status": "skipped",
+                        "message": "insufficient_confirmed_cash",
+                    })
+                    continue
                 result = self.executor.execute(d, sizing)
                 executions.append({
                     "sizing": sizing.to_dict(),
@@ -3161,7 +3331,22 @@ class TradingOrchestrator:
                                            "decision": decision_obj.to_dict()})
                 else:
                     # Ensure real cash covers the notional; sell SPY if short.
-                    self._ensure_cash_for(sizing.notional, equity)
+                    if not self._ensure_cash_for(
+                        sizing.notional,
+                        equity,
+                        floor_pct=float(self.risk.cash_reserve_pct),
+                    ):
+                        if sequential_cash:
+                            available_liquidity += sizing.notional
+                        log.warning("[%s] preclose buy skipped: insufficient confirmed cash",
+                                    tech.symbol)
+                        new_executions.append({
+                            "sizing": sizing.to_dict(),
+                            "decision": decision_obj.to_dict(),
+                            "status": "skipped",
+                            "message": "insufficient_confirmed_cash",
+                        })
+                        continue
                     result = self.executor.execute(decision_obj, sizing)
                     new_executions.append({
                         "sizing": sizing.to_dict(),

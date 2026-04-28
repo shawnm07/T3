@@ -115,7 +115,6 @@ Edit `config.yaml` to tune. Reloaded on every script run.
 Key knobs:
 - `risk.min_confidence` — higher = stricter, fewer trades (current: 0.40)
 - `risk.max_position_pct` — max single-position exposure (current: 7%)
-- `kill_switch.approval_threshold_usd` — above this, trades queue for approval
 - `kill_switch.weekly_drawdown_pct` — auto-pause threshold
 - `signals.weights` — rebalance which signal dominates
 

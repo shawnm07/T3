@@ -48,6 +48,7 @@ NON_CRITICAL_MODEL_DEFAULT = "claude-haiku-4-5-20251001"
 TRADE_CRITICAL_AGENTS = frozenset({
     "decision-arbiter",
     "portfolio-arbiter",
+    "portfolio-selector",   # unified 3-6 selector (replaces arbiter+decision once selector.enabled)
     "earnings-gate",
     "risk-manager",
     "exit-arbiter",

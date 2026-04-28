@@ -63,7 +63,6 @@ position fading into the close. Reflect this in `opportunity_score` and `action`
     "min_trade_usd": 500,
     "min_rebalance_delta_usd": 500,
     "min_rebalance_delta_pct": 0.15,
-    "approval_threshold_usd": 25000,
     "spy_treated_as_liquid": true
   },
   "system_state": {

@@ -10,19 +10,22 @@ import pandas as pd
 
 from src.ai_pipeline import (
     AIVerdict, run_ai_on_candidates, run_earnings_gate, run_portfolio_arbiter,
-    run_exit_arbiter, run_entry_arbiter_single,
+    run_portfolio_selector, run_exit_arbiter, run_entry_arbiter_single,
 )
 from src.ai_research import AIResearcher
 from src.alpaca_client import AlpacaClient
 from src.config import Config
 from src.decision import DecisionEngine, TradeDecision
+from src.discovery import Candidate, discover_candidates
 from src.earnings import EarningsInfo, fetch_earnings, within_window
 from src.executor import TradeExecutor
 from src.fundamentals import compute_fundamentals
 from src.journal import log_decision
 from src.kill_switch import check_kill_switch
 from src.macro import MacroSignal, compute_macro
+from src.market_data import get_market_data
 from src.overnight import OvernightSignal, market_bias_from_spy, score_overnight
+from src.rebalance import compute_rebalance_plan
 from src.risk import RiskManager
 from src.sentiment import score_news_for_symbol
 from src.technicals import TechnicalSignal, compute_technicals, technicals_for_bars_df
@@ -1026,8 +1029,6 @@ class TradingOrchestrator:
                 "rebalance", "min_delta_usd", default=500)),
             "min_rebalance_delta_pct": float(self.cfg.get(
                 "rebalance", "min_delta_pct", default=0.15)),
-            "approval_threshold_usd": float(self.cfg.get(
-                "kill_switch", "approval_threshold_usd", default=25000)),
             "spy_treated_as_liquid": bool(self.cash_proxy_enabled),
             "spy_can_be_freely_converted_to_cash": bool(self.cash_proxy_enabled),
             "cash_proxy_min_rebalance_usd": float(self.cash_proxy_min),
@@ -1805,8 +1806,513 @@ class TradingOrchestrator:
             "raw_proposals": proposed,
         }
 
+    # ---------- portfolio-selector (Phase 4 cutover) ----------
+
+    def _compute_floor_breach_flag(
+        self,
+        kill_state: dict[str, Any] | None,
+        macro: MacroSignal,
+        top_score: float | None = None,
+    ) -> bool:
+        """True when the 3-position floor may be relaxed to 0–6.
+
+        Conditions are configured under ``selector.floor_breach_conditions``.
+        Returns True if any enabled condition fires; False otherwise.
+        """
+        cfg_breach = self.cfg.get("selector", "floor_breach_conditions", default={}) or {}
+        if cfg_breach.get("kill_switch_active") and (kill_state or {}).get("halted"):
+            log.info("[selector] floor breach allowed: kill-switch halted")
+            return True
+        if cfg_breach.get("bear_regime"):
+            sev = float(macro.score) < -0.5
+            below_200 = float(getattr(macro, "spy_vs_200ema", 0.0) or 0.0) < 0.0
+            if sev and below_200:
+                log.info("[selector] floor breach allowed: bear regime "
+                         "(score=%.2f, spy_vs_200ema<0)", macro.score)
+                return True
+        ts_below = cfg_breach.get("top_score_below")
+        if ts_below is not None and top_score is not None:
+            try:
+                if float(top_score) < float(ts_below):
+                    log.info("[selector] floor breach allowed: top_score=%.2f < %.2f",
+                             top_score, ts_below)
+                    return True
+            except (TypeError, ValueError):
+                pass
+        return False
+
+    def _selector_state_path(self) -> Path:
+        rel = self.cfg.get("selector", "state_file",
+                           default="data/state/selector_state.json")
+        return Path(__file__).resolve().parents[1] / rel
+
+    def _handle_selector_failure(self, reason: str) -> int:
+        """Persist consecutive-failure counter; escalate at threshold."""
+        path = self._selector_state_path()
+        state: dict[str, Any] = {"consecutive_failures": 0, "last_failure_ts": None}
+        if path.exists():
+            try:
+                state = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                pass
+        state["consecutive_failures"] = int(state.get("consecutive_failures", 0)) + 1
+        state["last_failure_ts"] = pd.Timestamp.utcnow().isoformat()
+        state["last_reason"] = reason
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps(state), encoding="utf-8")
+        except OSError as e:
+            log.warning("[selector] could not persist state: %s", e)
+        threshold = int(self.cfg.get("selector", "max_consecutive_failures", default=3) or 3)
+        if state["consecutive_failures"] >= threshold:
+            log_decision({
+                "event": "selector_failure_escalated",
+                "consecutive_count": state["consecutive_failures"],
+                "reason": reason,
+            })
+            try:
+                if hasattr(self, "telegram") and self.telegram is not None:
+                    self.telegram.send_error(
+                        f"CRITICAL: portfolio-selector failed "
+                        f"{state['consecutive_failures']} consecutive scans "
+                        f"(reason: {reason}) — manual intervention required."
+                    )
+            except Exception as e:
+                log.warning("[selector] telegram escalation failed: %s", e)
+        return state["consecutive_failures"]
+
+    def _reset_selector_failures(self) -> None:
+        path = self._selector_state_path()
+        try:
+            if path.exists():
+                state = json.loads(path.read_text(encoding="utf-8"))
+                if state.get("consecutive_failures", 0) > 0:
+                    state["consecutive_failures"] = 0
+                    state["last_success_ts"] = pd.Timestamp.utcnow().isoformat()
+                    path.write_text(json.dumps(state), encoding="utf-8")
+        except (OSError, json.JSONDecodeError):
+            pass
+
+    def _build_unified_candidate_pool(
+        self,
+        portfolio: dict[str, Any],
+    ) -> tuple[list[Candidate], dict[str, int]]:
+        """Build the discovery pool {held ∪ newly discovered}, returning the
+        Candidate list and a sources-breakdown counter for logging.
+        """
+        held_syms = [
+            p.symbol for p in portfolio.get("holdings", [])
+            if not self._is_cash_proxy(p.symbol)
+        ]
+        mds = get_market_data(self.cfg)
+        candidates, breakdown = discover_candidates(
+            self.cfg, mds, held_symbols=held_syms,
+        )
+        return candidates, breakdown
+
+    def _build_selector_context(
+        self,
+        candidates: list[Candidate],
+        portfolio: dict[str, Any],
+        macro: MacroSignal,
+        equity: float,
+        kill_state: dict[str, Any] | None,
+        bearish_halt: bool,
+        dry_run: bool,
+        allow_floor_breach: bool,
+        earnings_close_symbols: set[str] | list[str] | None = None,
+    ) -> tuple[dict[str, Any], dict[str, dict[str, Any]]]:
+        """Assemble the selector input context.
+
+        Reuses ``_build_arbiter_context`` for the shared book/risk/macro shell,
+        then replaces ``positions`` + ``scan_candidates_summary`` with a unified
+        ``candidate_pool`` array where every entry has the same schema and a
+        ``currently_held`` flag.
+
+        Returns ``(context, pool_meta)`` — ``pool_meta`` maps symbol to
+        ``{"currently_held": bool, "is_crypto": bool, "sector": str}`` for the
+        validator to enforce anti-stagnation server-side.
+        """
+        holdings = portfolio.get("holdings", [])
+        tech_map = portfolio.get("tech_map", {}) or {}
+        sent_map = portfolio.get("sent_map", {}) or {}
+        numeric = portfolio.get("numeric", {}) or {}
+        earnings_map = portfolio.get("earnings_map", {}) or {}
+
+        # Base context from the arbiter helper (gives us risk_profile,
+        # trading_rules, execution_constraints, system_state, macro, spy_block,
+        # current_allocation, recent_decisions, cash, equity).
+        base = self._build_arbiter_context(
+            holdings=holdings,
+            tech_map=tech_map,
+            sent_map=sent_map,
+            numeric=numeric,
+            earnings_map=earnings_map,
+            macro=macro,
+            equity=equity,
+            kill_state=kill_state,
+            bearish_halt=bearish_halt,
+            dry_run=dry_run,
+            scan_candidates=None,
+            earnings_close_symbols=earnings_close_symbols,
+        )
+
+        # Override trading_rules with selector-specific guidance (no incumbent
+        # bias, forced rotation, exhaustion penalty, anti-stagnation).
+        base["trading_rules"] = [
+            "You are the SOLE authority on which 3-6 positions the bot holds.",
+            "Optimize for REMAINING upside between NOW and the NEXT SCAN.",
+            "currently_held flag carries ZERO weight. P&L is sunk and irrelevant.",
+            "Apply exhaustion penalty to symbols near day high with fading volume.",
+            "Force rotation: held symbols not in selected_positions MUST EXIT.",
+            "When any new candidate is within 5 score points of your weakest "
+            "selected, you MUST include at least one new candidate.",
+            "Score-weighted sizing: weight ∝ opportunity_score, not equal-weight.",
+            "Sector caps and per-position caps are HARD constraints.",
+        ]
+
+        # Drop recent_decisions: it's anti-thrash context for the legacy
+        # rebalance arbiter and grows unboundedly with journal size. The
+        # selector doesn't need decision history (it ranks fresh every scan).
+        # Keeping it pushed input tokens past the 30k/min org rate limit.
+        base.pop("recent_decisions", None)
+
+        # Mark whether floor-breach (0-2 positions allowed) is active this scan.
+        ss = base.setdefault("system_state", {})
+        ss["allow_floor_breach"] = bool(allow_floor_breach)
+
+        # Build unified candidate_pool. Held positions get full block (qty,
+        # weight, pnl); new candidates get zeros for those fields plus discovery
+        # metadata.
+        held_blocks_by_sym: dict[str, dict[str, Any]] = {
+            p["symbol"]: p for p in (base.get("positions") or [])
+        }
+        pool_meta: dict[str, dict[str, Any]] = {}
+        unified_pool: list[dict[str, Any]] = []
+
+        for cand in candidates:
+            sym = cand.symbol
+            currently_held = bool(cand.is_held)
+            block: dict[str, Any] = held_blocks_by_sym.get(sym, {}).copy()
+            if not block:
+                # Build a minimal block for non-held candidates.
+                tech = tech_map.get(sym)
+                sent = sent_map.get(sym)
+                num = numeric.get(sym)
+                einfo = earnings_map.get(sym)
+                block = {
+                    "symbol": sym,
+                    "side": "long",  # default — selector decides direction via action
+                    "qty": 0.0,
+                    "avg_entry_price": 0.0,
+                    "current_price": round(float(cand.price or 0), 4),
+                    "market_value_usd": 0.0,
+                    "abs_market_value_usd": 0.0,
+                    "current_weight_pct": 0.0,
+                    "unrealized_pl_usd": 0.0,
+                    "unrealized_plpc": 0.0,
+                    "sector": cand.sector or "Other",
+                    "tech_score": (round(float(tech.score), 3) if tech else None),
+                    "rsi": (round(float(tech.rsi), 1) if tech and tech.rsi is not None else None),
+                    "atr": (round(float(tech.atr), 3) if tech and tech.atr is not None else None),
+                    "sent_score": (round(float(sent.score), 3) if sent else None),
+                    "numeric_confidence": (round(float(num.confidence), 3) if num else None),
+                    "numeric_combined_score": (round(float(num.combined_score), 3) if num else None),
+                    "numeric_action": (num.action if num else None),
+                    "intraday_chart": None,
+                    "earnings_days_until": (einfo.days_until if einfo else None),
+                    "earnings_next_date": (einfo.next_date if einfo else None),
+                }
+            block["currently_held"] = currently_held
+            block["is_crypto"] = bool(cand.is_crypto)
+            block["discovery_sources"] = list(cand.sources)
+            block["intraday_change_pct"] = round(float(cand.change_pct or 0.0), 4)
+            unified_pool.append(block)
+            pool_meta[sym] = {
+                "currently_held": currently_held,
+                "is_crypto": bool(cand.is_crypto),
+                "sector": cand.sector or "Other",
+            }
+
+        base["candidate_pool"] = unified_pool
+        base.pop("positions", None)
+        base.pop("scan_candidates_summary", None)
+        return base, pool_meta
+
+    def _run_scan_with_selector(
+        self,
+        dry_run: bool = False,
+    ) -> dict[str, Any]:
+        """Phase 4 cutover: unified-pool selector replaces the two-pipeline split.
+
+        Flow:
+          1. preamble: kill-switch, snapshot, macro, portfolio_signals
+          2. urgent exits via exit-arbiter (kept)
+          3. build unified candidate pool via discovery.py
+          4. enrich + build selector context
+          5. call portfolio-selector (Opus 4.7)
+          6. validate; on failure → skip cycle (no trades), increment failure counter
+          7. translate target_weights → compute_rebalance_plan → executor
+          8. apply SPY target, run verifier
+        """
+        log.info("=== Starting scan via portfolio-selector (dry_run=%s) ===", dry_run)
+        kill = check_kill_switch(self.client, self.cfg)
+        account, positions = self.client.get_snapshot(force_refresh=True, log_detail=True)
+        equity = float(account.equity)
+        log.info("Account: equity=$%.2f cash=$%.2f positions=%d trades_today=%d",
+                 equity, float(account.cash), len(positions), kill.trades_today)
+        if not dry_run:
+            self._restore_cash_floor(equity)
+
+        macro = self.macro_brief()
+        scan_type = self._detect_scan_type()
+
+        portfolio = self._portfolio_signals(macro)
+        exit_results: list[dict[str, Any]] = []
+        exits = self.evaluate_exits(macro, portfolio=portfolio, scan_type=scan_type)
+        earnings_exit_syms: set[str] = {
+            sym for sym, reason in exits if "earnings" in reason.lower()
+        }
+        for sym, reason in exits:
+            if dry_run:
+                log.info("[DRY] Would close %s: %s", sym, reason)
+                exit_results.append({"symbol": sym, "action": "close_dry", "reason": reason})
+            else:
+                res = self.executor.close_position(sym, reason=reason)
+                exit_results.append({**res.to_dict(), "reason": reason})
+        if exit_results and not dry_run:
+            exited_syms = {e.get("symbol") for e in exit_results
+                           if e.get("status") != "rejected"}
+            portfolio["holdings"] = [p for p in portfolio.get("holdings", [])
+                                     if p.symbol not in exited_syms]
+
+        halt_score = float(self.cfg.get("macro", "bearish_halt_score", default=-0.55))
+        halt_on_spike = bool(self.cfg.get("macro", "bearish_halt_on_vix_spike", default=True))
+        bearish_halt = macro.score <= halt_score or (halt_on_spike and macro.vix_regime == "spike")
+
+        # 3. Build unified pool
+        candidates, breakdown = self._build_unified_candidate_pool(portfolio)
+        log_decision({
+            "event": "selector_pool",
+            "pool_size": len(candidates),
+            "sources_breakdown": breakdown,
+            "symbols": [c.symbol for c in candidates],
+        })
+
+        if not candidates:
+            log.warning("[selector] discovery returned empty pool — skipping cycle")
+            log_decision({"event": "selector_skipped", "reason": "empty_pool"})
+            return {"status": "skipped_empty_pool", "exits": exit_results}
+
+        # 4. Floor-breach decision (heuristic — top-score gate uses numeric pre-AI)
+        top_numeric = max(
+            (abs(float((portfolio.get("numeric", {}) or {}).get(c.symbol).combined_score))
+             for c in candidates
+             if (portfolio.get("numeric", {}) or {}).get(c.symbol) is not None),
+            default=None,
+        )
+        allow_floor_breach = self._compute_floor_breach_flag(
+            kill.to_dict(), macro, top_score=top_numeric,
+        )
+        if kill.halted:
+            allow_floor_breach = True
+
+        # 5. Build selector context
+        ctx, pool_meta = self._build_selector_context(
+            candidates=candidates,
+            portfolio=portfolio,
+            macro=macro,
+            equity=equity,
+            kill_state=kill.to_dict(),
+            bearish_halt=bearish_halt,
+            dry_run=dry_run,
+            allow_floor_breach=allow_floor_breach,
+            earnings_close_symbols=earnings_exit_syms,
+        )
+        held_symbols = [c.symbol for c in candidates if c.is_held]
+        pool_symbols = [c.symbol for c in candidates]
+        log_decision({
+            "event": "selector_input",
+            "context": ctx,
+            "allow_floor_breach": allow_floor_breach,
+        })
+
+        # 6. Run selector
+        result = run_portfolio_selector(
+            self.cfg, ctx, pool_symbols=pool_symbols, pool_meta=pool_meta,
+            held_symbols=held_symbols, allow_floor_breach=allow_floor_breach,
+        )
+
+        if result is None:
+            consec = self._handle_selector_failure(reason="ai_failure_or_validation")
+            log_decision({"event": "selector_skipped", "reason": "ai_failure",
+                          "consecutive_failures": consec})
+            return {
+                "status": "skipped_selector_failure",
+                "consecutive_failures": consec,
+                "exits": exit_results,
+                "pool_size": len(candidates),
+                "kill_switch": kill.to_dict(),
+            }
+
+        self._reset_selector_failures()
+        log_decision({"event": "selector_output", "result": result})
+        log_decision({
+            "event": "selector_rankings",
+            "candidate_rankings": result.get("candidate_rankings", []),
+        })
+        log_decision({
+            "event": "selector_exhaustion",
+            "exhaustion_penalty_applied": result.get("exhaustion_penalty_applied", []),
+            "count": len(result.get("exhaustion_penalty_applied", []) or []),
+        })
+        rotation = result.get("rotation_plan") or {}
+        # Build rotation_reason_summary
+        reason_sum: dict[str, int] = {}
+        for entry in rotation.get("exited", []) or []:
+            cat = entry.get("reason_category", "other")
+            reason_sum[cat] = reason_sum.get(cat, 0) + 1
+        log_decision({
+            "event": "selector_rotation",
+            "selected": result.get("selected_positions", []),
+            "exited": rotation.get("exited", []),
+            "entered": rotation.get("entered", []),
+            "held": rotation.get("held", []),
+            "new_candidates_considered": result.get("new_candidates_considered"),
+            "new_candidates_selected": result.get("new_candidates_selected"),
+            "rotation_reason_summary": reason_sum,
+        })
+
+        # 7. Translate to rebalance plan + execute
+        target_weights = result.get("target_weights") or {}
+        per_symbol = result.get("per_symbol") or {}
+        # compute_rebalance_plan iterates over CURRENT positions only — it
+        # produces trim/exit/grow actions for held names. New entries (selected
+        # symbols not currently held) need a separate buy loop below.
+        plan = compute_rebalance_plan(
+            positions=portfolio.get("holdings", []),
+            tech_map=portfolio.get("tech_map", {}) or {},
+            sent_map=portfolio.get("sent_map", {}) or {},
+            numeric_decisions=portfolio.get("numeric", {}) or {},
+            ai_verdicts={},
+            equity=equity,
+            config=self.cfg,
+            cash_proxy_symbol=self.cash_proxy_symbol if self.cash_proxy_enabled else None,
+            ai_target_weights=target_weights,
+            ai_per_symbol=per_symbol,
+        )
+        executions: list[dict[str, Any]] = []
+        # Sells/exits first so freed cash can fund new buys.
+        plan_sorted = sorted(plan or [],
+                             key=lambda a: 0 if a.side == "sell" else 1)
+        for a in plan_sorted:
+            if dry_run:
+                log.info("[DRY] Rebalance %s", a.to_dict())
+                executions.append({"dry_run": True, **a.to_dict()})
+                continue
+            grows_exposure = a.current_notional < a.target_notional
+            if grows_exposure:
+                self._ensure_cash_for(a.delta_notional, equity)
+            try:
+                exec_result = self.executor.partial_trade(
+                    symbol=a.symbol, side=a.side,
+                    delta_notional=a.delta_notional, reason=a.reason,
+                )
+                executions.append({**a.to_dict(), "execution": exec_result.to_dict()})
+                if not exec_result.ok:
+                    log.warning("[selector] rebalance %s did not fill", a.symbol)
+            except Exception as e:
+                log.warning("[selector] partial_trade failed for %s: %s", a.symbol, e)
+                executions.append({**a.to_dict(), "_error": str(e)})
+
+        # New-entry loop: any selected symbol not in current positions gets a
+        # BUY for target_pct * equity. Skips crypto (separate executor path).
+        held_syms_set = {p.symbol for p in portfolio.get("holdings", [])}
+        for sym in result.get("selected_positions", []) or []:
+            if sym in held_syms_set or "/" in sym:
+                continue
+            target_pct = float((per_symbol.get(sym) or {}).get("target_pct", 0) or 0)
+            if target_pct <= 0:
+                continue
+            notional = round(target_pct * equity, 2)
+            if notional < float(self.cfg.get("risk", "min_trade_usd", default=500)):
+                log.info("[selector] new entry %s skipped (notional $%.0f below min)",
+                         sym, notional)
+                continue
+            reason = (per_symbol.get(sym) or {}).get("one_sentence_reason", "selector entry")
+            if dry_run:
+                log.info("[DRY] Selector new entry %s notional $%.0f", sym, notional)
+                executions.append({"dry_run": True, "symbol": sym, "side": "buy",
+                                   "delta_notional": notional, "reason": reason,
+                                   "is_new_entry": True})
+                continue
+            self._ensure_cash_for(notional, equity)
+            try:
+                exec_result = self.executor.partial_trade(
+                    symbol=sym, side="buy", delta_notional=notional, reason=reason,
+                )
+                executions.append({"symbol": sym, "side": "buy",
+                                   "delta_notional": notional, "reason": reason,
+                                   "is_new_entry": True,
+                                   "execution": exec_result.to_dict()})
+            except Exception as e:
+                log.warning("[selector] new-entry partial_trade failed for %s: %s", sym, e)
+                executions.append({"symbol": sym, "side": "buy",
+                                   "delta_notional": notional, "reason": reason,
+                                   "is_new_entry": True, "_error": str(e)})
+
+        # 8. Apply SPY target + verifier
+        spy_target_pct = float(result.get("spy_target_pct", 0) or 0)
+        cash_proxy_action = None
+        if not dry_run and self.cash_proxy_enabled:
+            try:
+                cash_proxy_action = self._apply_spy_target(spy_target_pct, equity)
+                self._last_arbiter_set_spy_target = True
+            except Exception as e:
+                log.warning("[selector] SPY target apply failed: %s", e)
+
+        verifier_summary: dict[str, Any] | None = None
+        if not dry_run:
+            try:
+                verifier_summary = self._verify_portfolio_alignment(equity)
+            except Exception as e:
+                log.warning("[selector] verifier raised: %s", e)
+                verifier_summary = {"error": str(e)}
+
+        summary = {
+            "ts": pd.Timestamp.utcnow().isoformat(),
+            "equity": equity,
+            "positions_count": len(positions),
+            "macro": macro.to_dict(),
+            "kill_switch": kill.to_dict(),
+            "selector": {
+                "pool_size": len(candidates),
+                "sources_breakdown": breakdown,
+                "selected_positions": result.get("selected_positions", []),
+                "target_weights": target_weights,
+                "spy_target_pct": spy_target_pct,
+                "cash_target_pct": result.get("cash_target_pct"),
+                "exhaustion_penalty_applied": result.get("exhaustion_penalty_applied", []),
+                "new_candidates_selected": result.get("new_candidates_selected"),
+                "allow_floor_breach": allow_floor_breach,
+            },
+            "exits": exit_results,
+            "executions": executions,
+            "cash_proxy": cash_proxy_action,
+            "verifier": verifier_summary,
+        }
+        _save_research("scan", summary)
+        log.info("Scan complete (selector): selected=%d, exits=%d, executions=%d",
+                 len(result.get("selected_positions", [])),
+                 len(exit_results), len(executions))
+        return summary
+
     # ---------- main loop ----------
     def run_scan(self, max_candidates: int = 25, dry_run: bool = False) -> dict[str, Any]:
+        # Phase 4 cutover: when the unified-selector feature flag is on, route
+        # to the new pipeline. Legacy two-pipeline path runs only when off.
+        if self.cfg.get("selector", "enabled", default=False):
+            return self._run_scan_with_selector(dry_run=dry_run)
         log.info("=== Starting scan (dry_run=%s) ===", dry_run)
         kill = check_kill_switch(self.client, self.cfg)
         # Independent valuation: equity, market_value, unrealized_pl[pc],

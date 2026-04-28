@@ -175,6 +175,22 @@ class AIPipeline:
             "portfolio-arbiter", context, task_type="trade_critical",
         )
 
+    async def portfolio_selector(
+        self,
+        context: dict[str, Any],
+    ) -> dict[str, Any]:
+        """One AI call to select 3-6 positions from a unified candidate pool.
+
+        Replaces the two-pipeline split (portfolio-arbiter + decision-arbiter).
+        Returns the JSON contract documented in
+        ``.claude/agents/portfolio-selector.md`` — selected_positions,
+        target_weights, per_symbol, candidate_rankings, rotation_plan,
+        exhaustion_penalty_applied, etc.
+        """
+        return await self.ai.call_agent(
+            "portfolio-selector", context, task_type="trade_critical",
+        )
+
     async def portfolio_verifier(
         self,
         context: dict[str, Any],
@@ -415,6 +431,325 @@ def run_portfolio_arbiter(
         log_decision({
             "event": "ai_failure",
             "agent": "portfolio-arbiter",
+            "attempts": max_attempts,
+            "last_error": last_error,
+            "last_problems": last_problems,
+        })
+    except Exception:
+        pass
+    return None
+
+
+# --------------------------------------------------------------------------- #
+#  Portfolio selector (Phase 3+) — unified 3-6 selector validator + runner    #
+# --------------------------------------------------------------------------- #
+
+
+_SELECTOR_VALID_ACTIONS = {"BUY", "INCREASE", "HOLD", "REDUCE", "EXIT", "PASS"}
+_SELECTOR_EXIT_REASON_CATS = {
+    "replaced_by_higher_opportunity",
+    "removed_due_to_exhaustion",
+    "removed_due_to_weak_continuation",
+    "floor_breach",
+    "earnings_proximity",
+    "other",
+}
+_SELECTOR_ENTRY_REASON_CATS = {
+    "stronger_remaining_upside",
+    "breakout_continuation",
+    "anti_stagnation_inclusion",
+    "other",
+}
+
+
+def validate_selector_response(
+    result: dict[str, Any] | None,
+    held_symbols: list[str],
+    pool_symbols: list[str],
+    pool_meta: dict[str, dict[str, Any]],
+    cfg: Config,
+    allow_floor_breach: bool,
+) -> tuple[bool, list[str]]:
+    """Validate the portfolio-selector response against the strict 3-6 contract.
+
+    ``pool_meta`` maps symbol → {"currently_held": bool, ...} so anti-stagnation
+    can be enforced without depending on the model's own ``currently_held``
+    flagging being correct.
+
+    Returns ``(ok, problems)``. The bot rejects on ANY problem — no auto-repair.
+    """
+    problems: list[str] = []
+    if not isinstance(result, dict) or result.get("_error"):
+        err = (result or {}).get("_error") if isinstance(result, dict) else type(result).__name__
+        return False, [f"non-dict or error: {err}"]
+
+    selected = result.get("selected_positions") or []
+    target_w = result.get("target_weights") or {}
+    per_sym = result.get("per_symbol") or {}
+    rankings = result.get("candidate_rankings") or []
+
+    min_pos = 0 if allow_floor_breach else int(cfg.get("selector", "min_positions", default=3))
+    max_pos = int(cfg.get("selector", "max_positions", default=6))
+    max_pp = float(cfg.get("risk", "max_position_pct", default=0.50))
+
+    if not isinstance(selected, list):
+        problems.append(f"selected_positions not a list: {type(selected).__name__}")
+        selected = []
+    if not (min_pos <= len(selected) <= max_pos):
+        problems.append(f"selected count {len(selected)} not in [{min_pos},{max_pos}]")
+    if len(set(selected)) != len(selected):
+        problems.append("duplicates in selected_positions")
+    pool_set = set(pool_symbols)
+    for s in selected:
+        if s not in pool_set:
+            problems.append(f"selected {s} not in candidate pool")
+
+    if not isinstance(target_w, dict):
+        problems.append("target_weights not a dict")
+        target_w = {}
+    if set(target_w.keys()) != set(selected):
+        missing = set(selected) - set(target_w.keys())
+        extra = set(target_w.keys()) - set(selected)
+        if missing:
+            problems.append(f"target_weights missing {sorted(missing)}")
+        if extra:
+            problems.append(f"target_weights has non-selected {sorted(extra)}")
+    for s, w in target_w.items():
+        try:
+            wf = float(w)
+        except (TypeError, ValueError):
+            problems.append(f"weight {s} not numeric: {w!r}")
+            continue
+        if not (0 < wf <= max_pp):
+            problems.append(f"weight {s}={wf:.4f} out of (0, {max_pp}]")
+
+    try:
+        spy_t = float(result.get("spy_target_pct", 0) or 0)
+        cash_t = float(result.get("cash_target_pct", 0) or 0)
+        wsum = sum(float(v) for v in target_w.values())
+        total = wsum + spy_t + cash_t
+        if not (0.99 <= total <= 1.01):
+            problems.append(f"weights+spy+cash sum {total:.3f} outside [0.99, 1.01]")
+    except (TypeError, ValueError):
+        problems.append("weights/spy/cash not numeric")
+        spy_t, cash_t = 0.0, 0.0
+
+    spy_dec = result.get("spy_decision")
+    if not isinstance(spy_dec, dict):
+        problems.append("missing spy_decision")
+    else:
+        for f in ("target_pct", "action", "opportunity_score", "one_sentence_reason"):
+            if f not in spy_dec or spy_dec[f] in (None, ""):
+                problems.append(f"spy_decision.{f} missing")
+
+    if not isinstance(per_sym, dict):
+        problems.append("per_symbol not a dict")
+        per_sym = {}
+
+    for s in held_symbols:
+        if s not in selected:
+            info = per_sym.get(s) if isinstance(per_sym, dict) else None
+            if not isinstance(info, dict):
+                problems.append(f"held {s} not selected and missing per_symbol entry")
+                continue
+            tp_raw = info.get("target_pct")
+            if tp_raw is None:
+                tp = None
+            else:
+                try:
+                    tp = float(tp_raw)
+                except (TypeError, ValueError):
+                    tp = None
+            action = str(info.get("action", "")).upper()
+            if tp != 0.0 or action != "EXIT":
+                problems.append(f"held {s} not selected but per_symbol.action={action!r} target_pct={tp}")
+
+    missing_per_sym = [s for s in pool_symbols if s not in per_sym]
+    if missing_per_sym:
+        problems.append(f"per_symbol missing {len(missing_per_sym)} symbols: {missing_per_sym[:5]}")
+    for s, info in per_sym.items() if isinstance(per_sym, dict) else []:
+        if not isinstance(info, dict):
+            problems.append(f"per_symbol[{s}] not a dict")
+            continue
+        for f in ("target_pct", "action", "opportunity_score", "one_sentence_reason",
+                  "exhaustion_penalty", "remaining_upside_score"):
+            if f not in info:
+                problems.append(f"per_symbol[{s}].{f} missing")
+        action = str(info.get("action", "")).upper()
+        if action and action not in _SELECTOR_VALID_ACTIONS:
+            problems.append(f"per_symbol[{s}].action invalid: {action!r}")
+        reason = info.get("one_sentence_reason", "")
+        if isinstance(reason, str) and ";" in reason:
+            info["one_sentence_reason"] = reason.replace(";", ".")
+
+    if not isinstance(rankings, list):
+        problems.append("candidate_rankings not a list")
+    else:
+        ranked_syms = {r.get("symbol") for r in rankings if isinstance(r, dict)}
+        missing_rank = pool_set - ranked_syms
+        extra_rank = ranked_syms - pool_set
+        if missing_rank:
+            problems.append(f"candidate_rankings missing {len(missing_rank)} symbols: {sorted(missing_rank)[:5]}")
+        if extra_rank:
+            problems.append(f"candidate_rankings has non-pool symbols: {sorted(extra_rank)[:5]}")
+
+    # Anti-stagnation enforcement
+    if not allow_floor_breach and selected:
+        scores: dict[str, float] = {}
+        for r in rankings if isinstance(rankings, list) else []:
+            if isinstance(r, dict):
+                try:
+                    scores[r.get("symbol", "")] = float(r.get("opportunity_score", 0) or 0)
+                except (TypeError, ValueError):
+                    continue
+        new_in_pool = [s for s in pool_symbols if not pool_meta.get(s, {}).get("currently_held", False)]
+        new_in_selected = [s for s in selected if not pool_meta.get(s, {}).get("currently_held", False)]
+        if selected:
+            lowest_selected = min(scores.get(s, 0.0) for s in selected)
+        else:
+            lowest_selected = 0.0
+        viable_new = [s for s in new_in_pool if scores.get(s, 0.0) >= (lowest_selected - 5.0)]
+        if viable_new and not new_in_selected:
+            problems.append(
+                f"Selection failed to incorporate new opportunities despite "
+                f"viable candidates: {viable_new[:5]}"
+            )
+
+    if "exhaustion_penalty_applied" not in result:
+        problems.append("exhaustion_penalty_applied missing")
+    elif not isinstance(result.get("exhaustion_penalty_applied"), list):
+        problems.append("exhaustion_penalty_applied not a list")
+
+    rp = result.get("rotation_plan") or {}
+    if isinstance(rp, dict):
+        for entry in rp.get("exited", []) or []:
+            if not isinstance(entry, dict):
+                continue
+            cat = entry.get("reason_category")
+            if cat is not None and cat not in _SELECTOR_EXIT_REASON_CATS:
+                problems.append(f"rotation_plan.exited[{entry.get('symbol')}] bad reason_category: {cat!r}")
+        for entry in rp.get("entered", []) or []:
+            if not isinstance(entry, dict):
+                continue
+            cat = entry.get("reason_category")
+            if cat is not None and cat not in _SELECTOR_ENTRY_REASON_CATS:
+                problems.append(f"rotation_plan.entered[{entry.get('symbol')}] bad reason_category: {cat!r}")
+
+    return (len(problems) == 0), problems
+
+
+def _selector_problems_are_retryable(problems: list[str]) -> bool:
+    """True when problems are exclusively count/range OR anti-stagnation —
+    these are worth a feedback-prompted retry. Other problems (missing
+    fields, malformed JSON) usually indicate the model went off-contract
+    and aren't fixable by re-prompting."""
+    if not problems:
+        return False
+    keywords = ("selected count", "duplicates in selected_positions",
+                "incorporate new opportunities")
+    return all(any(kw in p for kw in keywords) for p in problems)
+
+
+def run_portfolio_selector(
+    config: Config,
+    context: dict[str, Any],
+    pool_symbols: list[str],
+    pool_meta: dict[str, dict[str, Any]],
+    held_symbols: list[str],
+    allow_floor_breach: bool = False,
+    max_attempts: int = 3,
+) -> dict[str, Any] | None:
+    """Synchronous entry point for the unified portfolio selector.
+
+    Hard rule (matches portfolio-arbiter): NO non-AI fallback. Retry with
+    exponential backoff and validate the response. If every attempt fails
+    or returns invalid, return None — caller MUST treat None as
+    'execute no trades this scan, leave positions untouched'.
+
+    On count/range or anti-stagnation validation failure, one extra
+    feedback-prompted retry is attempted before giving up (controlled by
+    ``selector.retry_validation_failures``).
+    """
+    ai = AIResearcher(config)
+    if not ai.available():
+        log.critical(
+            "PORTFOLIO SELECTOR: AI unavailable (enabled=%s, key=%s) — "
+            "no trades will execute (fail-safe)",
+            ai.enabled, bool(ai.api_key),
+        )
+        return None
+
+    pipeline = AIPipeline(config, ai)
+    extra_retries_allowed = int(config.get("selector", "retry_validation_failures", default=1) or 0)
+    extra_retries_used = 0
+    last_error: str = ""
+    last_problems: list[str] = []
+
+    attempt = 0
+    while attempt < max_attempts:
+        attempt += 1
+        try:
+            result = asyncio.run(pipeline.portfolio_selector(context))
+        except Exception as e:
+            last_error = f"{type(e).__name__}: {e}"
+            log.warning("PORTFOLIO SELECTOR attempt %d/%d raised: %s",
+                        attempt, max_attempts, last_error)
+            result = None
+
+        if isinstance(result, dict) and not result.get("_error"):
+            ok, problems = validate_selector_response(
+                result, held_symbols, pool_symbols, pool_meta, config, allow_floor_breach,
+            )
+            if ok:
+                if attempt > 1:
+                    log.info("PORTFOLIO SELECTOR succeeded on attempt %d/%d",
+                             attempt, max_attempts)
+                return result
+            last_problems = problems
+            log.warning("PORTFOLIO SELECTOR attempt %d/%d failed validation: %s",
+                        attempt, max_attempts, problems[:5])
+
+            # Feedback-prompted retry for retryable problems (count or anti-stagnation).
+            if (extra_retries_used < extra_retries_allowed
+                    and _selector_problems_are_retryable(problems)):
+                feedback = "Validation failed: " + " | ".join(problems[:5])
+                feedback += (
+                    "\nFix and re-emit the JSON. You MUST honor the 3-6 selection "
+                    "count rule and the anti-stagnation rule (include at least one "
+                    "currently_held=false candidate within 5 score points of your "
+                    "lowest selected position)."
+                )
+                ctx_with_feedback = {**context, "_validator_feedback": feedback}
+                context = ctx_with_feedback  # next loop iteration uses this
+                extra_retries_used += 1
+                # do NOT count this as a normal attempt — extend by one
+                max_attempts += 1
+                log.info("PORTFOLIO SELECTOR retrying with validator feedback")
+                continue
+        elif isinstance(result, dict):
+            last_error = str(result.get("_error", "unknown"))
+            log.warning("PORTFOLIO SELECTOR attempt %d/%d returned error: %s",
+                        attempt, max_attempts, last_error)
+
+        if attempt < max_attempts:
+            # 429 rate-limit errors require waiting at least one full window
+            # (60s for input-token TPM); shorter backoff just hits 429 again.
+            is_rate_limit = "429" in last_error or "rate_limit" in last_error.lower()
+            backoff = 70 if is_rate_limit else 2 ** attempt  # 2s, 4s, 8s normally
+            log.info("PORTFOLIO SELECTOR retrying in %ds%s",
+                     backoff, " (rate-limit)" if is_rate_limit else "")
+            time.sleep(backoff)
+
+    log.critical(
+        "PORTFOLIO SELECTOR FAILED after %d attempts — NO trades will execute "
+        "(last_error=%s, last_validation_problems=%s)",
+        max_attempts, last_error, last_problems[:5],
+    )
+    try:
+        from src.journal import log_decision
+        log_decision({
+            "event": "ai_failure",
+            "agent": "portfolio-selector",
             "attempts": max_attempts,
             "last_error": last_error,
             "last_problems": last_problems,

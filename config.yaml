@@ -211,13 +211,14 @@ ai:
   # so larger caps are free headroom.
   max_tokens_per_agent:
     portfolio-arbiter: 8000   # full-book JSON (thesis + per-symbol for ~20 holdings)
+    portfolio-selector: 16000 # unified pool: per_symbol + rankings for every pool member (~30-50 syms)
     exit-arbiter: 3000
     earnings-gate: 3000
     risk-manager: 4000
     portfolio-verifier: 4000  # corrective-trade JSON for post-execution reconcile
   temperature: 0.3
   weight: 0.6                      # AI confidence blend weight vs numeric (0..1)
-  timeout_seconds: 45
+  timeout_seconds: 240             # bumped for portfolio-selector (~16k token output on Opus 4.7)
 
 telegram:
   enabled: true                    # if true + TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID set, sends notifications
@@ -227,4 +228,64 @@ telegram:
   notify_weekly: true              # send weekly performance review
   notify_errors: true              # send immediate alerts on errors/halts
   include_ai_votes: true           # show AI agent approvals in scan notifications
+
+# ================================================================
+# UNIFIED PORTFOLIO SELECTOR (Phase 0 — feature-flagged off)
+# ----------------------------------------------------------------
+# Replaces the two-pipeline split (portfolio-arbiter for held +
+# decision-arbiter for new candidates) with one Opus 4.7 agent that
+# ranks held ∪ discovered in a single pool and returns 3–6 selected
+# positions with score-weighted target weights. NO incumbent bias.
+# ================================================================
+selector:
+  enabled: false                   # FLAG: phases 0-3 keep this false; phase 4 flips on
+  min_positions: 3
+  max_positions: 6
+  min_per_position_pct: 0.04       # selected positions floor at 4% of equity
+  pool_size_target: 40
+  pool_size_max: 50
+  min_average_confidence: 0.50     # sanity check on selected set's avg confidence
+  max_consecutive_failures: 3      # escalate via Telegram after this many in a row
+  tie_tolerance_score: 5           # opportunity-score window for tie-break
+  retry_validation_failures: 1     # extra retry on count/range or anti-stagnation errors
+  state_file: data/state/selector_state.json   # persists consecutive_failures counter
+  floor_breach_conditions:
+    kill_switch_active: true       # allow <3 positions when kill-switch is halted
+    top_score_below: 0.50          # allow <3 when no candidate scores above this
+    bear_regime: true              # allow <3 when macro_score < -0.5 AND SPY 50dma < 200dma
+
+# Unified candidate pool builder (held + newly discovered).
+# Replaces the static SP500/Russell technical_screen approach.
+discovery:
+  enabled: true
+  pool_size_target: 40             # discovery aim before AI ranking
+  pool_size_max: 50                # hard cap for AI cost
+  movers_top_n: 15                 # AV gainers + losers each
+  most_active_top_n: 10            # AV most-active
+  news_sentiment_top_n: 10
+  news_relevance_threshold: 0.6
+  tv_breakout_top_n: 10            # tradingview-screener volume-breakout
+  tv_squeeze_top_n: 5              # tradingview-screener bollinger-squeeze
+  max_pool_per_sector: 0.40        # sector cap on pool, not portfolio
+  always_include_watchlist: true
+  always_include_held: true
+  crypto_in_pool: true             # unified equity+crypto selector
+
+# Market data layer (Alpha Vantage primary, NEVER Alpaca for charts/news).
+# Falls back to tradingview-screener (no API key) and yfinance only.
+data:
+  alpha_vantage_api_key_env: ALPHA_VANTAGE_API_KEY
+  alpha_vantage_rate_limit_per_min: 75
+  alpha_vantage_max_concurrency: 5
+  cache_dir: data/cache/av
+  intraday_interval: 5min
+  daily_lookback_days: 252
+  fallback_to_tv_screener: true
+  fallback_to_yfinance: true
+  use_alpaca_for_data: false       # never (per user instruction)
+
+# Journal logging knobs for the new selector events.
+journal:
+  log_full_pool: true              # log every symbol in the candidate pool
+  log_full_rankings: true          # log every candidate's opportunity_score + remaining_upside
 

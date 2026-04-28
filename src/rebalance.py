@@ -153,8 +153,21 @@ def compute_rebalance_plan(
 
         target_weight = ai_target_weights.get(sym)
         if target_weight is None:
-            log.info("[%s] arbiter omitted target weight — holding", sym)
-            continue
+            # Under the unified selector (selector.enabled), held symbols not
+            # in target_weights are required to have per_symbol[sym].target_pct
+            # == 0 and action == "EXIT" — force-exit them. Under the legacy
+            # portfolio-arbiter, fall back to the old hold-by-default behavior
+            # (the legacy arbiter does not promise full coverage of the book).
+            if bool(config.get("selector", "enabled", default=False)):
+                info_force = ai_per_symbol.get(sym) or {}
+                if info_force.get("target_pct") == 0 and str(info_force.get("action", "")).upper() == "EXIT":
+                    target_weight = 0.0
+                else:
+                    log.error("[%s] selector omitted target weight — forcing EXIT (fail-safe)", sym)
+                    target_weight = 0.0
+            else:
+                log.info("[%s] arbiter omitted target weight — holding", sym)
+                continue
         target_weight = max(0.0, min(max_position_pct, float(target_weight)))
 
         info = ai_per_symbol.get(sym) or {}

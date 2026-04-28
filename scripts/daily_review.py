@@ -27,7 +27,9 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 log = logging.getLogger("daily_review")
 
 PHOENIX = ZoneInfo("America/Phoenix")
-MODEL = "claude-opus-4-7"
+OPUS_MODEL   = "claude-opus-4-7"
+SONNET_MODEL = "claude-sonnet-4-6"
+MODEL = SONNET_MODEL  # toggle: switch to OPUS_MODEL to restore full accuracy
 RESEARCH = ROOT / "data" / "research"
 
 

@@ -27,6 +27,7 @@ from src.market_data import get_market_data
 from src.overnight import OvernightSignal, market_bias_from_spy, score_overnight
 from src.rebalance import compute_rebalance_plan
 from src.risk import RiskManager
+from src import sector_guard
 from src.sentiment import score_news_for_symbol
 from src.technicals import TechnicalSignal, compute_technicals, technicals_for_bars_df
 from src.universe import build_stock_universe, crypto_universe
@@ -1969,6 +1970,15 @@ class TradingOrchestrator:
             "selected, you MUST include at least one new candidate.",
             "Score-weighted sizing: weight ∝ opportunity_score, not equal-weight.",
             "Sector caps and per-position caps are HARD constraints.",
+            (
+                f"DIVERSIFICATION CAP (HARD): no more than "
+                f"{int(self.cfg.get('diversification', 'max_per_gics_sector', default=3) or 3)} "
+                f"selected positions may share the same GICS sector, and no more than "
+                f"{int(self.cfg.get('diversification', 'max_per_theme', default=3) or 3)} "
+                f"may share the same theme_bucket. Theme weight cap: "
+                f"{float(self.cfg.get('diversification', 'max_theme_weight_pct', default=0.50) or 0.50):.0%}. "
+                f"The executor will VETO any plan that violates these caps."
+            ),
         ]
 
         # Drop recent_decisions: it's anti-thrash context for the legacy
@@ -1989,6 +1999,8 @@ class TradingOrchestrator:
         }
         pool_meta: dict[str, dict[str, Any]] = {}
         unified_pool: list[dict[str, Any]] = []
+        sector_to_theme = sector_guard._build_sector_to_theme(self.cfg)
+        symbol_overrides = sector_guard._symbol_overrides(self.cfg)
 
         for cand in candidates:
             sym = cand.symbol
@@ -2027,11 +2039,19 @@ class TradingOrchestrator:
             block["is_crypto"] = bool(cand.is_crypto)
             block["discovery_sources"] = list(cand.sources)
             block["intraday_change_pct"] = round(float(cand.change_pct or 0.0), 4)
+            theme = (
+                "crypto" if cand.is_crypto
+                else sector_guard.theme_bucket_for(
+                    cand.sector or "", sector_to_theme, sym, symbol_overrides
+                )
+            )
+            block["theme_bucket"] = theme
             unified_pool.append(block)
             pool_meta[sym] = {
                 "currently_held": currently_held,
                 "is_crypto": bool(cand.is_crypto),
                 "sector": cand.sector or "Other",
+                "theme_bucket": theme,
             }
 
         base["candidate_pool"] = unified_pool
@@ -2156,6 +2176,63 @@ class TradingOrchestrator:
             }
 
         self._reset_selector_failures()
+
+        # Diversification veto: reject any plan that violates the per-sector
+        # / per-theme cap. One repair retry, then forced compliance.
+        cash_proxy = self.cash_proxy_symbol if self.cash_proxy_enabled else None
+        guard = sector_guard.validate(
+            target_weights=result.get("target_weights") or {},
+            per_symbol=result.get("per_symbol") or {},
+            pool_meta=pool_meta,
+            cfg=self.cfg,
+            cash_proxy_symbol=cash_proxy,
+        )
+        if not guard.ok:
+            log_decision({"event": "sector_guard_violation",
+                          "violations": [v.to_dict() for v in guard.violations]})
+            ctx_retry = dict(ctx)
+            ss_retry = dict(ctx_retry.get("system_state") or {})
+            ss_retry["sector_guard_violations"] = [v.to_dict() for v in guard.violations]
+            ss_retry["sector_guard_retry"] = True
+            ctx_retry["system_state"] = ss_retry
+            retry_result = run_portfolio_selector(
+                self.cfg, ctx_retry, pool_symbols=pool_symbols, pool_meta=pool_meta,
+                held_symbols=held_symbols, allow_floor_breach=allow_floor_breach,
+            )
+            if retry_result is not None:
+                guard2 = sector_guard.validate(
+                    target_weights=retry_result.get("target_weights") or {},
+                    per_symbol=retry_result.get("per_symbol") or {},
+                    pool_meta=pool_meta,
+                    cfg=self.cfg,
+                    cash_proxy_symbol=cash_proxy,
+                )
+                if guard2.ok:
+                    result = retry_result
+                    log_decision({"event": "sector_guard_repair_ok"})
+                else:
+                    forced = sector_guard.force_compliance(
+                        target_weights=retry_result.get("target_weights") or {},
+                        per_symbol=retry_result.get("per_symbol") or {},
+                        violations=guard2.violations,
+                        cash_proxy_symbol=cash_proxy,
+                    )
+                    result = retry_result
+                    log_decision({"event": "sector_guard_forced",
+                                  "forced_exits": forced,
+                                  "violations": [v.to_dict() for v in guard2.violations]})
+            else:
+                forced = sector_guard.force_compliance(
+                    target_weights=result.get("target_weights") or {},
+                    per_symbol=result.get("per_symbol") or {},
+                    violations=guard.violations,
+                    cash_proxy_symbol=cash_proxy,
+                )
+                log_decision({"event": "sector_guard_forced",
+                              "forced_exits": forced,
+                              "violations": [v.to_dict() for v in guard.violations],
+                              "retry": "ai_unavailable"})
+
         log_decision({"event": "selector_output", "result": result})
         log_decision({
             "event": "selector_rankings",

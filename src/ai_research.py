@@ -35,12 +35,19 @@ AGENTS_DIR = Path(__file__).resolve().parents[1] / ".claude" / "agents"
 # MODEL ROUTER — centralized selection for all AI calls in the bot.
 #
 # HARD RULE: Any AI output that can directly lead to buying, selling, sizing,
-# or otherwise modifying exposure MUST use TRADE_CRITICAL_MODEL (Opus 4.7).
-# Cheaper models are permitted ONLY for pure input agents (technical/
+# or otherwise modifying exposure MUST use TRADE_CRITICAL_MODEL (Sonnet 4.6 or
+# Opus 4.7). Cheaper models are permitted ONLY for pure input agents (technical/
 # fundamental/sentiment analysts whose structured output is fed into the
-# Opus arbiter) or for non-critical summarization / formatting.
+# arbiter) or for non-critical summarization / formatting.
 # ---------------------------------------------------------------------------
-TRADE_CRITICAL_MODEL_DEFAULT = "claude-opus-4-7"
+
+# Cost toggle — change TRADE_CRITICAL_MODEL_DEFAULT to switch tiers:
+#   OPUS_MODEL   = max accuracy, higher cost
+#   SONNET_MODEL = lower cost (currently active)
+OPUS_MODEL   = "claude-opus-4-7"
+SONNET_MODEL = "claude-sonnet-4-6"
+
+TRADE_CRITICAL_MODEL_DEFAULT = SONNET_MODEL
 NON_CRITICAL_MODEL_DEFAULT = "claude-haiku-4-5-20251001"
 
 # Agents whose output directly authorizes or modifies capital allocation.

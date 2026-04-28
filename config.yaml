@@ -137,7 +137,7 @@ rebalance:
   winner_profit_threshold: 0.03    # don't trim if unrealized pnl > +3% AND tech still positive
   block_on_risk_reject: true       # AI risk agent 'reject' or 'D/F' grade hard-blocks adds
   # AI budget for held-position analysis
-  rerun_ai_on_score_delta: 0.15    # re-ask AI when tech score has moved this much since last scan
+  rerun_ai_on_score_delta: 0.0     # always re-rank held positions; the unified selector evaluates every scan
   max_ai_reruns_per_scan: 8        # cap AI reruns per scan to control cost
   # Bearish-day override: allow add when AI conviction is exceptional
   bearish_override_conf: 0.85
@@ -192,11 +192,11 @@ ai:
   # in TRADE_CRITICAL_AGENTS have their model forced to
   # trade_critical_model regardless of what the caller passes in.
   # ================================================================
-  trade_critical_model: claude-opus-4-7      # Opus 4.7 for ALL trade-critical reasoning
+  trade_critical_model: claude-sonnet-4-6    # toggle: claude-opus-4-7 (max accuracy) ↔ claude-sonnet-4-6 (lower cost)
   non_critical_model: claude-haiku-4-5-20251001  # analysts / logging / summaries only
   verifier_model: claude-sonnet-4-6          # Sonnet 4.6 for the post-execution portfolio verifier
   # Legacy aliases — retained for callers that haven't migrated yet.
-  model: claude-opus-4-7
+  model: claude-sonnet-4-6                   # mirrors trade_critical_model
   haiku_model: claude-haiku-4-5-20251001  # technical/fundamental/sentiment analysts (fast, cheap)
   # Per-agent model overrides (only consulted for agents NOT in the
   # TRADE_CRITICAL_AGENTS hard-coded set in src/ai_research.py).
@@ -238,7 +238,7 @@ telegram:
 # positions with score-weighted target weights. NO incumbent bias.
 # ================================================================
 selector:
-  enabled: false                   # FLAG: phases 0-3 keep this false; phase 4 flips on
+  enabled: true                    # unified pool selector with no incumbent bias
   min_positions: 3
   max_positions: 6
   min_per_position_pct: 0.04       # selected positions floor at 4% of equity
@@ -283,6 +283,55 @@ data:
   fallback_to_tv_screener: true
   fallback_to_yfinance: true
   use_alpaca_for_data: false       # never (per user instruction)
+
+# Hard portfolio-level diversification cap. Enforced post-AI by sector_guard.py
+# as an executor veto — independent of whatever the AI returns.
+diversification:
+  max_per_gics_sector: 3
+  max_per_theme: 3
+  max_theme_weight_pct: 0.50
+  # The bot's universe loader returns top-level GICS sectors. Theme keys here
+  # mirror those exactly so every holding maps cleanly (no "other" bucket).
+  themes:
+    technology: [Information Technology]
+    healthcare: [Health Care]
+    financials: [Financials]
+    consumer_discretionary: [Consumer Discretionary]
+    communication_services: [Communication Services]
+    industrials: [Industrials]
+    consumer_staples: [Consumer Staples]
+    energy: [Energy]
+    utilities: [Utilities]
+    real_estate: [Real Estate]
+    materials: [Materials]
+  # Symbol-level overrides for cross-sector correlation clusters. These
+  # supersede the GICS-sector mapping above. The `ai_data_center` bucket
+  # exists specifically to prevent the 2026-04-28 failure mode: a book full
+  # of semis (IT) + power/HVAC industrials all moving together on AI capex
+  # news. Same cap (3) applies as any other theme.
+  symbol_overrides:
+    # Semis & AI-tied tech hardware
+    NVDA: ai_data_center
+    AMD: ai_data_center
+    AVGO: ai_data_center
+    MU: ai_data_center
+    INTC: ai_data_center
+    TSM: ai_data_center
+    ASML: ai_data_center
+    SMCI: ai_data_center
+    DELL: ai_data_center
+    ANET: ai_data_center
+    MRVL: ai_data_center
+    # Data-center industrials & power
+    VRT: ai_data_center
+    FIX: ai_data_center
+    GEV: ai_data_center
+    ETN: ai_data_center
+    PWR: ai_data_center
+    EMR: ai_data_center
+    # Crypto-correlated equities (move with BTC/ETH)
+    COIN: crypto_proxy
+    MSTR: crypto_proxy
 
 # Journal logging knobs for the new selector events.
 journal:

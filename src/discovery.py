@@ -421,12 +421,16 @@ def _apply_sector_cap(
     keep: dict[str, Candidate] = {}
     dropped = 0
     for sector, members in by_sector.items():
-        # Held + crypto always pass; rank others by source priority + change_pct
-        held_or_crypto = [c for c in members if c.is_held or c.is_crypto]
-        rest = [c for c in members if not (c.is_held or c.is_crypto)]
-        rest.sort(key=lambda c: (-len(c.sources), -abs(c.change_pct)))
-        keep_count = max(0, max_per_sector - len(held_or_crypto))
-        kept = held_or_crypto + rest[:keep_count]
+        # Crypto is structurally a separate bucket and always passes. Held
+        # equities are NO LONGER exempt — they compete for sector slots like
+        # any other candidate so a saturated book cannot crowd out alternatives
+        # the AI never gets to see. Held names retain a ranking advantage via
+        # is_held in the sort key.
+        crypto = [c for c in members if c.is_crypto]
+        rest = [c for c in members if not c.is_crypto]
+        rest.sort(key=lambda c: (-int(c.is_held), -len(c.sources), -abs(c.change_pct)))
+        keep_count = max(0, max_per_sector - len(crypto))
+        kept = crypto + rest[:keep_count]
         dropped += len(members) - len(kept)
         for c in kept:
             keep[c.symbol] = c

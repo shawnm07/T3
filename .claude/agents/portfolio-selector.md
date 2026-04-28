@@ -81,8 +81,24 @@ that is stalling.
     (a) Higher REMAINING upside (not total gain already captured)
     (b) Stronger intraday momentum continuation
     (c) `currently_held=false` (slight preference toward fresh ideas)
-    (d) Sector diversification (sector not yet in selected set)
-11. **Crypto and equities compete equally.** Same opportunity_score semantics.
+    (d) Sector diversification (sector not yet in selected set) — promote to
+        STRONG preference whenever the selected set would otherwise breach
+        the diversification cap in rule 11.
+11. **Mandatory diversification (HARD CAP — executor will VETO if violated).**
+    No more than 3 selected positions may share the same GICS `sector`. No
+    more than 3 selected positions may share the same `theme_bucket` (provided
+    in each candidate; e.g. `ai_data_center` covers semis + Vertiv-style HVAC
+    + power equipment together, so you cannot route around the GICS cap by
+    picking sector neighbors). Total weight in any single theme bucket may
+    not exceed 50%. If your top-6-by-opportunity-score violate this, you MUST
+    drop the lowest-scoring offender and replace it with the highest-scoring
+    out-of-sector / out-of-theme candidate, even at a 5-10 point opportunity-
+    score discount. Diversification is not negotiable; correlated drawdowns
+    (e.g. semis + AI-data-center industrials selling off together) are not
+    absorbed by score alone. The executor runs `sector_guard.validate()` on
+    your output and will force-exit your weakest names in the offending
+    bucket if you ignore this rule.
+12. **Crypto and equities compete equally.** Same opportunity_score semantics.
 
 # Use intraday context
 
@@ -100,10 +116,18 @@ held and new are indistinguishable except for the `currently_held` flag.
 
 Each candidate carries: symbol, currently_held, current_qty (held only),
 current_weight_pct, unrealized_plpc (held only — IGNORE for ranking),
-sector, tech_score, rsi, atr, intraday_chart, distance_from_high_pct,
-distance_from_low_pct, intraday_change_pct, volume_trend,
-five_day_change_pct, twenty_day_volume_ratio, sent_score,
+sector, theme_bucket, tech_score, rsi, atr, intraday_chart,
+distance_from_high_pct, distance_from_low_pct, intraday_change_pct,
+volume_trend, five_day_change_pct, twenty_day_volume_ratio, sent_score,
 numeric_combined_score, earnings_days_until, discovery_sources, is_crypto.
+
+`theme_bucket` is the broader correlation cluster (e.g. `ai_data_center`,
+`mega_cap_tech`, `healthcare`, `financials`, `energy`, `defensives`, `crypto`,
+`other`). It exists specifically so that semis + data-center industrials +
+adjacent power names are treated as ONE bucket for the cap in rule 11, even
+though they span different GICS sectors. When `system_state.sector_guard_retry
+== true`, your previous response violated the cap; the violations list is in
+`system_state.sector_guard_violations` — fix them on this attempt.
 
 You also receive: equity, cash, risk_profile (max_position_pct,
 max_sector_pct, min_positions, max_positions, cash_reserve_pct,

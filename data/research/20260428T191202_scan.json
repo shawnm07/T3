@@ -1,0 +1,138 @@
+{
+  "ts": "2026-04-28T19:12:02.863060+00:00",
+  "equity": 99281.47651147938,
+  "positions_count": 7,
+  "macro": {
+    "regime": "neutral",
+    "score": 0.218,
+    "spy_trend": 0.338,
+    "spy_vs_200ema": 0.07,
+    "vix_level": 27.785,
+    "vix_regime": "normal",
+    "breadth_pct_above_50": 0.6326530612244898,
+    "notes": [
+      "spy_uptrend",
+      "vixy_ratio_0.93",
+      "breadth_63pct"
+    ]
+  },
+  "kill_switch": {
+    "halted": false,
+    "reasons": [],
+    "weekly_return": 0.029586671095169104,
+    "daily_return": 0.0070376245001921856,
+    "trades_today": 9
+  },
+  "selector": {
+    "pool_size": 30,
+    "sources_breakdown": {
+      "held": 6,
+      "watchlist": 15,
+      "av_gainers": 15,
+      "av_losers": 15,
+      "av_most_active": 10,
+      "tv_breakout": 10,
+      "tv_squeeze": 5,
+      "crypto": 3
+    },
+    "selected_positions": [
+      "MU",
+      "DELL",
+      "FIX",
+      "LLY",
+      "JPM"
+    ],
+    "target_weights": {
+      "MU": 0.18,
+      "DELL": 0.168,
+      "FIX": 0.152,
+      "LLY": 0.0,
+      "JPM": 0.0,
+      "SPY": 0.4
+    },
+    "spy_target_pct": 0.0,
+    "cash_target_pct": 0.1,
+    "exhaustion_penalty_applied": [
+      "AMD",
+      "VRT",
+      "HTCO",
+      "CRMX",
+      "ERAS"
+    ],
+    "new_candidates_selected": 2,
+    "allow_floor_breach": false
+  },
+  "exits": [],
+  "executions": [
+    {
+      "dry_run": true,
+      "symbol": "AMD",
+      "side": "sell",
+      "delta_notional": 8307.74,
+      "current_notional": 8307.74,
+      "target_notional": 0.0,
+      "tech_score": 0.65,
+      "unrealized_plpc": 0.0107,
+      "reason": "arbiter EXIT -> 0.0% (from 8.4%): RSI 75 overbought, fading, and earnings in 7 days. exit.",
+      "one_sentence_reason": "RSI 75 overbought, fading, and earnings in 7 days. exit.",
+      "opportunity_score": 38.0,
+      "ai_action": "EXIT",
+      "ai_confidence": 0.7,
+      "target_pct": 0.0,
+      "target_qty": 0.0
+    },
+    {
+      "dry_run": true,
+      "symbol": "AVGO",
+      "side": "sell",
+      "delta_notional": 9940.6,
+      "current_notional": 9940.6,
+      "target_notional": 0.0,
+      "tech_score": 0.719,
+      "unrealized_plpc": -0.0207,
+      "reason": "arbiter EXIT -> 0.0% (from 10.0%): Cut to comply with IT sector cap. lowest scoring IT name held.",
+      "one_sentence_reason": "Cut to comply with IT sector cap. lowest scoring IT name held.",
+      "opportunity_score": 50.0,
+      "ai_action": "EXIT",
+      "ai_confidence": 0.6,
+      "target_pct": 0.0,
+      "target_qty": 0.0
+    },
+    {
+      "dry_run": true,
+      "symbol": "MU",
+      "side": "sell",
+      "delta_notional": 3822.28,
+      "current_notional": 21692.94,
+      "target_notional": 17870.67,
+      "tech_score": 0.811,
+      "unrealized_plpc": -0.0156,
+      "reason": "arbiter REDUCE -> 18.0% (from 21.8%): Top-ranked by combined score. modest add given strong tech setup.",
+      "one_sentence_reason": "Top-ranked by combined score. modest add given strong tech setup.",
+      "opportunity_score": 72.0,
+      "ai_action": "REDUCE",
+      "ai_confidence": 0.7,
+      "target_pct": 0.18,
+      "target_qty": 44.12
+    },
+    {
+      "dry_run": true,
+      "symbol": "VRT",
+      "side": "sell",
+      "delta_notional": 13700.68,
+      "current_notional": 13700.68,
+      "target_notional": 0.0,
+      "tech_score": 0.753,
+      "unrealized_plpc": -0.0299,
+      "reason": "arbiter EXIT -> 0.0% (from 13.8%): Down 3.7% with falling trend on rising volume signals distribution.",
+      "one_sentence_reason": "Down 3.7% with falling trend on rising volume signals distribution.",
+      "opportunity_score": 48.0,
+      "ai_action": "EXIT",
+      "ai_confidence": 0.65,
+      "target_pct": 0.0,
+      "target_qty": 0.0
+    }
+  ],
+  "cash_proxy": null,
+  "verifier": null
+}

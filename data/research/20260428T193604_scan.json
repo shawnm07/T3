@@ -1,0 +1,269 @@
+{
+  "ts": "2026-04-28T19:36:04.335149+00:00",
+  "equity": 96647.28209293477,
+  "positions_count": 7,
+  "macro": {
+    "regime": "neutral",
+    "score": 0.228,
+    "spy_trend": 0.337,
+    "spy_vs_200ema": 0.07,
+    "vix_level": 27.785,
+    "vix_regime": "normal",
+    "breadth_pct_above_50": 0.6530612244897959,
+    "notes": [
+      "spy_uptrend",
+      "vixy_ratio_0.93",
+      "breadth_65pct"
+    ]
+  },
+  "kill_switch": {
+    "halted": false,
+    "reasons": [],
+    "weekly_return": 0.029586671095169104,
+    "daily_return": 0.0070376245001921856,
+    "trades_today": 9
+  },
+  "selector": {
+    "pool_size": 37,
+    "sources_breakdown": {
+      "held": 6,
+      "watchlist": 15,
+      "av_gainers": 15,
+      "av_losers": 15,
+      "av_most_active": 10,
+      "tv_breakout": 10,
+      "tv_squeeze": 5,
+      "crypto": 3
+    },
+    "selected_positions": [
+      "MU",
+      "CNC",
+      "CECO",
+      "DELL"
+    ],
+    "target_weights": {
+      "MU": 0.266,
+      "CNC": 0.242,
+      "CECO": 0.22,
+      "DELL": 0.222
+    },
+    "spy_target_pct": 0.0,
+    "cash_target_pct": 0.05,
+    "exhaustion_penalty_applied": [
+      "KNSA",
+      "OMCL",
+      "SANM"
+    ],
+    "new_candidates_selected": 2,
+    "allow_floor_breach": false
+  },
+  "exits": [],
+  "executions": [
+    {
+      "symbol": "AMD",
+      "side": "sell",
+      "delta_notional": 7937.33,
+      "current_notional": 7937.33,
+      "target_notional": 0.0,
+      "tech_score": 0.848,
+      "unrealized_plpc": -0.0343,
+      "reason": "arbiter EXIT -> 0.0% (from 8.2%): RSI 74.3 elevated with earnings in 7 days and ai_data_center theme at cap. exiting to reduce concentration and earnings risk.",
+      "one_sentence_reason": "RSI 74.3 elevated with earnings in 7 days and ai_data_center theme at cap. exiting to reduce concentration and earnings risk.",
+      "opportunity_score": 35.0,
+      "ai_action": "EXIT",
+      "ai_confidence": 0.35,
+      "target_pct": 0.0,
+      "target_qty": 0.0,
+      "execution": {
+        "symbol": "AMD",
+        "status": "filled",
+        "order_id": "36c9c390-f149-4d56-b5a0-24ae60a31db4",
+        "approval_id": null,
+        "message": "rebalance sell $7937 (arbiter EXIT -> 0.0% (from 8.2%): RSI 74.3 elevated with earnings in 7 days and ai_data_center theme at cap. exiting to reduce concentration and earnings risk.) [filled]",
+        "filled_qty": 24.494152,
+        "filled_avg_price": 324.05,
+        "final_status": "filled",
+        "ok": true
+      }
+    },
+    {
+      "symbol": "AVGO",
+      "side": "sell",
+      "delta_notional": 9881.81,
+      "current_notional": 9881.81,
+      "target_notional": 0.0,
+      "tech_score": 0.717,
+      "unrealized_plpc": -0.0265,
+      "reason": "arbiter EXIT -> 0.0% (from 10.2%): Zero sentiment score and lowest numeric combined score among held names. exiting to comply with ai_data_center theme weight hard cap.",
+      "one_sentence_reason": "Zero sentiment score and lowest numeric combined score among held names. exiting to comply with ai_data_center theme weight hard cap.",
+      "opportunity_score": 40.0,
+      "ai_action": "EXIT",
+      "ai_confidence": 0.4,
+      "target_pct": 0.0,
+      "target_qty": 0.0,
+      "execution": {
+        "symbol": "AVGO",
+        "status": "rejected",
+        "order_id": null,
+        "approval_id": null,
+        "message": "{\"available\":\"24.64998076\",\"code\":40310000,\"existing_qty\":\"24.64998076\",\"held_for_orders\":\"0\",\"message\":\"insufficient qty available for order (requested: 24.689711173, available: 24.64998076)\",\"symbol\":\"AVGO\"}",
+        "filled_qty": 0.0,
+        "filled_avg_price": null,
+        "final_status": "error",
+        "ok": false
+      }
+    },
+    {
+      "symbol": "FIX",
+      "side": "sell",
+      "delta_notional": 14033.46,
+      "current_notional": 14033.46,
+      "target_notional": 0.0,
+      "tech_score": 0.796,
+      "unrealized_plpc": -0.0552,
+      "reason": "arbiter EXIT -> 0.0% (from 14.5%): Falling volume and flat trend with numeric combined score 0.364. exiting to comply with ai_data_center theme weight hard cap.",
+      "one_sentence_reason": "Falling volume and flat trend with numeric combined score 0.364. exiting to comply with ai_data_center theme weight hard cap.",
+      "opportunity_score": 45.0,
+      "ai_action": "EXIT",
+      "ai_confidence": 0.45,
+      "target_pct": 0.0,
+      "target_qty": 0.0,
+      "execution": {
+        "symbol": "FIX",
+        "status": "filled",
+        "order_id": "e446264f-06bd-472f-889b-d7ccd2668190",
+        "approval_id": null,
+        "message": "rebalance sell $14033 (arbiter EXIT -> 0.0% (from 14.5%): Falling volume and flat trend with numeric combined score 0.364. exiting to comply with ai_data_center theme weight hard cap.) [filled]",
+        "filled_qty": 8.157471,
+        "filled_avg_price": 1720.32,
+        "final_status": "filled",
+        "ok": true
+      }
+    },
+    {
+      "symbol": "VRT",
+      "side": "sell",
+      "delta_notional": 13387.83,
+      "current_notional": 13387.83,
+      "target_notional": 0.0,
+      "tech_score": 0.74,
+      "unrealized_plpc": -0.0521,
+      "reason": "arbiter EXIT -> 0.0% (from 13.9%): Falling volume on intraday chart with numeric combined score 0.39 and ai_data_center theme membership forces exit to comply with 50% theme weight cap.",
+      "one_sentence_reason": "Falling volume on intraday chart with numeric combined score 0.39 and ai_data_center theme membership forces exit to comply with 50% theme weight cap.",
+      "opportunity_score": 42.0,
+      "ai_action": "EXIT",
+      "ai_confidence": 0.42,
+      "target_pct": 0.0,
+      "target_qty": 0.0,
+      "execution": {
+        "symbol": "VRT",
+        "status": "filled",
+        "order_id": "8a28c6d1-a222-4e79-a738-dbe39bc8a11e",
+        "approval_id": null,
+        "message": "rebalance sell $13388 (arbiter EXIT -> 0.0% (from 13.9%): Falling volume on intraday chart with numeric combined score 0.39 and ai_data_center theme membership forces exit to comply with 50% theme weight cap.) [filled]",
+        "filled_qty": 43.923327,
+        "filled_avg_price": 304.8,
+        "final_status": "filled",
+        "ok": true
+      }
+    },
+    {
+      "symbol": "DELL",
+      "side": "buy",
+      "delta_notional": 7173.53,
+      "current_notional": 14282.17,
+      "target_notional": 21455.7,
+      "tech_score": 0.785,
+      "unrealized_plpc": -0.0705,
+      "reason": "arbiter REDUCE -> 22.2% (from 14.8%): Retained as second ai_data_center slot with rising intraday trend and 30 days to earnings, but weight reduced to keep theme below 50% cap.",
+      "one_sentence_reason": "Retained as second ai_data_center slot with rising intraday trend and 30 days to earnings, but weight reduced to keep theme below 50% cap.",
+      "opportunity_score": 55.0,
+      "ai_action": "REDUCE",
+      "ai_confidence": 0.55,
+      "target_pct": 0.222,
+      "target_qty": null,
+      "execution": {
+        "symbol": "DELL",
+        "status": "filled",
+        "order_id": "344ef96f-809e-4887-8bd7-6d0b722e370f",
+        "approval_id": null,
+        "message": "rebalance buy $7174 (arbiter REDUCE -> 22.2% (from 14.8%): Retained as second ai_data_center slot with rising intraday trend and 30 days to earnings, but weight reduced to keep theme below 50% cap.) [filled]",
+        "filled_qty": 34.972358,
+        "filled_avg_price": 205.12,
+        "final_status": "filled",
+        "ok": true
+      }
+    },
+    {
+      "symbol": "MU",
+      "side": "buy",
+      "delta_notional": 4379.89,
+      "current_notional": 21328.29,
+      "target_notional": 25708.18,
+      "tech_score": 0.808,
+      "unrealized_plpc": -0.0322,
+      "reason": "arbiter HOLD -> 26.6% (from 22.1%): Best-scoring held name with highest sentiment and numeric combined score. retaining as primary ai_data_center position within theme cap.",
+      "one_sentence_reason": "Best-scoring held name with highest sentiment and numeric combined score. retaining as primary ai_data_center position within theme cap.",
+      "opportunity_score": 68.0,
+      "ai_action": "HOLD",
+      "ai_confidence": 0.68,
+      "target_pct": 0.266,
+      "target_qty": null,
+      "execution": {
+        "symbol": "MU",
+        "status": "filled",
+        "order_id": "89aa91e1-b6bb-4ee4-b0bf-f02aa62eff67",
+        "approval_id": null,
+        "message": "rebalance buy $4380 (arbiter HOLD -> 26.6% (from 22.1%): Best-scoring held name with highest sentiment and numeric combined score. retaining as primary ai_data_center position within theme cap.) [filled]",
+        "filled_qty": 8.670646,
+        "filled_avg_price": 505.14,
+        "final_status": "filled",
+        "ok": true
+      }
+    },
+    {
+      "symbol": "CNC",
+      "side": "buy",
+      "delta_notional": 23388.64,
+      "reason": "Strong +14.16% healthcare catalyst with fresh sector diversification provides the best new-candidate upside and satisfies anti-stagnation requirement.",
+      "is_new_entry": true,
+      "execution": {
+        "symbol": "CNC",
+        "status": "filled",
+        "order_id": "377932e3-5741-4ff2-8243-1acfa028fa39",
+        "approval_id": null,
+        "message": "rebalance buy $23389 (Strong +14.16% healthcare catalyst with fresh sector diversification provides the best new-candidate upside and satisfies anti-stagnation requirement.) [filled]",
+        "filled_qty": 475.475503,
+        "filled_avg_price": 49.19,
+        "final_status": "filled",
+        "ok": true
+      }
+    },
+    {
+      "symbol": "CECO",
+      "side": "buy",
+      "delta_notional": 21262.4,
+      "reason": "TV breakout signal with +13.7% intraday gain in Producer Manufacturing provides Industrials diversification outside the ai_data_center theme cap.",
+      "is_new_entry": true,
+      "execution": {
+        "symbol": "CECO",
+        "status": "filled",
+        "order_id": "666d860d-9829-4aa0-a7a0-6a997fc470aa",
+        "approval_id": null,
+        "message": "rebalance buy $21262 (TV breakout signal with +13.7% intraday gain in Producer Manufacturing provides Industrials diversification outside the ai_data_center theme cap.) [filled]",
+        "filled_qty": 284.599117,
+        "filled_avg_price": 74.71,
+        "final_status": "filled",
+        "ok": true
+      }
+    }
+  ],
+  "cash_proxy": {
+    "symbol": "SPY",
+    "action": "sell_failed",
+    "error": "{\"available\":\"4.162178235\",\"code\":40310000,\"existing_qty\":\"4.162178235\",\"held_for_orders\":\"0\",\"message\":\"insufficient qty available for order (requested: 4.162875059, available: 4.162178235)\",\"symbol\":\"SPY\"}"
+  },
+  "verifier": {
+    "error": "'TradingOrchestrator' object has no attribute '_last_ai_target_weights'"
+  }
+}

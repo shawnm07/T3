@@ -1,0 +1,160 @@
+{
+  "ts": "2026-04-28T12:49:42.867750+00:00",
+  "equity": 97588.00182608578,
+  "positions_count": 8,
+  "macro": {
+    "regime": "neutral",
+    "score": 0.21,
+    "spy_trend": 0.364,
+    "spy_vs_200ema": 0.076,
+    "vix_level": 27.81,
+    "vix_regime": "normal",
+    "breadth_pct_above_50": 0.5918367346938775,
+    "notes": [
+      "spy_uptrend",
+      "vixy_ratio_0.92",
+      "breadth_59pct"
+    ]
+  },
+  "kill_switch": {
+    "halted": false,
+    "reasons": [],
+    "weekly_return": 0.029586671095169104,
+    "daily_return": 0.0070376245001921856,
+    "trades_today": 0
+  },
+  "selector": {
+    "pool_size": 28,
+    "sources_breakdown": {
+      "held": 7,
+      "watchlist": 15,
+      "av_gainers": 15,
+      "av_losers": 15,
+      "av_most_active": 10,
+      "tv_breakout": 10,
+      "tv_squeeze": 5,
+      "crypto": 3
+    },
+    "selected_positions": [
+      "MU",
+      "NVDA",
+      "DELL",
+      "VRT",
+      "FIX"
+    ],
+    "target_weights": {
+      "MU": 0.27,
+      "NVDA": 0.21,
+      "DELL": 0.2,
+      "VRT": 0.16,
+      "FIX": 0.11
+    },
+    "spy_target_pct": 0.0,
+    "cash_target_pct": 0.05,
+    "exhaustion_penalty_applied": [
+      "CRMX",
+      "OGN",
+      "MANE"
+    ],
+    "new_candidates_selected": 1,
+    "allow_floor_breach": false
+  },
+  "exits": [],
+  "executions": [
+    {
+      "dry_run": true,
+      "symbol": "AMD",
+      "side": "sell",
+      "delta_notional": 5100.19,
+      "current_notional": 5100.19,
+      "target_notional": 0.0,
+      "tech_score": 0.659,
+      "unrealized_plpc": -0.0063,
+      "reason": "arbiter EXIT -> 0.0% (from 5.2%): Earnings in 7 days plus RSI 80.2 creates unacceptable binary risk.",
+      "one_sentence_reason": "Earnings in 7 days plus RSI 80.2 creates unacceptable binary risk.",
+      "opportunity_score": 35.0,
+      "ai_action": "EXIT",
+      "ai_confidence": 0.85,
+      "target_pct": 0.0,
+      "target_qty": 0.0
+    },
+    {
+      "dry_run": true,
+      "symbol": "AVGO",
+      "side": "sell",
+      "delta_notional": 6791.16,
+      "current_notional": 6791.16,
+      "target_notional": 0.0,
+      "tech_score": 0.769,
+      "unrealized_plpc": -0.0565,
+      "reason": "arbiter EXIT -> 0.0% (from 7.0%): Redundant with MU/DELL semi exposure and weakest of held tech names.",
+      "one_sentence_reason": "Redundant with MU/DELL semi exposure and weakest of held tech names.",
+      "opportunity_score": 48.0,
+      "ai_action": "EXIT",
+      "ai_confidence": 0.7,
+      "target_pct": 0.0,
+      "target_qty": 0.0
+    },
+    {
+      "dry_run": true,
+      "symbol": "FIX",
+      "side": "sell",
+      "delta_notional": 2078.88,
+      "current_notional": 12813.56,
+      "target_notional": 10734.68,
+      "tech_score": 0.819,
+      "unrealized_plpc": -0.0899,
+      "reason": "arbiter REDUCE -> 11.0% (from 13.1%): Reduce from 13% to 11% as RSI 70.6 limits remaining upside.",
+      "one_sentence_reason": "Reduce from 13% to 11% as RSI 70.6 limits remaining upside.",
+      "opportunity_score": 58.0,
+      "ai_action": "REDUCE",
+      "ai_confidence": 0.58,
+      "target_pct": 0.11,
+      "target_qty": 6.11
+    },
+    {
+      "dry_run": true,
+      "symbol": "GEV",
+      "side": "sell",
+      "delta_notional": 3765.41,
+      "current_notional": 3765.41,
+      "target_notional": 0.0,
+      "tech_score": 0.824,
+      "unrealized_plpc": -0.0911,
+      "reason": "arbiter EXIT -> 0.0% (from 3.9%): Falling on falling volume with elevated RSI \u2014 capital better deployed in NVDA.",
+      "one_sentence_reason": "Falling on falling volume with elevated RSI \u2014 capital better deployed in NVDA.",
+      "opportunity_score": 52.0,
+      "ai_action": "EXIT",
+      "ai_confidence": 0.7,
+      "target_pct": 0.0,
+      "target_qty": 0.0
+    },
+    {
+      "dry_run": true,
+      "symbol": "VRT",
+      "side": "buy",
+      "delta_notional": 2064.91,
+      "current_notional": 13549.17,
+      "target_notional": 15614.08,
+      "tech_score": 0.804,
+      "unrealized_plpc": -0.0406,
+      "reason": "arbiter INCREASE -> 16.0% (from 13.9%): Industrials AI infrastructure leader with pullback to day low offers re-entry.",
+      "one_sentence_reason": "Industrials AI infrastructure leader with pullback to day low offers re-entry.",
+      "opportunity_score": 64.0,
+      "ai_action": "INCREASE",
+      "ai_confidence": 0.64,
+      "target_pct": 0.16,
+      "target_qty": 50.51
+    },
+    {
+      "dry_run": true,
+      "symbol": "NVDA",
+      "side": "buy",
+      "delta_notional": 20493.48,
+      "reason": "Fresh breakout candidate up 4% intraday bucking sector weakness \u2014 anti-stagnation inclusion.",
+      "is_new_entry": true
+    }
+  ],
+  "cash_proxy": null,
+  "verifier": null
+}

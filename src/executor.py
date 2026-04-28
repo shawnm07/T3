@@ -7,7 +7,7 @@ from typing import Any
 from src.alpaca_client import AlpacaClient
 from src.config import Config
 from src.decision import TradeDecision
-from src.journal import enqueue_approval, log_trade
+from src.journal import log_trade
 from src.kill_switch import increment_trade_counter
 from src.risk import SizingDecision
 
@@ -17,7 +17,7 @@ log = logging.getLogger(__name__)
 @dataclass
 class ExecutionResult:
     symbol: str
-    status: str  # "submitted" | "queued_for_approval" | "rejected" | "filled" | "unfilled"
+    status: str  # "submitted" | "rejected" | "filled" | "unfilled"
     order_id: str | None = None
     approval_id: str | None = None
     message: str = ""
@@ -46,7 +46,6 @@ class TradeExecutor:
         self.client = client
         self.cfg = config
         self.is_crypto = is_crypto
-        self.approval_threshold = config.get("kill_switch", "approval_threshold_usd", default=10000)
         self.mode = config.alpaca.mode
         self.fill_timeout = float(config.get("execution", "fill_timeout_s", default=30))
         self.fill_poll = float(config.get("execution", "fill_poll_s", default=1.0))
@@ -72,29 +71,6 @@ class TradeExecutor:
         return (filled_qty, avg_price, status, ok)
 
     def execute(self, decision: TradeDecision, sizing: SizingDecision) -> ExecutionResult:
-        notional = sizing.notional
-
-        if notional > self.approval_threshold:
-            approval_id = enqueue_approval({
-                "decision": decision.to_dict(),
-                "sizing": sizing.to_dict(),
-                "notional": notional,
-                "threshold": self.approval_threshold,
-            })
-            msg = f"${notional:.0f} > threshold ${self.approval_threshold:.0f}, queued as {approval_id}"
-            log.info("[%s] APPROVAL REQUIRED: %s", sizing.symbol, msg)
-            log_trade({
-                "event": "approval_queued",
-                "symbol": sizing.symbol,
-                "sizing": sizing.to_dict(),
-                "decision": decision.to_dict(),
-                "approval_id": approval_id,
-            })
-            return ExecutionResult(
-                symbol=sizing.symbol, status="queued_for_approval",
-                approval_id=approval_id, message=msg,
-            )
-
         try:
             tif = "gtc" if self.is_crypto else "day"
             order = self.client.submit_bracket(

@@ -51,7 +51,7 @@ position fading into the close. Reflect this in `opportunity_score` and `action`
     "max_drawdown_daily_pct": 0.025,
     "max_position_pct": 0.50,
     "max_sector_pct": 0.40,
-    "max_positions": 15,
+    "max_positions": 6,
     "cash_reserve_pct": 0.05,
     "cash_reserve_min_pct": 0.02,
     "max_risk_per_trade_pct": 0.005,
@@ -282,6 +282,7 @@ For EVERY per-symbol entry (including SPY), include `one_sentence_reason`:
 # Hard rules
 
 - Every held risky symbol MUST appear in `target_weights`, `per_symbol`, and `opportunity_ranking`.
+- The number of non-zero entries in `target_weights` (excluding SPY) MUST NOT exceed `max_positions` (currently **6**). If you want to add a new name, you must first exit an existing one to make room.
 - Every per-symbol weight MUST be in `[0, max_position_pct]`.
 - `sum(target_weights.values()) + spy_target_pct + cash_target_pct` ∈ `[0.99, 1.01]`.
 - Sector sums MUST respect `max_sector_pct`.

@@ -85,6 +85,9 @@ class TelegramNotifier:
         spy_daily_pct: float = 0.0,
         ai_verdicts: dict[str, Any] | None = None,
         ai_active: bool = False,
+        rebalance: list[dict[str, Any]] | None = None,
+        opportunity_ranking: list[str] | None = None,
+        ai_arbiter_skipped: str | None = None,
     ) -> bool:
         """Format and send clean scan execution notification focused on decisions."""
         ts = _get_phoenix_timestamp()
@@ -165,6 +168,38 @@ class TelegramNotifier:
         else:
             msg += "<b>DECISIONS</b>\n"
             msg += "No action taken (holding)\n\n"
+
+        # AI Rebalance section — every action carries one_sentence_reason
+        # and opportunity_score from the Opus 4.7 portfolio arbiter.
+        if ai_arbiter_skipped:
+            msg += "<b>AI REBALANCE</b>\n"
+            msg += f"⚠️ Skipped: {_esc(ai_arbiter_skipped)} (no trades executed)\n\n"
+        elif rebalance:
+            msg += "<b>AI REBALANCE</b>\n"
+            for a in rebalance:
+                if a.get("event") == "spy_rebalance":
+                    sym = a.get("symbol", "SPY")
+                    action = a.get("action", "?")
+                    delta = float(a.get("delta_usd", 0) or 0)
+                    sign = "+" if delta >= 0 else ""
+                    msg += f"\n{_esc(sym)} {action.upper()} ({sign}${delta:,.0f})\n"
+                    continue
+                sym = a.get("symbol", "?")
+                ai_action = a.get("ai_action") or ("ADD" if a.get("side") == "buy" else "TRIM")
+                delta_notional = float(a.get("delta_notional", 0) or 0)
+                # Convention: "sell" reduces longs (negative cash impact for the position)
+                signed = -delta_notional if a.get("side") == "sell" else delta_notional
+                opp = a.get("opportunity_score", 0)
+                target_pct = float(a.get("target_pct", 0) or 0) * 100
+                osr = a.get("one_sentence_reason") or a.get("reason") or ""
+                msg += (f"\n{_esc(ai_action)} {_esc(sym)} "
+                        f"({signed:+,.0f} → {target_pct:.1f}%, opp={opp:.0f})\n")
+                if osr:
+                    msg += f"  {_esc(osr)}\n"
+            if opportunity_ranking:
+                ranked = " > ".join(_esc(s) for s in opportunity_ranking[:8])
+                msg += f"\nRanking: {ranked}\n"
+            msg += "\n"
 
         # Top candidates (for context)
         top_actionable = [d for d in decisions if d.get("action") in ("buy", "sell_short")]

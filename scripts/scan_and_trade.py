@@ -91,6 +91,9 @@ def main() -> int:
             spy_daily_pct=spy_daily_pct,
             ai_verdicts=result.get("ai_verdicts", {}),
             ai_active=result.get("ai_active", False),
+            rebalance=result.get("rebalance", []),
+            opportunity_ranking=result.get("opportunity_ranking", []),
+            ai_arbiter_skipped=result.get("ai_arbiter_skipped"),
         )
         return 0
 

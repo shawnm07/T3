@@ -49,7 +49,7 @@ class RiskManager:
         self.max_leverage = config.get("risk", "max_leverage", default=1.0)
         self.stop_atr_mult = config.get("risk", "stop_loss_atr_mult", default=2.0)
         self.tp_atr_mult = config.get("risk", "take_profit_atr_mult", default=4.0)
-        self.max_positions = config.get("risk", "max_positions", default=15)
+        self.max_positions = config.get("risk", "max_positions", default=6)
         self.min_trade = config.get("risk", "min_trade_usd", default=500)
         self.cash_reserve_pct = config.get("risk", "cash_reserve_pct", default=0.20)
         self.cash_reserve_min_pct = config.get("risk", "cash_reserve_min_pct", default=0.10)

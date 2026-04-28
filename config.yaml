@@ -9,7 +9,7 @@ risk:
   stop_loss_atr_mult: 2.0
   take_profit_atr_mult: 4.0
   min_confidence: 0.40
-  max_positions: 15
+  max_positions: 6
   min_trade_usd: 500
   # True-cash floor: operational buffer only (settlement, slippage, immediate response).
   # Idle capital above this floor is parked in the cash_proxy (SPY) below, not left
@@ -27,7 +27,6 @@ risk:
 kill_switch:
   weekly_drawdown_pct: 0.05
   daily_drawdown_pct: 0.025
-  approval_threshold_usd: 25000
   max_daily_trades: 50
 
 universe:
@@ -149,6 +148,13 @@ rebalance:
   underwater_plpc_threshold: -0.005  # trigger when unrealized P&L < -0.5%
   underwater_add_cap_multiplier: 1.25  # max target = current * 1.25 (25% add cap)
 
+portfolio_verifier:
+  # Post-rebalance reconcile pass on Sonnet 4.6. Forces actual portfolio to
+  # match Opus's targets (within tolerance) and force-closes target-0 dust.
+  enabled: true
+  tolerance_pct_of_equity: 0.005   # discrepancies below 0.5% of equity are noise
+  min_corrective_usd: 50           # never submit a corrective trade smaller than this
+
 exit_arbiter:
   # Opus 4.7 AI must explicitly approve every position close. Deterministic
   # exit triggers (technical flip, bad news, stall, preclose bias) are only
@@ -188,13 +194,27 @@ ai:
   # ================================================================
   trade_critical_model: claude-opus-4-7      # Opus 4.7 for ALL trade-critical reasoning
   non_critical_model: claude-haiku-4-5-20251001  # analysts / logging / summaries only
+  verifier_model: claude-sonnet-4-6          # Sonnet 4.6 for the post-execution portfolio verifier
   # Legacy aliases — retained for callers that haven't migrated yet.
   model: claude-opus-4-7
   haiku_model: claude-haiku-4-5-20251001  # technical/fundamental/sentiment analysts (fast, cheap)
+  # Per-agent model overrides (only consulted for agents NOT in the
+  # TRADE_CRITICAL_AGENTS hard-coded set in src/ai_research.py).
+  model_per_agent:
+    portfolio-verifier: claude-sonnet-4-6
   max_candidates_per_scan: 5       # top-N by numeric score to send to AI
   min_numeric_combined_for_ai: 0.30  # pre-filter: only analyze these
   parallel_analyst_calls: true     # technical/fundamental/sentiment agents run concurrently
   max_tokens_per_call: 1500
+  # Per-agent overrides — arbiters return larger structured JSON and trip the
+  # global cap once the book grows. Anthropic bills only on tokens generated,
+  # so larger caps are free headroom.
+  max_tokens_per_agent:
+    portfolio-arbiter: 8000   # full-book JSON (thesis + per-symbol for ~20 holdings)
+    exit-arbiter: 3000
+    earnings-gate: 3000
+    risk-manager: 4000
+    portfolio-verifier: 4000  # corrective-trade JSON for post-execution reconcile
   temperature: 0.3
   weight: 0.6                      # AI confidence blend weight vs numeric (0..1)
   timeout_seconds: 45

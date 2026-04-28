@@ -10,7 +10,7 @@ with ATR stops, paper mode against Alpaca.
 | --- | --- |
 | Mode | paper (Alpaca) |
 | Benchmark | SPY |
-| Risk profile | balanced (max 20% drawdown, 5-15 positions) |
+| Risk profile | balanced (max 20% drawdown, max 6 positions) |
 | Assets | US long + short + crypto (BTC/ETH/SOL) |
 | Cadence | swing — research 2-4× weekdays, crypto every 4h |
 | Kill switch | weekly dd ≥ 5% pauses new entries; trades > $10K need approval |

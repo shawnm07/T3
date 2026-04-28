@@ -167,6 +167,16 @@ class AIResearcher:
             "ai", "non_critical_model", default=self.haiku_model,
         )
         self.max_tokens = config.get("ai", "max_tokens_per_call", default=1500)
+        per_agent = config.get("ai", "max_tokens_per_agent", default={}) or {}
+        self.max_tokens_per_agent: dict[str, int] = {
+            str(k): int(v) for k, v in per_agent.items()
+        }
+        per_agent_model = config.get("ai", "model_per_agent", default={}) or {}
+        # Only consulted for agents NOT in TRADE_CRITICAL_AGENTS — those are
+        # always forced to Opus and per-agent overrides are ignored.
+        self.model_per_agent: dict[str, str] = {
+            str(k): str(v) for k, v in per_agent_model.items()
+        }
         self.temperature = config.get("ai", "temperature", default=0.3)
         self.timeout = config.get("ai", "timeout_seconds", default=45)
         self.api_key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
@@ -216,6 +226,9 @@ class AIResearcher:
                     agent_name, model, forced,
                 )
             model = forced
+        elif model is None and agent_name in self.model_per_agent:
+            # Per-agent override for non-trade-critical agents (e.g. portfolio-verifier on Sonnet).
+            model = self.model_per_agent[agent_name]
 
         # System prompt as cached content block — stable per agent, so cache hits
         # after the first call cut input token cost ~90% for the system prompt.
@@ -240,9 +253,10 @@ class AIResearcher:
         effective_model = model or self.model
         # claude-opus-4-7 (extended thinking) does not accept the temperature param.
         supports_temperature = "opus-4-7" not in effective_model
+        effective_max_tokens = self.max_tokens_per_agent.get(agent_name, self.max_tokens)
         create_kwargs: dict = dict(
             model=effective_model,
-            max_tokens=self.max_tokens,
+            max_tokens=effective_max_tokens,
             system=system_blocks,
             messages=[{"role": "user", "content": user_content}],
         )

@@ -175,6 +175,20 @@ class AIPipeline:
             "portfolio-arbiter", context, task_type="trade_critical",
         )
 
+    async def portfolio_verifier(
+        self,
+        context: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Sonnet post-execution reconciler. Compares actual portfolio to
+        Opus's targets and proposes corrective trades. Bypasses the trade-
+        critical Opus rule because the verifier can only ENFORCE existing
+        Opus decisions, not originate them. Returns:
+          { "verifier_thesis": str,
+            "corrective_trades": [{symbol, side, delta_usd, ...}, ...],
+            "skipped": [{symbol, reason}, ...] }
+        """
+        return await self.ai.call_agent("portfolio-verifier", context)
+
     async def earnings_gate_verdict(
         self,
         context: dict[str, Any],
@@ -279,18 +293,53 @@ def validate_arbiter_response(
         action = str(info.get("action", "")).upper()
         if action and action not in _VALID_ACTIONS:
             problems.append(f"per_symbol[{sym}].action invalid ({action!r})")
+        # Sanitize: replace any semicolons with periods (style guide says "exactly
+        # one sentence, no semicolons stitching"). Mutates result in place so the
+        # downstream consumer sees the cleaned string. Not worth burning a retry on.
         reason = info.get("one_sentence_reason", "")
-        if isinstance(reason, str) and reason and ";" in reason:
-            problems.append(f"per_symbol[{sym}].one_sentence_reason contains ';'")
+        if isinstance(reason, str) and ";" in reason:
+            info["one_sentence_reason"] = reason.replace(";", ".")
 
-    # Numeric sanity: weights sum + spy + cash ∈ [0.99, 1.01]
+    # Numeric sanity: weights sum + spy + cash ∈ [0.99, 1.01].
+    # Auto-repair when slightly off: Opus often leaves a few percent unallocated
+    # (e.g. weights=0.95, spy=0, cash=0). Treat the gap as implicit cash —
+    # Opus chose not to deploy it, which IS a cash decision. Mutates result so
+    # downstream sees the repaired values. Only reject if grossly malformed.
     try:
         weight_sum = sum(float(v) for v in target_weights.values())
         spy_t = float(result.get("spy_target_pct", 0) or 0)
         cash_t = float(result.get("cash_target_pct", 0) or 0)
         total = weight_sum + spy_t + cash_t
-        if not (0.99 <= total <= 1.01):
-            problems.append(f"weights+spy+cash sum out of bounds: {total:.3f}")
+        if 0.85 <= total < 0.99:
+            # Under-allocated: park the missing slice in cash.
+            gap = round(1.0 - total, 4)
+            new_cash = round(cash_t + gap, 4)
+            log.info(
+                "Arbiter weight-sum auto-repair: total=%.3f → adding %.3f to cash "
+                "(was %.3f → %.3f), weights+spy untouched.",
+                total, gap, cash_t, new_cash,
+            )
+            result["cash_target_pct"] = new_cash
+            result["_auto_repaired"] = {"action": "padded_cash", "gap": gap, "original_total": round(total, 4)}
+        elif 1.01 < total <= 1.15:
+            # Over-allocated: scale weights down proportionally to make total = 1.
+            # SPY/cash kept fixed (they're explicit reserve choices); weights absorb the cut.
+            scale = (1.0 - spy_t - cash_t) / weight_sum if weight_sum > 0 else 1.0
+            if scale > 0:
+                result["target_weights"] = {
+                    s: round(float(v) * scale, 4) for s, v in target_weights.items()
+                }
+                log.info(
+                    "Arbiter weight-sum auto-repair: total=%.3f → scaled weights by %.4f "
+                    "to fit (spy=%.3f cash=%.3f untouched).",
+                    total, scale, spy_t, cash_t,
+                )
+                result["_auto_repaired"] = {"action": "scaled_weights", "scale": round(scale, 4),
+                                            "original_total": round(total, 4)}
+            else:
+                problems.append(f"weights+spy+cash sum out of bounds: {total:.3f} (cannot scale)")
+        elif not (0.99 <= total <= 1.01):
+            problems.append(f"weights+spy+cash sum out of bounds: {total:.3f} (outside repair band 0.85–1.15)")
     except (TypeError, ValueError):
         problems.append("weights/spy/cash not numeric")
 
@@ -373,6 +422,38 @@ def run_portfolio_arbiter(
     except Exception:
         pass
     return None
+
+
+def run_portfolio_verifier(
+    config: Config,
+    context: dict[str, Any],
+) -> dict[str, Any] | None:
+    """Synchronous Sonnet verifier call. Returns parsed dict or None on failure.
+
+    Unlike the Opus arbiter we do NOT retry — the verifier's role is purely
+    advisory + corrective; if it fails we just skip reconciliation this scan.
+    The portfolio is still in the state Opus aimed at (minus fill drift), so
+    skipping a verifier pass costs alignment, not safety.
+    """
+    ai = AIResearcher(config)
+    if not ai.available():
+        log.warning(
+            "PORTFOLIO VERIFIER: AI unavailable (enabled=%s, key=%s) — "
+            "skipping post-execution reconcile",
+            ai.enabled, bool(ai.api_key),
+        )
+        return None
+    pipeline = AIPipeline(config, ai)
+    try:
+        result = asyncio.run(pipeline.portfolio_verifier(context))
+    except Exception as e:
+        log.warning("PORTFOLIO VERIFIER call raised: %s — skipping reconcile", e)
+        return None
+    if not isinstance(result, dict) or result.get("_error"):
+        err = (result or {}).get("_error") if isinstance(result, dict) else type(result).__name__
+        log.warning("PORTFOLIO VERIFIER returned error: %s — skipping reconcile", err)
+        return None
+    return result
 
 
 def run_exit_arbiter(

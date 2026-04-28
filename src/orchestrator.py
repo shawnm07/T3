@@ -67,17 +67,15 @@ class TradingOrchestrator:
         self.entry_earnings_override = float(
             config.get("earnings", "new_entry_earnings_override_confidence", default=0.85)
         )
-        # Rebalance: block large no-arbiter adds
-        self.rebal_require_ai_conf = float(
-            config.get("rebalance", "require_ai_above_confidence", default=0.75)
-        )
-        self.rebal_require_ai_usd = float(
-            config.get("rebalance", "require_ai_above_delta_usd", default=5000)
-        )
+        # NOTE: legacy `rebalance.require_ai_above_*` knobs are no longer
+        # consulted — there is no non-AI fallback. Hard rule: no AI → no trades.
         # Tracks whether the most recent rebalance handled SPY/cash via the AI
         # arbiter. When True, the post-scan deterministic auto-sweep is skipped
         # so the bot never overrides an explicit AI allocation decision.
         self._last_arbiter_set_spy_target: bool = False
+        # Most-recent arbiter outputs surfaced for the scan summary (Telegram).
+        self._last_opportunity_ranking: list[str] = []
+        self._last_arbiter_skipped: str | None = None
 
     def _is_cash_proxy(self, symbol: str) -> bool:
         return self.cash_proxy_enabled and symbol == self.cash_proxy_symbol
@@ -188,6 +186,23 @@ class TradingOrchestrator:
             f"{macro.breadth_pct_above_50:.0%}" if macro.breadth_pct_above_50 else "n/a",
         )
         return macro
+
+    def _detect_scan_type(self) -> str:
+        """Return 'FIRST', 'MIDDAY', or 'UNKNOWN' based on current Eastern Time.
+
+        Deterministic and filesystem-free. The scheduled scan times are:
+          10:00 ET → FIRST  (window: 09:30–11:00 ET)
+          12:00, 14:00, 15:30 ET → MIDDAY  (window: 11:00–16:00 ET)
+        Anything outside market hours returns UNKNOWN and earnings checks are
+        skipped (fail-safe: never assume first scan).
+        """
+        et_now = pd.Timestamp.now(tz="America/New_York")
+        et_min = et_now.hour * 60 + et_now.minute
+        if 9 * 60 + 30 <= et_min < 11 * 60:
+            return "FIRST"
+        if 11 * 60 <= et_min <= 16 * 60:
+            return "MIDDAY"
+        return "UNKNOWN"
 
     # ---------- screening ----------
     def technical_screen(self, symbols: list[str], top_n: int = 40) -> list[TechnicalSignal]:
@@ -322,6 +337,7 @@ class TradingOrchestrator:
         self,
         macro: MacroSignal,
         portfolio: dict[str, Any] | None = None,
+        scan_type: str = "UNKNOWN",
     ) -> list[tuple[str, str]]:
         """Return list of (symbol, reason) to close. AI IS THE ONLY AUTHORITY.
 
@@ -330,6 +346,12 @@ class TradingOrchestrator:
         the Opus 4.7 exit-arbiter. NOTHING CLOSES WITHOUT AI APPROVAL.
         If AI is unavailable we HOLD (fail-safe). The bot does not make
         close decisions on its own.
+
+        scan_type controls earnings-risk gating:
+          "FIRST"   → earnings gate runs; earnings-window positions evaluated by AI
+          "MIDDAY"  → earnings-window positions FROZEN (no exit of any kind)
+          "UNKNOWN" → earnings checks skipped (fail-safe: never assume first scan)
+        Pre-close earnings handling is done in run_preclose(), not here.
         """
         closes: list[tuple[str, str]] = []
         portfolio = portfolio or self._portfolio_signals(macro)
@@ -351,6 +373,22 @@ class TradingOrchestrator:
 
         stall_thr = float(self.cfg.get("risk", "exit_stall_threshold", default=0.10))
         min_exit_conf = float(self.cfg.get("exit_arbiter", "min_confidence", default=0.55))
+
+        if scan_type == "FIRST":
+            log.info(
+                "evaluate_exits: Earnings-risk check RUNNING (first scan) — "
+                "earnings-window positions will be evaluated by AI gate"
+            )
+        elif scan_type == "MIDDAY":
+            log.info(
+                "evaluate_exits: Earnings-risk check SKIPPED (intraday scan — "
+                "only runs first + pre-close). Earnings-window positions are FROZEN."
+            )
+        else:
+            log.info(
+                "evaluate_exits: scan_type=UNKNOWN — earnings-risk checks SKIPPED "
+                "(fail-safe: never assume first scan outside scheduled windows)"
+            )
 
         for p in holdings:
             if p.symbol not in tech_map:
@@ -374,7 +412,16 @@ class TradingOrchestrator:
             # we treat that as the exit-arbiter verdict; if it says trim we log
             # and defer. Otherwise we route everything through the generic exit
             # arbiter. In both paths the bot is *never* the decision-maker.
-            if in_earnings_window:
+            #
+            # FIRST scan: AI earnings gate runs; gate verdict determines action.
+            # MIDDAY scan: position is FROZEN — no exit of any kind is allowed,
+            #   including technical, sentiment, or any other exit path.
+            # UNKNOWN / pre-close: earnings checks skipped (pre-close uses run_preclose()).
+            if in_earnings_window and scan_type == "FIRST":
+                log.info(
+                    "[%s] Earnings-risk check RUNNING (first scan) — earnings in %dd",
+                    p.symbol, einfo.days_until,
+                )
                 verdict, reason = self._earnings_gate_decision(
                     p=p, einfo=einfo, tech=tech, sent=sent,
                     numeric=numeric.get(p.symbol), macro=macro,
@@ -387,10 +434,25 @@ class TradingOrchestrator:
                     log.info("[%s] earnings gate: trim_50 — deferring to rebalance arbiter", p.symbol)
                     continue
                 if verdict == "hold":
-                    # Skip secondary exit logic during earnings window — AI said hold.
+                    # AI said hold — skip all secondary exit logic this scan.
                     continue
-                # verdict "skip_no_ai" (fail-safe): don't close, don't run other
-                # exit checks for earnings-window names.
+                # verdict "skip_no_ai" (fail-safe): hold, skip other exit checks.
+                continue
+            elif in_earnings_window and scan_type == "MIDDAY":
+                # FREEZE: earnings-window positions must not be touched intraday.
+                # No technical, sentiment, or any other exit is permitted.
+                log.info(
+                    "[%s] Earnings-window position SKIPPED entirely during intraday scan "
+                    "(earnings in %dd — frozen until first/pre-close scan)",
+                    p.symbol, einfo.days_until,
+                )
+                continue
+            elif in_earnings_window:
+                # UNKNOWN scan type: skip earnings checks (fail-safe).
+                log.info(
+                    "[%s] Earnings-window position SKIPPED (scan_type=UNKNOWN — fail-safe hold)",
+                    p.symbol,
+                )
                 continue
 
             # If no candidate exit signal, don't burn an Opus call.
@@ -463,7 +525,7 @@ class TradingOrchestrator:
         return closes
 
     def _earnings_gate_decision(
-        self, p, einfo: EarningsInfo, tech, sent, numeric, macro: MacroSignal,
+        self, p, einfo: EarningsInfo, tech, sent, numeric, macro: MacroSignal | None,
         is_long: bool, plpc: float,
     ) -> tuple[str, str]:
         """Return (verdict, human-readable-reason) for a position entering its
@@ -503,7 +565,7 @@ class TradingOrchestrator:
             "sent_score": round(float(sent.score), 3) if sent else None,
             "headline_count": getattr(sent, "article_count", None) if sent else None,
             "numeric_decision": (numeric.to_dict() if numeric else None),
-            "macro": macro.to_dict(),
+            "macro": macro.to_dict() if macro is not None else None,
         }
         try:
             result = run_earnings_gate(self.cfg, ctx)
@@ -776,6 +838,7 @@ class TradingOrchestrator:
         bearish_halt: bool = False,
         dry_run: bool = False,
         scan_candidates: list[dict[str, Any]] | None = None,
+        earnings_close_symbols: set[str] | list[str] | None = None,
     ) -> dict[str, Any]:
         """Shape the FULL portfolio + rules + intraday + SPY context for the
         portfolio-arbiter agent.
@@ -829,16 +892,17 @@ class TradingOrchestrator:
                     except Exception:
                         spy_qty = 0.0
                     break
-        spy_intraday_chg = self._intraday_change_pct(intraday_bars, "SPY")
+        spy_chart = self._intraday_chart_for(intraday_bars, "SPY")
         spy_5d_chg = self._five_day_change_pct(spy_daily, "SPY")
-        spy_current_price = None
-        try:
-            spy_quote = self.client.get_stock_quote("SPY")
-            spy_current_price = float(getattr(spy_quote, "ask_price", 0)
-                                      or getattr(spy_quote, "bid_price", 0)
-                                      or 0) or None
-        except Exception:
-            spy_current_price = None
+        spy_current_price = (spy_chart or {}).get("current_price")
+        if spy_current_price is None:
+            try:
+                spy_quote = self.client.get_stock_quote("SPY")
+                spy_current_price = float(getattr(spy_quote, "ask_price", 0)
+                                          or getattr(spy_quote, "bid_price", 0)
+                                          or 0) or None
+            except Exception:
+                spy_current_price = None
         spy_block: dict[str, Any] = {
             "symbol": self.cash_proxy_symbol,
             "role": "cash_equivalent_parking_vehicle",
@@ -848,7 +912,7 @@ class TradingOrchestrator:
             "current_value_usd": round(spy_position_value, 2),
             "current_weight_pct": round(spy_position_value / equity, 4) if equity else 0.0,
             "current_price": spy_current_price,
-            "intraday_change_pct": round(spy_intraday_chg, 4) if spy_intraday_chg is not None else None,
+            "intraday_chart": spy_chart,
             "five_day_change_pct": round(spy_5d_chg, 4) if spy_5d_chg is not None else None,
             "macro_trend": round(float(macro.spy_trend), 3),
             "macro_vs_200ema": round(float(macro.spy_vs_200ema), 4),
@@ -880,7 +944,7 @@ class TradingOrchestrator:
             unreal_plpc = float(getattr(p, "unrealized_plpc", 0) or 0)
             sector = sectors.get(sym, "unknown")
             sector_exposure_usd[sector] = sector_exposure_usd.get(sector, 0.0) + mv
-            intraday_chg = self._intraday_change_pct(intraday_bars, sym)
+            chart = self._intraday_chart_for(intraday_bars, sym)
             pos_ctx.append({
                 "symbol": sym,
                 "side": "long" if is_long else "short",
@@ -900,8 +964,7 @@ class TradingOrchestrator:
                 "numeric_confidence": round(float(num.confidence), 3) if num else None,
                 "numeric_combined_score": round(float(num.combined_score), 3) if num else None,
                 "numeric_action": num.action if num else None,
-                "intraday_change_pct": (round(intraday_chg, 4)
-                                        if intraday_chg is not None else None),
+                "intraday_chart": chart,
                 "earnings_days_until": (einfo.days_until if einfo else None),
                 "earnings_next_date": (einfo.next_date if einfo else None),
             })
@@ -971,6 +1034,7 @@ class TradingOrchestrator:
         }
 
         # --- System state ---
+        ec_syms = sorted(list(earnings_close_symbols)) if earnings_close_symbols else []
         system_state = {
             "kill_switch_halted": bool((kill_state or {}).get("halted", False)),
             "kill_switch_reasons": (kill_state or {}).get("reasons", []) or [],
@@ -978,9 +1042,18 @@ class TradingOrchestrator:
             "daily_return": (kill_state or {}).get("daily_return"),
             "trades_today": (kill_state or {}).get("trades_today"),
             "bearish_halt_active": bool(bearish_halt),
+            "earnings_close_symbols": ec_syms,
             "dry_run": bool(dry_run),
             "rebalance_use_ai_arbiter": bool(self.rebalance_use_ai_arbiter),
         }
+
+        # --- Recent decision context (today + previous trading day) ---
+        try:
+            from src.journal import load_recent_decisions
+            recent_decisions = load_recent_decisions(days_back=1)
+        except Exception as e:
+            log.info("Arbiter context: recent_decisions load failed (%s)", e)
+            recent_decisions = {"today": [], "previous_trading_day": []}
 
         return {
             "equity": round(equity, 2),
@@ -996,6 +1069,7 @@ class TradingOrchestrator:
             "macro": macro.to_dict(),
             "spy_block": spy_block,
             "positions": pos_ctx,
+            "recent_decisions": recent_decisions,
             "scan_candidates_summary": (scan_candidates or [])[:10],
         }
 
@@ -1041,14 +1115,22 @@ class TradingOrchestrator:
     ) -> list[dict[str, Any]]:
         """Execute AI-driven portfolio rebalance.
 
-        The Opus 4.7 portfolio arbiter is the FINAL authority — it sees the full
-        book + every rule + intraday context and returns quantitative target
-        allocations including a SPY-vs-cash split. The executor only translates
-        targets into trades. Deterministic logic does not override the AI.
+        Hard rules:
+          * The Opus 4.7 portfolio arbiter is the SOLE decision-maker.
+          * NO non-AI fallback. If the AI is unavailable or returns an
+            incomplete response after retries, this function logs a CRITICAL
+            warning and executes ZERO trades (returns []).
+          * NO post-AI overrides. Earnings windows, bearish-halt status, and
+            recent decisions are passed INTO the AI as context — the AI
+            decides what to do with them. The system enforces only safety
+            (kill switch + execution-cost floors), not strategy.
+          * Runs every scan. If the arbiter says HOLD on every position,
+            we still log a `rebalance_summary` so behavior is observable.
 
-        Returns list of applied action dicts. If allow_adds=False, only trims
-        run (bearish-halt mode unless a position clears the high-conviction
-        override).
+        Args:
+            allow_adds: retained for backward compatibility; no longer
+                filters AI decisions. The bearish_halt flag itself is
+                forwarded as context to the arbiter.
         """
         from src.rebalance import (
             compute_rebalance_plan, load_tech_cache, save_tech_cache,
@@ -1061,7 +1143,11 @@ class TradingOrchestrator:
         numeric = portfolio.get("numeric", {})
         earnings_map = portfolio.get("earnings_map", {})
         if not holdings or not tech_map:
+            log.info("Rebalance: no holdings or tech_map — nothing to do")
             return []
+        # `allow_adds` is intentionally not consulted post-AI (fix #5). The
+        # bearish_halt flag is passed to the arbiter as input context only.
+        _ = allow_adds  # kept in signature for compatibility
 
         # --- BEFORE snapshot (logged after the run for diff context) ---
         before_snapshot = self._snapshot_portfolio(equity)
@@ -1071,70 +1157,162 @@ class TradingOrchestrator:
         ai_per_symbol: dict[str, dict] | None = None
         ai_spy_target_pct: float | None = None
         ai_cash_target_pct: float | None = None
+        ai_opportunity_ranking: list[str] = []
         arbiter_result: dict[str, Any] | None = None
         arbiter_ctx: dict[str, Any] | None = None
-        if self.rebalance_use_ai_arbiter and self.ai.available():
-            arbiter_ctx = self._build_arbiter_context(
-                holdings=holdings, tech_map=tech_map, sent_map=sent_map,
-                numeric=numeric, earnings_map=earnings_map, macro=macro, equity=equity,
-                kill_state=kill_state, bearish_halt=bearish_halt, dry_run=dry_run,
-            )
-            log.info(
-                "Rebalance: invoking portfolio arbiter (model=%s) on %d held positions, "
-                "equity=$%.0f, cash=$%.0f, BP=$%.0f, SPY=$%.0f",
-                self.cfg.get("ai", "trade_critical_model", default="?"),
-                len(holdings),
-                arbiter_ctx["equity"],
-                arbiter_ctx["cash"]["balance"],
-                arbiter_ctx["cash"]["buying_power"],
-                arbiter_ctx["spy_block"]["current_value_usd"],
-            )
-            log_decision({
-                "event": "portfolio_arbiter_input",
-                "context": arbiter_ctx,
-            })
-            arbiter_result = run_portfolio_arbiter(self.cfg, arbiter_ctx)
-            log_decision({
-                "event": "portfolio_arbiter_output",
-                "result": arbiter_result,
-            })
-            if arbiter_result:
-                ai_target_weights = {
-                    str(k): float(v)
-                    for k, v in (arbiter_result.get("target_weights") or {}).items()
-                }
-                ai_per_symbol = arbiter_result.get("per_symbol") or {}
-                spy_t = arbiter_result.get("spy_target_pct")
-                cash_t = arbiter_result.get("cash_target_pct")
-                if spy_t is not None:
-                    try:
-                        ai_spy_target_pct = max(0.0, min(1.0, float(spy_t)))
-                    except (TypeError, ValueError):
-                        ai_spy_target_pct = None
-                if cash_t is not None:
-                    try:
-                        ai_cash_target_pct = max(0.0, min(1.0, float(cash_t)))
-                    except (TypeError, ValueError):
-                        ai_cash_target_pct = None
-                log.info("Arbiter thesis: %s", (arbiter_result.get("portfolio_thesis") or "")[:200])
-                log.info("Arbiter targets: %s",
-                         {s: round(w, 3) for s, w in ai_target_weights.items()})
-                log.info("Arbiter SPY target=%s%% cash target=%s%% (reasoning: %s)",
-                         f"{ai_spy_target_pct*100:.1f}" if ai_spy_target_pct is not None else "n/a",
-                         f"{ai_cash_target_pct*100:.1f}" if ai_cash_target_pct is not None else "n/a",
-                         (arbiter_result.get("spy_vs_cash_reasoning") or "")[:200])
-                for mv in (arbiter_result.get("capital_movement_plan") or []):
-                    log.info("Arbiter capital plan: %s %s$%.0f — %s",
-                             mv.get("symbol"),
-                             "+" if float(mv.get("delta_usd", 0) or 0) >= 0 else "-",
-                             abs(float(mv.get("delta_usd", 0) or 0)),
-                             (mv.get("purpose") or ""))
-                for flag in (arbiter_result.get("risk_flags") or []):
-                    log.info("Arbiter risk flag: %s", flag)
-            else:
-                log.warning("Portfolio arbiter unavailable — falling back to softmax conviction weights")
 
-        # --- Build plan ---
+        # Hard rule: AI is the only path. If the AI is disabled or unavailable,
+        # we execute zero trades and skip the rebalance. No deterministic fallback.
+        # Reset per-scan arbiter telemetry
+        self._last_opportunity_ranking = []
+        self._last_arbiter_skipped = None
+        self._last_arbiter_set_spy_target = False
+        self._last_ai_target_weights = None
+        self._last_ai_per_symbol = None
+        self._last_ai_spy_target_pct = None
+        self._last_ai_cash_target_pct = None
+
+        if not (self.rebalance_use_ai_arbiter and self.ai.available()):
+            log.critical(
+                "REBALANCE SKIPPED: AI arbiter unavailable "
+                "(use_ai_arbiter=%s, ai_available=%s) — no trades will execute "
+                "this scan (fail-safe: no AI → no trades).",
+                self.rebalance_use_ai_arbiter, self.ai.available(),
+            )
+            log_decision({
+                "event": "ai_failure",
+                "agent": "portfolio-arbiter",
+                "reason": "ai_unavailable",
+                "use_ai_arbiter": bool(self.rebalance_use_ai_arbiter),
+                "ai_available": bool(self.ai.available()),
+            })
+            self._last_arbiter_skipped = "ai_unavailable"
+            return []
+
+        held_symbol_list = [
+            p.symbol for p in holdings
+            if not self._is_cash_proxy(p.symbol) and "/" not in p.symbol
+        ]
+        arbiter_ctx = self._build_arbiter_context(
+            holdings=holdings, tech_map=tech_map, sent_map=sent_map,
+            numeric=numeric, earnings_map=earnings_map, macro=macro, equity=equity,
+            kill_state=kill_state, bearish_halt=bearish_halt, dry_run=dry_run,
+            earnings_close_symbols=earnings_exit_symbols,
+        )
+        log.info(
+            "Rebalance: invoking portfolio arbiter (model=%s) on %d held positions, "
+            "equity=$%.0f, cash=$%.0f, BP=$%.0f, SPY=$%.0f, "
+            "recent_decisions=%d today + %d prev day",
+            self.cfg.get("ai", "trade_critical_model", default="?"),
+            len(holdings),
+            arbiter_ctx["equity"],
+            arbiter_ctx["cash"]["balance"],
+            arbiter_ctx["cash"]["buying_power"],
+            arbiter_ctx["spy_block"]["current_value_usd"],
+            len((arbiter_ctx.get("recent_decisions") or {}).get("today", [])),
+            len((arbiter_ctx.get("recent_decisions") or {}).get("previous_trading_day", [])),
+        )
+        log_decision({
+            "event": "portfolio_arbiter_input",
+            "held_symbols": held_symbol_list,
+            "intraday_chart_present": {
+                "spy": bool(arbiter_ctx["spy_block"].get("intraday_chart")),
+                **{p["symbol"]: bool(p.get("intraday_chart")) for p in arbiter_ctx["positions"]},
+            },
+            "context": arbiter_ctx,
+        })
+        arbiter_result = run_portfolio_arbiter(
+            self.cfg, arbiter_ctx, held_symbols=held_symbol_list,
+        )
+        log_decision({
+            "event": "portfolio_arbiter_output",
+            "result": arbiter_result,
+        })
+
+        if not arbiter_result:
+            log.critical(
+                "REBALANCE SKIPPED: portfolio arbiter returned no valid response "
+                "after retries — no trades will execute this scan."
+            )
+            after_snapshot = self._snapshot_portfolio(equity)
+            log_decision({
+                "event": "rebalance_summary",
+                "before": before_snapshot,
+                "after": after_snapshot,
+                "arbiter_input_present": True,
+                "arbiter_output_present": False,
+                "actions_executed": 0,
+                "skipped_reason": "ai_failure_after_retries",
+                "dry_run": dry_run,
+            })
+            self._last_arbiter_skipped = "ai_failure_after_retries"
+            return []
+
+        ai_target_weights = {
+            str(k): float(v)
+            for k, v in (arbiter_result.get("target_weights") or {}).items()
+        }
+        ai_per_symbol = arbiter_result.get("per_symbol") or {}
+        ai_opportunity_ranking = list(arbiter_result.get("opportunity_ranking") or [])
+        self._last_opportunity_ranking = ai_opportunity_ranking
+        spy_t = arbiter_result.get("spy_target_pct")
+        cash_t = arbiter_result.get("cash_target_pct")
+        if spy_t is not None:
+            try:
+                ai_spy_target_pct = max(0.0, min(1.0, float(spy_t)))
+            except (TypeError, ValueError):
+                ai_spy_target_pct = None
+        if cash_t is not None:
+            try:
+                ai_cash_target_pct = max(0.0, min(1.0, float(cash_t)))
+            except (TypeError, ValueError):
+                ai_cash_target_pct = None
+        log.info("Arbiter thesis: %s", (arbiter_result.get("portfolio_thesis") or "")[:200])
+        log.info("Arbiter targets: %s",
+                 {s: round(w, 3) for s, w in ai_target_weights.items()})
+        log.info("Arbiter SPY target=%s%% cash target=%s%% (reasoning: %s)",
+                 f"{ai_spy_target_pct*100:.1f}" if ai_spy_target_pct is not None else "n/a",
+                 f"{ai_cash_target_pct*100:.1f}" if ai_cash_target_pct is not None else "n/a",
+                 (arbiter_result.get("spy_vs_cash_reasoning") or "")[:200])
+        log.info("Arbiter opportunity ranking: %s", ai_opportunity_ranking)
+        # Stash for the post-execution Sonnet verifier (run by orchestrator after
+        # rebalance + entries + cash sweep complete). The verifier needs Opus's
+        # exact targets to know what discrepancies to correct.
+        self._last_ai_target_weights = dict(ai_target_weights)
+        self._last_ai_per_symbol = dict(ai_per_symbol) if isinstance(ai_per_symbol, dict) else {}
+        self._last_ai_spy_target_pct = ai_spy_target_pct
+        self._last_ai_cash_target_pct = ai_cash_target_pct
+        # Per-symbol audit log: action + opportunity_score + one_sentence_reason
+        for sym in held_symbol_list:
+            info = (ai_per_symbol or {}).get(sym, {})
+            log.info(
+                "Arbiter[%s] action=%s target=%.1f%% conf=%.2f opportunity=%.0f reason=%s",
+                sym,
+                info.get("action", "?"),
+                float(info.get("target_pct", 0) or 0) * 100,
+                float(info.get("confidence", 0) or 0),
+                float(info.get("opportunity_score", 0) or 0),
+                (info.get("one_sentence_reason") or "")[:160],
+            )
+        spy_dec = arbiter_result.get("spy_decision") or {}
+        if spy_dec:
+            log.info(
+                "Arbiter[SPY] action=%s target=%.1f%% opportunity=%.0f reason=%s",
+                spy_dec.get("action", "?"),
+                float(spy_dec.get("target_pct", 0) or 0) * 100,
+                float(spy_dec.get("opportunity_score", 0) or 0),
+                (spy_dec.get("one_sentence_reason") or "")[:160],
+            )
+        for mv in (arbiter_result.get("capital_movement_plan") or []):
+            log.info("Arbiter capital plan: %s %s$%.0f — %s",
+                     mv.get("symbol"),
+                     "+" if float(mv.get("delta_usd", 0) or 0) >= 0 else "-",
+                     abs(float(mv.get("delta_usd", 0) or 0)),
+                     (mv.get("purpose") or ""))
+        for flag in (arbiter_result.get("risk_flags") or []):
+            log.info("Arbiter risk flag: %s", flag)
+
+        # --- Build plan from AI output (no post-AI overrides) ---
         plan = compute_rebalance_plan(
             positions=holdings,
             tech_map=tech_map,
@@ -1148,61 +1326,12 @@ class TradingOrchestrator:
             ai_per_symbol=ai_per_symbol,
         )
 
-        # --- Fix 1: drop rebalance ADDS for symbols already flagged for earnings exit ---
-        # Earnings-close must win; we cannot simultaneously close and scale up.
-        if earnings_exit_symbols:
-            before = len(plan)
-            plan = [
-                a for a in plan
-                if not (a.symbol in earnings_exit_symbols and a.current_notional < a.target_notional)
-            ]
-            dropped = before - len(plan)
-            if dropped:
-                log.info("Rebalance: dropped %d add(s) that conflict with earnings exits: %s",
-                         dropped, earnings_exit_symbols & {a.symbol for a in plan})
-
-        # --- Fix 2: block large adds when AI arbiter didn't run (softmax fallback) ---
-        # Without the full-book arbiter, we shouldn't make big sizing decisions.
-        if arbiter_result is None:
-            filtered_plan = []
-            for a in plan:
-                is_add = a.current_notional < a.target_notional
-                large_add = is_add and (
-                    a.blended_confidence >= self.rebal_require_ai_conf
-                    or a.delta_notional >= self.rebal_require_ai_usd
-                )
-                if large_add:
-                    log.info("[%s] rebalance large add blocked: arbiter unavailable "
-                             "(conf=%.2f, delta=$%.0f)", a.symbol, a.blended_confidence, a.delta_notional)
-                else:
-                    filtered_plan.append(a)
-            plan = filtered_plan
-
-        # --- Bearish-day filter: adds require high-conviction override ---
-        if not allow_adds:
-            override = float(self.cfg.get("rebalance", "bearish_override_conf", default=0.85))
-            filtered = []
-            for a in plan:
-                # side="sell" is always a trim for longs (or a short-scale-up for shorts).
-                # Distinguish trim-of-long from short-scale-up via blended conf threshold used;
-                # trims have blended < trim_floor, scale-ups have blended >= add_floor.
-                trim_floor = float(self.cfg.get("rebalance", "trim_confidence_floor", default=0.40))
-                is_trim = a.blended_confidence < trim_floor
-                if is_trim:
-                    filtered.append(a)
-                elif a.blended_confidence >= override:
-                    filtered.append(a)
-                    log.info("[%s] bearish-day add allowed via high-conviction override (%.2f >= %.2f)",
-                             a.symbol, a.blended_confidence, override)
-                else:
-                    log.info("[%s] bearish-day: skipping add (conf=%.2f < override=%.2f)",
-                             a.symbol, a.blended_confidence, override)
-            plan = filtered
-
-        log.info("Rebalance plan: %d actions (%d trims, %d adds)",
-                 len(plan),
-                 sum(1 for a in plan if a.side == "sell" and a.blended_confidence < 0.5),
-                 sum(1 for a in plan if a.side == "buy" or (a.side == "sell" and a.blended_confidence >= 0.5)))
+        log.info(
+            "Rebalance plan: %d actions (%d trims/exits, %d adds)",
+            len(plan),
+            sum(1 for a in plan if a.current_notional > a.target_notional),
+            sum(1 for a in plan if a.current_notional < a.target_notional),
+        )
 
         # --- Execute with fill verification and per-action cash reassessment ---
         results: list[dict[str, Any]] = []
@@ -1266,6 +1395,19 @@ class TradingOrchestrator:
             "arbiter_output_present": arbiter_result is not None,
             "ai_spy_target_pct": ai_spy_target_pct,
             "ai_cash_target_pct": ai_cash_target_pct,
+            "ai_opportunity_ranking": ai_opportunity_ranking,
+            "ai_actions": [
+                {
+                    "symbol": a["symbol"],
+                    "ai_action": a.get("ai_action"),
+                    "side": a.get("side"),
+                    "delta_notional": a.get("delta_notional"),
+                    "target_pct": a.get("target_pct"),
+                    "opportunity_score": a.get("opportunity_score"),
+                    "one_sentence_reason": a.get("one_sentence_reason"),
+                }
+                for a in results if "symbol" in a
+            ],
             "actions_executed": len(results),
             "dry_run": dry_run,
         })
@@ -1418,6 +1560,251 @@ class TradingOrchestrator:
                     results.append({**res.to_dict(), "reason": reason, "ai_verdict": v.to_dict()})
         return results
 
+    # ---------- post-execution portfolio verifier (Sonnet 4.6) ----------
+    def _verify_portfolio_alignment(self, equity: float) -> dict[str, Any] | None:
+        """Reconcile actual portfolio against the targets the Opus arbiter set
+        for this scan. Two passes:
+
+        1. Deterministic dust sweep: any symbol where Opus target is 0 (or
+           absent from target_weights) but the position still has any shares
+           is force-closed via Alpaca's `close_position` API (qty-based, no
+           dust). This fixes the chronic "0.09 shares left after liquidate"
+           problem caused by notional-sized closes drifting on price.
+
+        2. Sonnet 4.6 corrective pass: builds a current-vs-target diff over
+           the tolerance band and asks the verifier to propose corrective
+           trades. Sonnet's response is hard-filtered server-side — only
+           same-direction toward-target trades on Opus-approved symbols
+           survive. Anything else is rejected before execution.
+
+        Skipped if: arbiter didn't run / set targets this scan, AI unavailable,
+        verifier disabled in config. Never raises — returns a summary dict
+        (or None on skip).
+        """
+        from src.ai_pipeline import run_portfolio_verifier
+
+        if not bool(self.cfg.get("portfolio_verifier", "enabled", default=True)):
+            return None
+        target_weights = self._last_ai_target_weights
+        if not isinstance(target_weights, dict) or not target_weights:
+            log.info("Verifier skipped: no Opus targets stashed this scan "
+                     "(arbiter skipped or returned no targets).")
+            return None
+
+        spy_target = self._last_ai_spy_target_pct
+        cash_target = self._last_ai_cash_target_pct
+        per_symbol = self._last_ai_per_symbol or {}
+
+        try:
+            account, positions = self.client.get_snapshot(force_refresh=True, log_detail=False)
+        except Exception as e:
+            log.warning("Verifier: snapshot fetch failed: %s — skipping reconcile", e)
+            return None
+        live_equity = float(account.equity) if account else equity
+        cash_usd = float(account.cash) if account else 0.0
+
+        # ---- Pass 1: deterministic dust sweep ----
+        dust_closed: list[dict[str, Any]] = []
+        for p in positions:
+            sym = p.symbol
+            # SPY is reconciled separately via _apply_spy_target — skip here.
+            if sym == self.cash_proxy_symbol:
+                continue
+            qty = abs(float(p.qty))
+            if qty <= 0:
+                continue
+            tw = float(target_weights.get(sym, 0.0) or 0.0)
+            if tw <= 0.0:
+                # Target zero but residual shares — force full close via percentage=100.
+                try:
+                    log.info("Verifier dust-sweep: force-closing %s (qty=%s, target=0%%)", sym, qty)
+                    order = self.client.close_position(sym, percentage=100)
+                    order_id = str(getattr(order, "id", "") or "") or None
+                    final_status = "submitted"
+                    filled_qty = 0.0
+                    if order_id:
+                        final, ok = self.client.wait_for_order_fill(
+                            order_id, timeout_s=30.0, poll_s=1.0,
+                        )
+                        if final is not None:
+                            final_status = str(getattr(final, "status", "") or "submitted").lower().replace("orderstatus.", "")
+                            filled_qty = float(getattr(final, "filled_qty", 0) or 0)
+                    dust_closed.append({
+                        "symbol": sym, "action": "force_close_100pct",
+                        "qty_before": qty, "filled_qty": filled_qty,
+                        "final_status": final_status, "order_id": order_id,
+                    })
+                except Exception as e:
+                    msg = str(e)
+                    log.warning("Verifier dust-sweep: close_position(%s) failed: %s", sym, msg)
+                    dust_closed.append({"symbol": sym, "action": "force_close_failed",
+                                        "qty_before": qty, "error": msg})
+
+        # Refresh after dust sweep so weight calc reflects post-close state.
+        if dust_closed:
+            try:
+                account, positions = self.client.get_snapshot(force_refresh=True, log_detail=False)
+                live_equity = float(account.equity) if account else live_equity
+                cash_usd = float(account.cash) if account else cash_usd
+            except Exception as e:
+                log.warning("Verifier: post-dust snapshot refresh failed: %s", e)
+
+        # ---- Build current-vs-target diff for Sonnet ----
+        tolerance_pct = float(self.cfg.get("portfolio_verifier", "tolerance_pct_of_equity", default=0.005))
+        tolerance_usd = tolerance_pct * live_equity
+        min_corrective_usd = float(self.cfg.get("portfolio_verifier", "min_corrective_usd", default=50))
+
+        # All symbols Opus had a target for, even if currently flat (might need to add).
+        # Plus any current position not in targets (already swept above, but defensive).
+        symbols_to_consider: set[str] = set(str(s) for s in target_weights.keys())
+        symbols_to_consider.update(p.symbol for p in positions
+                                   if p.symbol != self.cash_proxy_symbol
+                                   and abs(float(p.qty)) > 0)
+        # Drop dust-closed (fully liquidated) so verifier doesn't try to add back.
+        dust_closed_syms = {d["symbol"] for d in dust_closed
+                            if d.get("action") == "force_close_100pct"}
+
+        pos_by_sym = {p.symbol: p for p in positions}
+        diff_rows: list[dict[str, Any]] = []
+        for sym in sorted(symbols_to_consider):
+            tw = float(target_weights.get(sym, 0.0) or 0.0)
+            if tw <= 0.0:
+                continue  # target=0 cases handled by dust sweep
+            p = pos_by_sym.get(sym)
+            mv = abs(float(p.market_value)) if p else 0.0
+            qty = float(p.qty) if p else 0.0
+            cur_w = (mv / live_equity) if live_equity > 0 else 0.0
+            target_usd = tw * live_equity
+            gap_usd = target_usd - mv  # positive => under target (need buy)
+            gap_pct = (gap_usd / live_equity) if live_equity > 0 else 0.0
+            diff_rows.append({
+                "symbol": sym,
+                "qty": round(qty, 6),
+                "market_value_usd": round(mv, 2),
+                "current_weight": round(cur_w, 4),
+                "target_weight": round(tw, 4),
+                "gap_usd": round(gap_usd, 2),
+                "gap_pct_of_equity": round(gap_pct, 4),
+                "above_tolerance": abs(gap_usd) > tolerance_usd,
+                "opus_action": (per_symbol.get(sym, {}) or {}).get("action"),
+            })
+
+        ctx = {
+            "equity": round(live_equity, 2),
+            "tolerance_pct_of_equity": tolerance_pct,
+            "tolerance_usd": round(tolerance_usd, 2),
+            "min_corrective_usd": min_corrective_usd,
+            "opus_targets": {
+                "target_weights": {s: round(float(w), 4) for s, w in target_weights.items()},
+                "spy_target_pct": spy_target,
+                "cash_target_pct": cash_target,
+                "per_symbol": {s: {"action": (info or {}).get("action"),
+                                    "one_sentence_reason": (info or {}).get("one_sentence_reason")}
+                               for s, info in per_symbol.items()},
+            },
+            "current_portfolio": {
+                "cash_usd": round(cash_usd, 2),
+                "positions": diff_rows,
+            },
+            "dust_already_liquidated": sorted(dust_closed_syms),
+        }
+
+        log.info(
+            "Verifier: equity=$%.0f, tolerance=$%.0f (%.2f%% of eq), "
+            "off-target positions=%d, dust closed=%d",
+            live_equity, tolerance_usd, tolerance_pct * 100,
+            sum(1 for r in diff_rows if r["above_tolerance"]),
+            len(dust_closed),
+        )
+
+        out = run_portfolio_verifier(self.cfg, ctx)
+        if not out:
+            return {"dust_closed": dust_closed, "verifier_skipped": "no_response",
+                    "corrective_trades": []}
+
+        log.info("Verifier thesis: %s", (out.get("verifier_thesis") or "")[:200])
+
+        # ---- Hard filter Sonnet's proposed trades (defense in depth) ----
+        proposed = out.get("corrective_trades") or []
+        if not isinstance(proposed, list):
+            log.warning("Verifier: corrective_trades not a list — discarding")
+            proposed = []
+
+        diff_by_sym = {r["symbol"]: r for r in diff_rows}
+        executed: list[dict[str, Any]] = []
+        rejected: list[dict[str, Any]] = []
+        for prop in proposed:
+            if not isinstance(prop, dict):
+                rejected.append({"reason": "non-dict", "raw": str(prop)[:120]})
+                continue
+            sym = str(prop.get("symbol", "")).strip()
+            side = str(prop.get("side", "")).lower().strip()
+            try:
+                delta_usd = abs(float(prop.get("delta_usd", 0) or 0))
+            except (TypeError, ValueError):
+                rejected.append({"symbol": sym, "reason": "delta_usd not numeric"})
+                continue
+            if not sym:
+                rejected.append({"reason": "missing symbol"})
+                continue
+            if sym in dust_closed_syms:
+                rejected.append({"symbol": sym, "reason": "already dust-liquidated this pass"})
+                continue
+            row = diff_by_sym.get(sym)
+            if not row:
+                rejected.append({"symbol": sym, "reason": "not in Opus target_weights — verifier may not introduce new symbols"})
+                continue
+            if not row["above_tolerance"]:
+                rejected.append({"symbol": sym, "reason": f"within tolerance band (gap ${row['gap_usd']:.0f} <= ${tolerance_usd:.0f})"})
+                continue
+            if side not in ("buy", "sell"):
+                rejected.append({"symbol": sym, "reason": f"invalid side {side!r}"})
+                continue
+            required_side = "buy" if row["gap_usd"] > 0 else "sell"
+            if side != required_side:
+                rejected.append({"symbol": sym, "reason": f"side {side} would move away from target (need {required_side})"})
+                continue
+            if delta_usd < min_corrective_usd:
+                rejected.append({"symbol": sym, "reason": f"delta ${delta_usd:.0f} < min ${min_corrective_usd:.0f}"})
+                continue
+            # Cap delta at the actual gap so we never overshoot Opus's target.
+            capped_delta = min(delta_usd, abs(row["gap_usd"]))
+            if capped_delta < min_corrective_usd:
+                rejected.append({"symbol": sym, "reason": "capped delta below min_corrective"})
+                continue
+            try:
+                self._ensure_cash_for(capped_delta if side == "buy" else 0.0, live_equity)
+                exec_res = self.executor.partial_trade(
+                    symbol=sym, side=side, delta_notional=capped_delta,
+                    reason=f"verifier reconcile to Opus target {row['target_weight']*100:.1f}% "
+                           f"(gap was ${row['gap_usd']:+.0f})",
+                )
+                executed.append({
+                    "symbol": sym, "side": side,
+                    "proposed_usd": round(delta_usd, 2),
+                    "executed_usd": round(capped_delta, 2),
+                    "current_weight": row["current_weight"],
+                    "target_weight": row["target_weight"],
+                    "gap_usd_before": row["gap_usd"],
+                    "execution": exec_res.to_dict(),
+                })
+                if not exec_res.ok:
+                    log.warning("[%s] verifier corrective %s did not fill", sym, side)
+            except Exception as e:
+                log.warning("[%s] verifier corrective %s raised: %s", sym, side, e)
+                rejected.append({"symbol": sym, "reason": f"execution raised: {e}"})
+
+        log.info("Verifier: corrective trades executed=%d, rejected=%d, dust closed=%d",
+                 len(executed), len(rejected), len(dust_closed))
+        return {
+            "verifier_thesis": out.get("verifier_thesis", ""),
+            "tolerance_usd": round(tolerance_usd, 2),
+            "dust_closed": dust_closed,
+            "corrective_trades": executed,
+            "rejected_proposals": rejected,
+            "raw_proposals": proposed,
+        }
+
     # ---------- main loop ----------
     def run_scan(self, max_candidates: int = 25, dry_run: bool = False) -> dict[str, Any]:
         log.info("=== Starting scan (dry_run=%s) ===", dry_run)
@@ -1459,9 +1846,16 @@ class TradingOrchestrator:
         # Shared portfolio signal bundle (used for exits + rebalance)
         portfolio = self._portfolio_signals(macro)
 
+        # Detect scan type by Eastern Time — no filesystem dependency.
+        # FIRST (09:30–11:00 ET): earnings gate runs.
+        # MIDDAY (11:00–16:00 ET): earnings-window positions frozen, no exits allowed.
+        # UNKNOWN: earnings checks skipped (fail-safe).
+        scan_type = self._detect_scan_type()
+        log.info("Scan type detected: %s (time-based, America/New_York)", scan_type)
+
         # Exits first (hard signals — unchanged logic)
         exit_results: list[dict[str, Any]] = []
-        exits = self.evaluate_exits(macro, portfolio=portfolio)
+        exits = self.evaluate_exits(macro, portfolio=portfolio, scan_type=scan_type)
         # Track which symbols were closed for earnings so rebalance won't add back.
         earnings_exit_syms: set[str] = {
             sym for sym, reason in exits if "earnings" in reason.lower()
@@ -1497,11 +1891,25 @@ class TradingOrchestrator:
 
         if bearish_halt:
             log.warning(
-                "Bearish-day halt: macro_score=%.2f, vix=%s — skipping new screen entries "
-                "(exits & rebalance-trims ran; rebalance-adds only for high-conviction)",
+                "Bearish-day halt: macro_score=%.2f, vix=%s — skipping new screen entries. "
+                "Exits + AI-arbiter rebalance still ran; AI received bearish_halt_active=true "
+                "as context and decided allocations accordingly.",
                 macro.score, macro.vix_regime,
             )
-            cash_proxy_action = None if dry_run else self._sweep_cash_to_proxy(equity)
+            cash_proxy_action = None
+            if not dry_run:
+                if self._last_arbiter_set_spy_target:
+                    log.info("Auto-sweep skipped: AI arbiter set SPY target this scan")
+                    cash_proxy_action = {"skipped": "ai_arbiter_set_spy_target"}
+                else:
+                    cash_proxy_action = self._sweep_cash_to_proxy(equity)
+            verifier_summary: dict[str, Any] | None = None
+            if not dry_run:
+                try:
+                    verifier_summary = self._verify_portfolio_alignment(equity)
+                except Exception as e:
+                    log.warning("Portfolio verifier raised (bearish-halt path): %s", e)
+                    verifier_summary = {"error": str(e)}
             summary = {
                 "ts": pd.Timestamp.utcnow().isoformat(),
                 "equity": equity,
@@ -1512,8 +1920,11 @@ class TradingOrchestrator:
                                  "threshold": halt_score},
                 "exits": exit_results,
                 "rebalance": rebalance_results,
+                "opportunity_ranking": list(self._last_opportunity_ranking),
+                "ai_arbiter_skipped": self._last_arbiter_skipped,
                 "executions": [],
                 "cash_proxy": cash_proxy_action,
+                "verifier": verifier_summary,
             }
             _save_research("scan", summary)
             log.info("Scan complete (bearish halt): exits=%d, rebalance=%d, executions=0",
@@ -1709,6 +2120,19 @@ class TradingOrchestrator:
             else:
                 cash_proxy_action = self._sweep_cash_to_proxy(equity)
 
+        # ---- Post-execution Sonnet verifier ----
+        # Reconcile actual portfolio against the targets the Opus arbiter set
+        # this scan: force-close any target=0 dust, and ask Sonnet to surface
+        # any remaining sub-target gaps above the tolerance band. Always runs
+        # (when arbiter set targets); skipped on dry-run.
+        verifier_summary: dict[str, Any] | None = None
+        if not dry_run:
+            try:
+                verifier_summary = self._verify_portfolio_alignment(equity)
+            except Exception as e:
+                log.warning("Portfolio verifier raised: %s — continuing without reconcile", e)
+                verifier_summary = {"error": str(e)}
+
         summary = {
             "ts": pd.Timestamp.utcnow().isoformat(),
             "equity": equity,
@@ -1722,13 +2146,23 @@ class TradingOrchestrator:
             "approved_for_execution": len(pipeline_candidates),
             "exits": exit_results,
             "rebalance": rebalance_results,
+            "opportunity_ranking": list(self._last_opportunity_ranking),
+            "ai_arbiter_skipped": self._last_arbiter_skipped,
             "executions": executions,
             "cash_proxy": cash_proxy_action,
+            "verifier": verifier_summary,
             "decisions": [d.to_dict() for d in decisions],
         }
         _save_research("scan", summary)
-        log.info("Scan complete: exits=%d, rebalance=%d, executions=%d",
-                 len(exit_results), len(rebalance_results), len(executions))
+        verifier_corrects = (
+            len((verifier_summary or {}).get("corrective_trades") or []) if verifier_summary else 0
+        )
+        verifier_dust = (
+            len((verifier_summary or {}).get("dust_closed") or []) if verifier_summary else 0
+        )
+        log.info("Scan complete: exits=%d, rebalance=%d, executions=%d, verifier_corrects=%d, dust_closed=%d",
+                 len(exit_results), len(rebalance_results), len(executions),
+                 verifier_corrects, verifier_dust)
         return summary
 
     # ---------- pre-close overnight decision ----------
@@ -1811,6 +2245,23 @@ class TradingOrchestrator:
         tech_held = technicals_for_bars_df(daily_held) if daily_held is not None else {}
         news_held = self.client.get_news(symbols=held_syms, limit=80, days_back=2) if held_syms else []
 
+        # Fetch earnings data for earnings-risk gate (pre-close scan runs the same
+        # earnings gate logic as the first scan of the day).
+        earnings_map_preclose: dict[str, EarningsInfo] = {}
+        if self.earnings_enabled and held_syms:
+            for _sym in held_syms:
+                try:
+                    _einfo = fetch_earnings(_sym, ttl_hours=self.earnings_ttl_hours)
+                    if _einfo:
+                        earnings_map_preclose[_sym] = _einfo
+                except Exception as _e:
+                    log.warning("[%s] preclose earnings fetch failed: %s", _sym, _e)
+        if earnings_map_preclose:
+            log.info(
+                "Preclose earnings-risk gate: %d held position(s) have earnings data",
+                len(earnings_map_preclose),
+            )
+
         hold_reports: list[dict[str, Any]] = []
         exit_results: list[dict[str, Any]] = []
         for p in equity_positions:
@@ -1820,6 +2271,47 @@ class TradingOrchestrator:
             tech_score = tech.score if tech else 0.0
             sent = score_news_for_symbol(sym, news_held)
             sent_score = sent.score if sent else 0.0
+
+            # Earnings-risk gate: pre-close scan runs the same earnings gate as the
+            # first scan of the day. If the AI says close/hold here, we skip the
+            # overnight scoring decision entirely for that position.
+            _einfo_pre = earnings_map_preclose.get(sym) if self.earnings_enabled else None
+            _in_earn_win = bool(_einfo_pre and within_window(_einfo_pre, self.earnings_trim_days))
+            if _in_earn_win:
+                log.info(
+                    "[%s] earnings-risk gate running (pre-close scan — earnings in %dd)",
+                    sym, _einfo_pre.days_until,
+                )
+                _plpc = float(p.unrealized_plpc) if hasattr(p, "unrealized_plpc") else 0.0
+                _earn_verdict, _earn_reason = self._earnings_gate_decision(
+                    p=p, einfo=_einfo_pre, tech=tech, sent=sent,
+                    numeric=None, macro=None,
+                    is_long=is_long, plpc=_plpc,
+                )
+                if _earn_verdict == "close":
+                    hold_reports.append({"symbol": sym, "decision": "close_earnings_gate"})
+                    if dry_run:
+                        exit_results.append({
+                            "symbol": sym, "action": "close_dry", "reason": _earn_reason,
+                        })
+                    else:
+                        _res = self.executor.close_position(sym, reason=_earn_reason)
+                        exit_results.append({**_res.to_dict(), "reason": _earn_reason})
+                    continue
+                if _earn_verdict == "hold":
+                    log.info(
+                        "[%s] preclose earnings gate: hold — skipping overnight close decision",
+                        sym,
+                    )
+                    hold_reports.append({"symbol": sym, "decision": "hold_earnings_gate"})
+                    continue
+                if _earn_verdict == "trim_50":
+                    log.info(
+                        "[%s] preclose earnings gate: trim_50 — continuing with overnight decision",
+                        sym,
+                    )
+                # skip_no_ai or trim_50: fall through to overnight decision
+
             intraday = self._slice_symbol(intraday_held, sym)
             ov = score_overnight(sym, intraday, tech_score, sent_score, market_bias)
             if ov is None:

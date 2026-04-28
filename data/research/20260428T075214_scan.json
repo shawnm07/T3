@@ -1,0 +1,154 @@
+{
+  "ts": "2026-04-28T07:52:14.747954+00:00",
+  "equity": 98159.96501601127,
+  "positions_count": 8,
+  "macro": {
+    "regime": "neutral",
+    "score": 0.21,
+    "spy_trend": 0.364,
+    "spy_vs_200ema": 0.076,
+    "vix_level": 27.81,
+    "vix_regime": "normal",
+    "breadth_pct_above_50": 0.5918367346938775,
+    "notes": [
+      "spy_uptrend",
+      "vixy_ratio_0.92",
+      "breadth_59pct"
+    ]
+  },
+  "kill_switch": {
+    "halted": false,
+    "reasons": [],
+    "weekly_return": 0.016706764827445486,
+    "daily_return": 0.012394986531377716,
+    "trades_today": 0
+  },
+  "selector": {
+    "pool_size": 28,
+    "sources_breakdown": {
+      "held": 7,
+      "watchlist": 15,
+      "av_gainers": 15,
+      "av_losers": 15,
+      "av_most_active": 10,
+      "tv_breakout": 10,
+      "tv_squeeze": 5,
+      "crypto": 3
+    },
+    "selected_positions": [
+      "MU",
+      "FIX",
+      "VRT",
+      "GEV",
+      "AVGO"
+    ],
+    "target_weights": {
+      "MU": 0.235,
+      "FIX": 0.224,
+      "VRT": 0.201,
+      "GEV": 0.195,
+      "AVGO": 0.095
+    },
+    "spy_target_pct": 0.0,
+    "cash_target_pct": 0.05,
+    "exhaustion_penalty_applied": [
+      "AMD",
+      "DELL",
+      "CRMX",
+      "OGN",
+      "MANE"
+    ],
+    "new_candidates_selected": 0,
+    "allow_floor_breach": false
+  },
+  "exits": [],
+  "executions": [
+    {
+      "dry_run": true,
+      "symbol": "MU",
+      "side": "sell",
+      "delta_notional": 4286.96,
+      "current_notional": 27354.55,
+      "target_notional": 23067.59,
+      "tech_score": 0.821,
+      "unrealized_plpc": -0.0377,
+      "reason": "arbiter REDUCE -> 23.5% (from 27.9%): Top-ranked momentum with rising volume justifies largest weight. trim from 27.9% to manage concentration.",
+      "one_sentence_reason": "Top-ranked momentum with rising volume justifies largest weight. trim from 27.9% to manage concentration.",
+      "opportunity_score": 82.0,
+      "ai_action": "REDUCE",
+      "ai_confidence": 0.78,
+      "target_pct": 0.235,
+      "target_qty": 46.6
+    },
+    {
+      "dry_run": true,
+      "symbol": "AVGO",
+      "side": "buy",
+      "delta_notional": 2534.04,
+      "current_notional": 6791.16,
+      "target_notional": 9325.2,
+      "tech_score": 0.769,
+      "unrealized_plpc": -0.0565,
+      "reason": "arbiter INCREASE -> 9.5% (from 6.9%): Steady consolidation merits modest increase but lower conviction than top picks.",
+      "one_sentence_reason": "Steady consolidation merits modest increase but lower conviction than top picks.",
+      "opportunity_score": 66.0,
+      "ai_action": "INCREASE",
+      "ai_confidence": 0.65,
+      "target_pct": 0.095,
+      "target_qty": 22.3
+    },
+    {
+      "dry_run": true,
+      "symbol": "FIX",
+      "side": "buy",
+      "delta_notional": 7753.75,
+      "current_notional": 14234.08,
+      "target_notional": 21987.83,
+      "tech_score": 0.819,
+      "unrealized_plpc": 0.0144,
+      "reason": "arbiter INCREASE -> 22.4% (from 14.5%): Strongest breakout with rising volume and trend earns increased weight.",
+      "one_sentence_reason": "Strongest breakout with rising volume and trend earns increased weight.",
+      "opportunity_score": 78.0,
+      "ai_action": "INCREASE",
+      "ai_confidence": 0.75,
+      "target_pct": 0.224,
+      "target_qty": 12.25
+    },
+    {
+      "dry_run": true,
+      "symbol": "GEV",
+      "side": "buy",
+      "delta_notional": 15375.78,
+      "current_notional": 3765.41,
+      "target_notional": 19141.19,
+      "tech_score": 0.824,
+      "unrealized_plpc": -0.0787,
+      "reason": "arbiter INCREASE -> 19.5% (from 3.8%): Pullback with rising volume offers attractive entry to scale this small position up significantly.",
+      "one_sentence_reason": "Pullback with rising volume offers attractive entry to scale this small position up significantly.",
+      "opportunity_score": 68.0,
+      "ai_action": "INCREASE",
+      "ai_confidence": 0.7,
+      "target_pct": 0.195,
+      "target_qty": 18.2
+    },
+    {
+      "dry_run": true,
+      "symbol": "VRT",
+      "side": "buy",
+      "delta_notional": 6180.99,
+      "current_notional": 13549.17,
+      "target_notional": 19730.15,
+      "tech_score": 0.804,
+      "unrealized_plpc": -0.0406,
+      "reason": "arbiter INCREASE -> 20.1% (from 13.8%): Solid tech setup consolidating with room to run, increase allocation.",
+      "one_sentence_reason": "Solid tech setup consolidating with room to run, increase allocation.",
+      "opportunity_score": 70.0,
+      "ai_action": "INCREASE",
+      "ai_confidence": 0.7,
+      "target_pct": 0.201,
+      "target_qty": 65.0
+    }
+  ],
+  "cash_proxy": null,
+  "verifier": null
+}

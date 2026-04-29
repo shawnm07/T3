@@ -38,6 +38,100 @@ def _format_number(val: float) -> str:
     return f"{val:.2f}"
 
 
+def _is_rebalance_shape(ex: dict[str, Any]) -> bool:
+    """Detect a selector-rebalance execution dict.
+
+    Rebalance items get rendered in the dedicated AI REBALANCE block, so we
+    must exclude them from the DECISIONS loop or they appear twice (once
+    correctly, once as garbage with ``?`` placeholders because the notifier's
+    DECISIONS code expects nested ``sizing``/``decision`` dicts).
+
+    Heuristic: presence of ``ai_action`` (RebalanceAction.to_dict's signature
+    field) AND no nested ``sizing`` dict.
+    """
+    if "sizing" in ex and isinstance(ex.get("sizing"), dict) and ex["sizing"]:
+        return False
+    return bool(ex.get("ai_action")) or "delta_notional" in ex
+
+
+def _format_money(val: Any) -> str:
+    """Render a numeric or '?' as a money string.
+
+    Returns ``"?"`` only if val is None / non-numeric, never silently zero.
+    """
+    if val is None or val == "?":
+        return "?"
+    try:
+        f = float(val)
+    except (TypeError, ValueError):
+        return "?"
+    return f"{f:,.2f}"
+
+
+def _normalize_execution(
+    ex: dict[str, Any],
+    decisions_by_symbol: dict[str, dict[str, Any]] | None = None,
+    equity: float = 0.0,
+) -> dict[str, Any]:
+    """Return a uniform shape for a DECISIONS-block execution.
+
+    Reads nested ``sizing``/``decision`` dicts when present (legacy/new-entry
+    path), then falls back to top-level keys (selector-skipped path), then
+    looks up the matching ``decision`` from the orchestrator's decisions list
+    by symbol so RSI/scores/details survive even when the execution dict
+    didn't carry them.
+    """
+    sizing = ex.get("sizing") or {}
+    decision = ex.get("decision") or {}
+    sym = (
+        decision.get("symbol")
+        or sizing.get("symbol")
+        or ex.get("symbol")
+        or "?"
+    )
+    if decisions_by_symbol and sym in decisions_by_symbol and not decision:
+        decision = decisions_by_symbol[sym]
+
+    action = decision.get("action") or ex.get("side") or "?"
+    if action == "buy":
+        side_label = "BUY"
+    elif action == "sell":
+        side_label = "SELL"
+    else:
+        side_label = str(action).upper()
+
+    qty = sizing.get("qty", ex.get("qty", "?"))
+    entry = sizing.get("entry", sizing.get("entry_price", ex.get("entry", "?")))
+    stop = sizing.get("stop_loss", sizing.get("stop_price", ex.get("stop", "?")))
+    target = sizing.get("take_profit", sizing.get("target_price", ex.get("target", "?")))
+    notional = sizing.get("notional") or ex.get("notional") or ex.get("delta_notional") or 0.0
+    notional = float(notional or 0.0)
+    if equity:
+        position_pct = notional / equity
+    else:
+        position_pct = float(sizing.get("position_pct", 0.0) or 0.0)
+
+    return {
+        "kind": (
+            "skipped" if ex.get("skipped")
+            else "entry"
+        ),
+        "skipped": ex.get("skipped"),
+        "symbol": sym,
+        "side_label": side_label,
+        "qty": qty,
+        "entry": entry,
+        "stop": stop,
+        "target": target,
+        "notional": notional,
+        "position_pct": position_pct,
+        "signal_scores": decision.get("signal_scores", {}) or {},
+        "signal_details": decision.get("signal_details", {}) or {},
+        "risk_sizer": ex.get("risk_sizer") or sizing.get("limits") or {},
+        "reason": ex.get("reason") or ex.get("message") or "",
+    }
+
+
 class TelegramNotifier:
     def __init__(self, token: str | None = None, chat_id: str | None = None):
         self.token = token or os.environ.get("TELEGRAM_BOT_TOKEN")
@@ -77,7 +171,6 @@ class TelegramNotifier:
         decisions: list[dict[str, Any]],
         executions: list[dict[str, Any]],
         exits: list[dict[str, Any]],
-        kill_switch: dict[str, Any] | None = None,
         equity: float = 0,
         positions_count: int = 0,
         daily_pnl: float = 0.0,
@@ -94,80 +187,107 @@ class TelegramNotifier:
         msg = f"SCAN {scan_name} | {ts}\n"
         msg += "─" * 20 + "\n\n"
 
-        # Kill switch alert
-        if kill_switch and kill_switch.get("halted"):
-            reasons = kill_switch.get("reasons", [])
-            msg += f"⚠️  HALTED: {', '.join(reasons)}\n\n"
-            self._send(msg)
-            return True
-
-        # P&L Section
+        # P&L Section. "Account" = total balance (cash + position market
+        # value), not market-value-only. Daily % is anchored to today's
+        # baseline equity (computed by daily_pnl module), not Alpaca's data.
         msg += "<b>ACCOUNT STATUS</b>\n"
         pnl_icon = "▲" if daily_pnl_pct >= 0 else "▼"
         spy_comp = daily_pnl_pct - spy_daily_pct
         spy_icon = "▲" if spy_comp >= 0 else "▼"
-        msg += f"Equity: ${equity:,.0f} | Daily: {pnl_icon} {daily_pnl_pct*100:+.2f}% (${daily_pnl:+,.0f})\n"
+        msg += f"Account: ${equity:,.0f} | Daily: {pnl_icon} {daily_pnl_pct*100:+.2f}% (${daily_pnl:+,.0f})\n"
         msg += f"vs S&P 500: {spy_icon} {spy_comp*100:+.2f}% (S&P: {spy_daily_pct*100:+.2f}%)\n"
         msg += f"Positions: {positions_count}\n\n"
 
-        # Decisions - focus on what was traded
-        if executions or exits:
-            msg += "<b>DECISIONS</b>\n"
+        # Decisions - exclude rebalance-shape executions (they render in the
+        # AI REBALANCE block below). Look up missing decision metadata from
+        # the orchestrator's full decisions list by symbol.
+        decisions_by_symbol = {
+            d.get("symbol"): d for d in (decisions or []) if d.get("symbol")
+        }
+        decision_executions = [
+            ex for ex in (executions or [])
+            if not ex.get("dry_run") and not _is_rebalance_shape(ex)
+        ]
 
-            # Entries
-            for ex in executions:
-                if ex.get("dry_run"):
-                    continue
-                sizing = ex.get("sizing", {})
-                decision = ex.get("decision", {})
-                sym = decision.get("symbol", "?")
-                action = decision.get("action", "?")
-                side = "BUY" if action == "buy" else "SHORT"
+        msg += "<b>DECISIONS</b>\n"
+        decisions_body = ""
 
-                qty = sizing.get("qty", "?")
-                entry = sizing.get("entry", sizing.get("entry_price", "?"))
-                stop = sizing.get("stop_loss", sizing.get("stop_price", "?"))
-                target = sizing.get("take_profit", sizing.get("target_price", "?"))
-                notional = sizing.get("notional", 0.0) or 0.0
-                position_pct = (notional / equity) if equity else sizing.get("position_pct", 0.0)
+        # Entries (and any selector-path skipped items)
+        for ex in decision_executions:
+            norm = _normalize_execution(ex, decisions_by_symbol, equity=equity)
 
-                signals = decision.get("signal_scores", {})
-                signal_details = decision.get("signal_details", {})
-                tech_detail = signal_details.get("technical", {})
-                fund_detail = signal_details.get("fundamental", {})
-                earn_detail = signal_details.get("earnings", {})
+            if norm["kind"] == "skipped":
+                decisions_body += (
+                    f"\n⊘ SKIP {_esc(norm['symbol'])} — {_esc(norm['skipped'])}"
+                )
+                if norm["reason"]:
+                    decisions_body += f" ({_esc(norm['reason'])})"
+                decisions_body += "\n"
+                continue
 
-                # Technical summary
-                tech_score = signals.get("technical", 0.0)
-                tech_reason = tech_detail.get("rsi", "N/A")
+            signal_details = norm["signal_details"]
+            tech_detail = signal_details.get("technical", {}) or {}
+            fund_detail = signal_details.get("fundamental", {}) or {}
+            earn_detail = signal_details.get("earnings", {}) or {}
 
-                # Fundamental summary (one line)
-                fund_reason = "N/A"
-                if fund_detail:
-                    pe = fund_detail.get("pe_ratio", "N/A")
-                    growth = fund_detail.get("revenue_growth", 0.0)
-                    fund_reason = f"PE {pe} | Growth {growth:+.0%}"
+            tech_score = norm["signal_scores"].get("technical", 0.0)
+            tech_reason = tech_detail.get("rsi")
+            tech_str = f"RSI {tech_reason}" if tech_reason is not None else "RSI N/A"
 
-                msg += f"\n{side} {sym}\n"
-                msg += f"  Entry: ${entry} | Stop: ${stop} | Target: ${target} (Size: {position_pct:.1%})\n"
-                msg += f"  Technical: {tech_score:+.2f} (RSI {tech_reason})\n"
-                msg += f"  Fundamental: {fund_reason}\n"
-                days_until = earn_detail.get("days_until_earnings")
-                if days_until is not None:
-                    msg += f"  Earnings: {earn_detail.get('next_earnings_date','?')} (in {days_until}d)\n"
+            fund_reason = "N/A"
+            if fund_detail:
+                pe = fund_detail.get("pe_ratio", "N/A")
+                growth = fund_detail.get("revenue_growth", 0.0)
+                fund_reason = f"PE {pe} | Growth {growth:+.0%}"
 
-            # Exits
-            for exit_item in exits:
-                sym = exit_item.get("symbol", "?")
-                reason = exit_item.get("reason", "?")
-                msg += f"\n⊘ CLOSE {_esc(sym)}\n"
-                msg += f"  Reason: {_esc(reason)}\n"
+            entry_s = _format_money(norm["entry"])
+            stop_s = _format_money(norm["stop"])
+            target_s = _format_money(norm["target"])
 
-            msg += "\n"
+            decisions_body += f"\n{norm['side_label']} {_esc(norm['symbol'])}\n"
+            decisions_body += (
+                f"  Entry: ${entry_s} | Stop: ${stop_s} | Target: ${target_s} "
+                f"(Size: {norm['position_pct']:.1%})\n"
+            )
 
-        else:
-            msg += "<b>DECISIONS</b>\n"
-            msg += "No action taken (holding)\n\n"
+            risk_sizer = norm["risk_sizer"]
+            if risk_sizer:
+                risk_notional = (
+                    risk_sizer.get("post_cash_cap_notional")
+                    or risk_sizer.get("post_selector_cap_notional")
+                    or risk_sizer.get("final_notional")
+                    or risk_sizer.get("risk_sized_notional")
+                )
+                selector_notional = risk_sizer.get("selector_target_notional")
+                limiter = risk_sizer.get("limiting_factor") or risk_sizer.get("post_risk_cap_reason")
+                if risk_notional:
+                    decisions_body += f"  Risk sizer: ${float(risk_notional):,.0f}"
+                    if selector_notional:
+                        decisions_body += f" vs selector ${float(selector_notional):,.0f}"
+                    if limiter:
+                        decisions_body += f" ({_esc(limiter)})"
+                    decisions_body += "\n"
+
+            decisions_body += f"  Technical: {tech_score:+.2f} ({tech_str})\n"
+            decisions_body += f"  Fundamental: {fund_reason}\n"
+            days_until = earn_detail.get("days_until_earnings")
+            if days_until is not None:
+                decisions_body += (
+                    f"  Earnings: {earn_detail.get('next_earnings_date','?')} (in {days_until}d)\n"
+                )
+
+        # Exits
+        for exit_item in (exits or []):
+            sym = exit_item.get("symbol", "?")
+            reason = exit_item.get("reason", exit_item.get("message", "?"))
+            decisions_body += f"\n⊘ CLOSE {_esc(sym)}\n"
+            decisions_body += f"  Reason: {_esc(reason)}\n"
+
+        # Defensive: if everything got filtered out, fall back to "holding"
+        # rather than emitting an empty DECISIONS section.
+        if not decisions_body.strip():
+            decisions_body = "No action taken (holding)\n"
+        msg += decisions_body + "\n"
 
         # AI Rebalance section — every action carries one_sentence_reason
         # and opportunity_score from the Opus 4.7 portfolio arbiter.
@@ -202,14 +322,14 @@ class TelegramNotifier:
             msg += "\n"
 
         # Top candidates (for context)
-        top_actionable = [d for d in decisions if d.get("action") in ("buy", "sell_short")]
+        top_actionable = [d for d in decisions if d.get("action") == "buy"]
         if not top_actionable and decisions:
             top_candidates = sorted(decisions, key=lambda d: abs(d.get("combined_score", 0)), reverse=True)[:3]
             msg += "<b>TOP CANDIDATES SCREENED (Held)</b>\n"
             for d in top_candidates:
                 sym = d.get("symbol", "?")
                 score = d.get("combined_score", 0.0)
-                action = "BUY" if score > 0 else "SHORT"
+                action = "BUY" if score > 0 else "HOLD"
                 msg += f"  {sym}: {action} {score:+.2f}\n"
 
         return self._send(msg)
@@ -285,10 +405,11 @@ class TelegramNotifier:
         msg += f"Daily: {pnl_icon} {daily_return * 100:+.2f}%\n"
         msg += f"vs S&P 500: {spy_icon} {spy_comp * 100:+.2f}% (S&P: {spy_daily * 100:+.2f}%)\n\n"
 
-        # Summary
+        # Summary — single Account line per user preference (cash + positions
+        # combined; the user wants total balance, not the cash/equity split).
         msg += "<b>SUMMARY</b>\n"
         msg += f"Trades: {trades_today} | Positions: {positions_count} open\n"
-        msg += f"Equity: ${equity:,.0f} | Cash: ${cash:,.0f}\n"
+        msg += f"Account: ${equity:,.0f}\n"
 
         return self._send(msg)
 
@@ -350,7 +471,6 @@ class TelegramNotifier:
         hold_reports: list[dict[str, Any]],
         exits: list[dict[str, Any]],
         new_executions: list[dict[str, Any]],
-        kill_switch: dict[str, Any] | None = None,
         bearish_halt: bool = False,
         halt_threshold: float = -0.55,
         dry_run: bool = False,
@@ -361,17 +481,12 @@ class TelegramNotifier:
         msg = f"PRECLOSE{suffix} | {ts}\n"
         msg += "─" * 20 + "\n\n"
 
-        if kill_switch and kill_switch.get("halted"):
-            reasons = kill_switch.get("reasons", [])
-            msg += f"⚠️  HALTED: {', '.join(reasons)}\n"
-            return self._send(msg)
-
         if bearish_halt:
             msg += f"⚠️  BEARISH HALT: market_bias={market_bias:+.2f} ≤ {halt_threshold:+.2f} — no new overnight buys\n\n"
 
         bias_icon = "▲" if market_bias >= 0 else "▼"
         msg += "<b>ACCOUNT</b>\n"
-        msg += f"Equity: ${equity:,.0f} | Positions: {positions_count}\n"
+        msg += f"Account: ${equity:,.0f} | Positions: {positions_count}\n"
         msg += f"SPY late-day bias: {bias_icon} {market_bias:+.2f}\n\n"
 
         held = sum(1 for r in hold_reports if r.get("decision") in ("hold", "hold_no_data"))
@@ -443,12 +558,11 @@ def notify_scan_execution(
     decisions: list[dict[str, Any]],
     executions: list[dict[str, Any]],
     exits: list[dict[str, Any]],
-    kill_switch: dict[str, Any] | None = None,
     **kwargs: Any,
 ) -> bool:
     """Convenience function for scan notifications."""
     return get_notifier().notify_scan_execution(
-        scan_name, macro, decisions, executions, exits, kill_switch, **kwargs
+        scan_name, macro, decisions, executions, exits, **kwargs
     )
 
 

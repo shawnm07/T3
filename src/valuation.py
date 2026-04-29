@@ -6,9 +6,7 @@ decisions. This module recomputes them from:
 
 * share quantity + average entry price (from Alpaca — reliable)
 * cash balance (from Alpaca — reliable)
-* **independently fetched** current market prices (Alpha Vantage for stocks;
-  Alpaca crypto-quote stream for crypto — crypto trades 24/7 so its quote
-  endpoint is always live)
+* **independently fetched** current market prices (Alpha Vantage for stocks)
 
 Every call site in the bot that needs equity / P/L / market value should go
 through :func:`build_snapshot` (or use the wrapper methods on
@@ -29,9 +27,14 @@ from typing import Any, Iterable
 
 import requests
 
+from src.api_keys import KeyPool
+
 log = logging.getLogger(__name__)
 
-ALPHA_VANTAGE_KEY = os.getenv("ALPHA_VANTAGE_API_KEY", "GWAZL1MLMSB1F1LZ")
+# Backwards-compat: the old single-key constant is still consulted as a
+# fallback by KeyPool.from_env when only ALPHA_VANTAGE_API_KEY (singular)
+# is set. New deployments should use ALPHA_VANTAGE_API_KEYS (plural).
+ALPHA_VANTAGE_KEY = os.getenv("ALPHA_VANTAGE_API_KEY", "")
 _AV_URL = "https://www.alphavantage.co/query"
 
 # Price cache TTL (seconds). Keeps scan hot loops under Alpha Vantage
@@ -39,28 +42,30 @@ _AV_URL = "https://www.alphavantage.co/query"
 _PRICE_TTL = 20.0
 
 
-def _is_crypto_symbol(symbol: str) -> bool:
-    return "/" in symbol
-
-
 @dataclass
 class PricedQuote:
     symbol: str
     price: float
-    source: str              # "alpha_vantage" | "alpha_vantage_extended" | "alpaca_crypto" | "alpaca_stock_fallback"
+    source: str              # "alpha_vantage" | "alpha_vantage_extended" | "alpaca_stock_fallback"
     extended_hours: bool = False
 
 
 class PricingService:
-    """Fetch live prices for stocks (Alpha Vantage) and crypto (Alpaca).
+    """Fetch live prices for stocks from Alpha Vantage.
 
     Falls back to Alpaca's latest stock quote if Alpha Vantage is unreachable
     or rate-limited. Caches prices for ``_PRICE_TTL`` seconds.
     """
 
-    def __init__(self, alpaca_client=None, av_key: str = ALPHA_VANTAGE_KEY, ttl: float = _PRICE_TTL):
+    def __init__(self, alpaca_client=None, av_key: str | None = None,
+                 av_pool: KeyPool | None = None, ttl: float = _PRICE_TTL):
         self._alpaca = alpaca_client
-        self._av_key = av_key
+        # Prefer pool; fall back to single key if explicitly passed.
+        self._av_pool = av_pool or KeyPool.from_env(
+            "alpha_vantage", "ALPHA_VANTAGE_API_KEYS",
+            singular_env="ALPHA_VANTAGE_API_KEY",
+        )
+        self._av_key = av_key  # legacy override; only used if pool empty
         self._ttl = ttl
         self._cache: dict[str, tuple[float, PricedQuote]] = {}
         self._session = requests.Session()
@@ -86,28 +91,38 @@ class PricingService:
 
     # ---------- fetchers ----------
     def _fetch(self, symbol: str) -> PricedQuote | None:
-        if _is_crypto_symbol(symbol):
-            return self._fetch_crypto(symbol)
         q = self._fetch_alpha_vantage(symbol)
         if q is not None:
             return q
         return self._fetch_alpaca_stock(symbol)
 
     def _fetch_alpha_vantage(self, symbol: str) -> PricedQuote | None:
-        try:
-            resp = self._session.get(
-                _AV_URL,
-                params={"function": "GLOBAL_QUOTE", "symbol": symbol, "apikey": self._av_key},
-                timeout=10,
-            )
-            resp.raise_for_status()
-            data = resp.json() or {}
-        except Exception as e:
-            log.warning("[valuation] Alpha Vantage fetch failed for %s: %s", symbol, e)
-            return None
-        note = data.get("Note") or data.get("Information")
-        if note:
-            log.warning("[valuation] Alpha Vantage throttled/limited for %s: %s", symbol, str(note)[:120])
+        # Try keys in rotation; on throttle, mark and try next.
+        max_attempts = max(1, len(getattr(self._av_pool, "_keys", [])) or 1)
+        for _ in range(max_attempts):
+            key = self._av_pool.acquire() if self._av_pool.has_keys() else self._av_key
+            if not key:
+                return None
+            try:
+                resp = self._session.get(
+                    _AV_URL,
+                    params={"function": "GLOBAL_QUOTE", "symbol": symbol, "apikey": key},
+                    timeout=10,
+                )
+                resp.raise_for_status()
+                data = resp.json() or {}
+            except Exception as e:
+                log.warning("[valuation] Alpha Vantage fetch failed for %s: %s", symbol, e)
+                return None
+            note = data.get("Note") or data.get("Information")
+            if note:
+                log.warning("[valuation] Alpha Vantage throttled/limited for %s: %s", symbol, str(note)[:120])
+                if self._av_pool.has_keys():
+                    self._av_pool.mark_throttled(key)
+                    continue  # try next key
+                return None
+            break
+        else:
             return None
         gq = data.get("Global Quote") or data.get("globalQuote") or {}
         price_str = gq.get("05. price") or gq.get("price")
@@ -153,28 +168,6 @@ class PricingService:
                  "(Alpha Vantage unavailable; regular-market last trade)", symbol, price)
         return PricedQuote(symbol=symbol, price=price, source="alpaca_stock_fallback", extended_hours=False)
 
-    def _fetch_crypto(self, symbol: str) -> PricedQuote | None:
-        if self._alpaca is None:
-            return None
-        try:
-            q = self._alpaca.get_crypto_quote(symbol)
-        except Exception as e:
-            log.warning("[valuation] Alpaca crypto quote failed for %s: %s", symbol, e)
-            return None
-        bid = float(getattr(q, "bid_price", 0) or 0)
-        ask = float(getattr(q, "ask_price", 0) or 0)
-        if bid > 0 and ask > 0:
-            price = (bid + ask) / 2
-        elif ask > 0:
-            price = ask
-        elif bid > 0:
-            price = bid
-        else:
-            return None
-        # Crypto is 24/7 — no "extended hours" distinction.
-        return PricedQuote(symbol=symbol, price=price, source="alpaca_crypto", extended_hours=True)
-
-
 # --------------------------------------------------------------------------- #
 #  Valued wrappers — attribute-compatible with alpaca-py Position / Account   #
 # --------------------------------------------------------------------------- #
@@ -194,10 +187,10 @@ class ValuedPosition:
     """
     symbol: str
     qty: float
-    side: Any                       # original Alpaca PositionSide or str ("long"/"short")
+    side: Any                       # original Alpaca PositionSide or str
     avg_entry_price: float
     current_price: float
-    market_value: float             # signed: negative for shorts (like Alpaca)
+    market_value: float
     unrealized_pl: float
     unrealized_plpc: float
     asset_class: Any = None
@@ -235,9 +228,7 @@ class ValuedAccount:
 
 
 def _side_is_long(raw_position) -> bool:
-    side = getattr(raw_position, "side", None)
-    val = side.value if hasattr(side, "value") else side
-    return str(val).lower().endswith("long")
+    return True
 
 
 def value_position(raw_position, quote: PricedQuote | None) -> ValuedPosition:
@@ -259,12 +250,11 @@ def value_position(raw_position, quote: PricedQuote | None) -> ValuedPosition:
         price_source = quote.source
         extended = quote.extended_hours
 
-    # Market value: positive qty; sign flipped for shorts (matches Alpaca's convention).
     abs_qty = abs(qty)
-    signed_market_value = abs_qty * current * (1 if is_long else -1)
+    signed_market_value = abs_qty * current
     # P/L: (current - avg_entry) * qty * direction
     if avg_entry > 0:
-        pnl_per_share = (current - avg_entry) if is_long else (avg_entry - current)
+        pnl_per_share = current - avg_entry
         unrealized_pl = pnl_per_share * abs_qty
         unrealized_plpc = pnl_per_share / avg_entry
     else:
@@ -274,7 +264,7 @@ def value_position(raw_position, quote: PricedQuote | None) -> ValuedPosition:
     return ValuedPosition(
         symbol=sym,
         qty=qty,
-        side=getattr(raw_position, "side", "long" if is_long else "short"),
+        side=getattr(raw_position, "side", "long"),
         avg_entry_price=avg_entry,
         current_price=current,
         market_value=signed_market_value,

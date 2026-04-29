@@ -47,8 +47,6 @@ position fading into the close. Reflect this in `opportunity_score` and `action`
     "top_positions": [...]
   },
   "risk_profile": {
-    "max_drawdown_weekly_pct": 0.05,
-    "max_drawdown_daily_pct": 0.025,
     "max_position_pct": 0.50,
     "max_sector_pct": 0.40,
     "max_positions": 6,
@@ -66,10 +64,6 @@ position fading into the close. Reflect this in `opportunity_score` and `action`
     "spy_treated_as_liquid": true
   },
   "system_state": {
-    "kill_switch_halted": false,
-    "kill_switch_reasons": [],
-    "weekly_return": 0.012,
-    "daily_return": -0.004,
     "bearish_halt_active": false,
     "earnings_close_symbols": ["IRDM"],   // exits already routed (informational)
     "dry_run": false

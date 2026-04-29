@@ -1,6 +1,6 @@
 ---
 name: macro-analyst
-description: Use for top-down market regime analysis — Fed posture, yield curve, macro catalysts, sector rotation, VIX regime. Invoke before entering large positions or when the user asks about "what's the market doing" / "is this a good environment to buy/short".
+description: Use for top-down market regime analysis — Fed posture, yield curve, macro catalysts, sector rotation, VIX regime. Invoke before entering large positions or when the user asks about "what's the market doing" / "is this a good environment to buy".
 tools: Bash, Read, Grep, Glob, WebSearch, WebFetch
 ---
 

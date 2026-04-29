@@ -54,5 +54,5 @@ for n in c.get_news(symbols=['NVDA'], limit=30, days_back=7):
 # Rules
 
 - Distinguish real news (earnings, M&A, regulatory) from noise (price-target bumps with no new info).
-- Flag when sentiment is at an extreme — crowded longs and crowded shorts both mean-revert.
+- Flag when sentiment is at an extreme because crowded optimism can mean-revert.
 - If analyst revisions are going the opposite direction from price, say so (a divergence worth watching).

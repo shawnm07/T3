@@ -2,7 +2,8 @@
 from __future__ import annotations
 import json
 import logging
-from dataclasses import asdict
+from dataclasses import replace
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -21,7 +22,6 @@ from src.earnings import EarningsInfo, fetch_earnings, within_window
 from src.executor import TradeExecutor
 from src.fundamentals import compute_fundamentals
 from src.journal import log_decision
-from src.kill_switch import check_kill_switch
 from src.macro import MacroSignal, compute_macro
 from src.market_data import get_market_data
 from src.overnight import OvernightSignal, market_bias_from_spy, score_overnight
@@ -30,7 +30,7 @@ from src.risk import RiskManager
 from src import sector_guard
 from src.sentiment import score_news_for_symbol
 from src.technicals import TechnicalSignal, compute_technicals, technicals_for_bars_df
-from src.universe import build_stock_universe, crypto_universe
+from src.universe import build_stock_universe
 
 log = logging.getLogger(__name__)
 
@@ -51,25 +51,32 @@ class TradingOrchestrator:
         self.client = AlpacaClient(config)
         self.risk = RiskManager(config)
         self.engine = DecisionEngine(config)
-        self.executor = TradeExecutor(self.client, config, is_crypto=False)
-        self.crypto_executor = TradeExecutor(self.client, config, is_crypto=True)
+        self.executor = TradeExecutor(self.client, config)
         self.ai = AIResearcher(config)
         self.cash_proxy_enabled = bool(config.get("cash_proxy", "enabled", default=False))
         self.cash_proxy_symbol = str(config.get("cash_proxy", "symbol", default="SPY"))
         self.cash_proxy_min = float(config.get("cash_proxy", "min_rebalance_usd", default=500))
         self.earnings_enabled = bool(config.get("earnings", "enabled", default=True))
-        self.earnings_block_days = int(config.get("earnings", "block_entry_days", default=5))
-        self.earnings_trim_days = int(config.get("earnings", "trim_exit_days", default=3))
+        self.earnings_block_days = int(config.get("earnings", "block_entry_days", default=2))
+        self.earnings_trim_days = int(config.get("earnings", "trim_exit_days", default=2))
         self.earnings_override = float(config.get("earnings", "high_conviction_override", default=0.85))
         self.earnings_ttl_hours = float(config.get("earnings", "cache_ttl_hours", default=24))
         self.earnings_use_ai_gate = bool(config.get("earnings", "use_ai_gate", default=True))
+        # Day-of/day-before/day-2 minimum confidence for an AI 'hold' verdict
+        # to actually hold. Below the threshold, 'hold' is downgraded to trim_50.
+        self.earnings_day_0_1_hold_min_conf = float(
+            config.get("earnings", "day_0_1_hold_min_confidence", default=0.90)
+        )
+        self.earnings_day2_hold_min_conf = float(
+            config.get("earnings", "day2_hold_min_confidence", default=0.75)
+        )
         self.rebalance_use_ai_arbiter = bool(config.get("rebalance", "use_ai_arbiter", default=True))
         # New-entry earnings blackout (separate from held-position trim window)
         self.entry_earnings_blackout_days = int(
-            config.get("earnings", "new_entry_earnings_blackout_days", default=7)
+            config.get("earnings", "new_entry_earnings_blackout_days", default=2)
         )
         self.entry_earnings_override = float(
-            config.get("earnings", "new_entry_earnings_override_confidence", default=0.85)
+            config.get("earnings", "new_entry_earnings_override_confidence", default=0.90)
         )
         # NOTE: legacy `rebalance.require_ai_above_*` knobs are no longer
         # consulted — there is no non-AI fallback. Hard rule: no AI → no trades.
@@ -93,6 +100,257 @@ class TradingOrchestrator:
             if self._is_cash_proxy(p.symbol):
                 return p
         return None
+
+    # ---- preclose veto circuit-breaker -------------------------------------
+    # The exit-arbiter prompt biases hard toward 'hold' for positions with
+    # intact technicals. On 2026-04-27 DELL was vetoed at preclose (directional
+    # -0.05, tech 0.79) and bled out the next day. This breaker forces a 50%
+    # trim once the same position has been vetoed N times in a row while
+    # directional was negative.
+
+    def _veto_state_path(self) -> Path:
+        rel = self.cfg.get(
+            "overnight", "veto_circuit_breaker", "state_file",
+            default="data/state/preclose_veto_history.json",
+        )
+        return Path(__file__).resolve().parents[1] / rel
+
+    def _load_veto_state(self) -> dict[str, Any]:
+        path = self._veto_state_path()
+        if not path.exists():
+            return {}
+        try:
+            data = json.loads(path.read_text())
+        except (OSError, json.JSONDecodeError):
+            return {}
+        ttl = int(self.cfg.get("overnight", "veto_circuit_breaker", "ttl_days", default=7))
+        cutoff = (date.today() - timedelta(days=ttl)).isoformat()
+        cleaned = {
+            sym: entry for sym, entry in data.items()
+            if isinstance(entry, dict) and entry.get("last_date", "") >= cutoff
+        }
+        return cleaned
+
+    def _save_veto_state(self, state: dict[str, Any]) -> None:
+        path = self._veto_state_path()
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps(state, indent=2))
+        except OSError as e:
+            log.warning("preclose veto state save failed: %s", e)
+
+    def _record_preclose_veto(self, symbol: str) -> None:
+        if not bool(self.cfg.get("overnight", "veto_circuit_breaker", "enabled", default=True)):
+            return
+        state = self._load_veto_state()
+        entry = state.get(symbol) or {"count": 0, "last_date": ""}
+        entry["count"] = int(entry.get("count", 0)) + 1
+        entry["last_date"] = date.today().isoformat()
+        state[symbol] = entry
+        self._save_veto_state(state)
+
+    def _reset_preclose_veto(self, symbol: str) -> None:
+        state = self._load_veto_state()
+        if symbol in state:
+            state.pop(symbol, None)
+            self._save_veto_state(state)
+
+    def _preclose_veto_count(self, symbol: str) -> int:
+        state = self._load_veto_state()
+        entry = state.get(symbol) or {}
+        return int(entry.get("count", 0))
+
+    def _veto_circuit_breaker_should_trim(self, symbol: str, directional: float) -> bool:
+        if not bool(self.cfg.get("overnight", "veto_circuit_breaker", "enabled", default=True)):
+            return False
+        if directional >= 0:
+            return False
+        threshold = int(self.cfg.get(
+            "overnight", "veto_circuit_breaker", "trim_after_consecutive_vetoes",
+            default=2,
+        ))
+        # We just incremented the counter via _record_preclose_veto; the
+        # current count *includes* this veto.
+        return self._preclose_veto_count(symbol) >= threshold
+
+    # ---- diversification pre-trade enforcement -----------------------------
+
+    def _holdings_theme_state(
+        self, positions: list[Any], equity: float,
+    ) -> dict[str, dict[str, Any]]:
+        """Compute per-theme {count, weight, members} for current holdings.
+
+        Used by the pre-trade gate and the audit log so we don't have to wait
+        for sector_guard to repair a violation post-execution.
+        """
+        sector_to_theme = sector_guard._build_sector_to_theme(self.cfg)
+        symbol_overrides = sector_guard._symbol_overrides(self.cfg)
+        proxy = (self.cash_proxy_symbol or "").upper() if self.cash_proxy_enabled else ""
+        themes: dict[str, dict[str, Any]] = {}
+        for p in positions:
+            sym = (p.symbol or "").upper()
+            if not sym or sym == proxy or "/" in sym:
+                continue
+            sector = ""
+            try:
+                # AlpacaClient enriches positions with sector via the universe
+                # loader; fall back to "" if absent. theme_bucket_for handles
+                # the missing-sector case via symbol_overrides.
+                sector = str(getattr(p, "sector", "") or "")
+            except Exception:
+                pass
+            theme = sector_guard.theme_bucket_for(
+                sector, sector_to_theme, sym, symbol_overrides,
+            )
+            mv = abs(float(getattr(p, "market_value", 0) or 0))
+            entry = themes.setdefault(theme, {"count": 0, "weight": 0.0, "members": []})
+            entry["count"] += 1
+            entry["weight"] += (mv / equity) if equity else 0.0
+            entry["members"].append(sym)
+        return themes
+
+    def _audit_themes(self, positions: list[Any], equity: float) -> None:
+        """Log a WARNING for any theme that already exceeds count or weight cap.
+
+        Visible at scan start so a violation is caught on the first scan
+        rather than buried inside a sector_guard repair event.
+        """
+        max_per_theme = int(self.cfg.get("diversification", "max_per_theme", default=3) or 3)
+        max_w = float(
+            self.cfg.get("diversification", "max_theme_weight_pct", default=0.50) or 0.50
+        )
+        state = self._holdings_theme_state(positions, equity)
+        for theme, info in state.items():
+            if info["count"] > max_per_theme:
+                log.warning(
+                    "[diversification] theme=%s count=%d > max_per_theme=%d members=%s",
+                    theme, info["count"], max_per_theme, info["members"],
+                )
+            if info["weight"] > max_w + 1e-6:
+                log.warning(
+                    "[diversification] theme=%s weight=%.2f > max=%.2f members=%s",
+                    theme, info["weight"], max_w, info["members"],
+                )
+
+    def _theme_cap_pre_block(
+        self,
+        sym: str,
+        delta_notional: float,
+        positions: list[Any],
+        equity: float,
+        pool_meta: dict[str, dict[str, Any]] | None = None,
+    ) -> dict[str, Any] | None:
+        """Block a new-entry / increase if it would breach the theme cap.
+
+        Returns a block-dict to short-circuit, or None if OK to proceed.
+        """
+        max_per_theme = int(self.cfg.get("diversification", "max_per_theme", default=3) or 3)
+        max_w = float(
+            self.cfg.get("diversification", "max_theme_weight_pct", default=0.50) or 0.50
+        )
+        sector_to_theme = sector_guard._build_sector_to_theme(self.cfg)
+        symbol_overrides = sector_guard._symbol_overrides(self.cfg)
+        sector = (pool_meta or {}).get(sym, {}).get("sector", "") or ""
+        cand_theme = sector_guard.theme_bucket_for(
+            sector, sector_to_theme, sym, symbol_overrides,
+        )
+        if cand_theme == "other":
+            return None  # untracked theme, no cap to enforce here
+        state = self._holdings_theme_state(positions, equity)
+        info = state.get(cand_theme, {"count": 0, "weight": 0.0, "members": []})
+        # Only block NEW entries on count cap (existing positions can grow);
+        # for adds, we'd block on weight only (caller passes their delta).
+        proxy = (self.cash_proxy_symbol or "").upper() if self.cash_proxy_enabled else ""
+        is_new_entry = sym.upper() not in {m.upper() for m in info["members"]}
+        if is_new_entry and info["count"] >= max_per_theme:
+            return {
+                "reason": "theme_count_cap",
+                "theme": cand_theme,
+                "current_count": info["count"],
+                "limit": max_per_theme,
+                "members": info["members"],
+            }
+        added_weight = (float(delta_notional) / equity) if equity else 0.0
+        new_weight = info["weight"] + added_weight
+        if new_weight > max_w + 1e-6:
+            return {
+                "reason": "theme_weight_cap",
+                "theme": cand_theme,
+                "current_weight": round(info["weight"], 4),
+                "added_weight": round(added_weight, 4),
+                "new_weight_would_be": round(new_weight, 4),
+                "limit": max_w,
+                "members": info["members"],
+            }
+        return None
+
+    def _minutes_to_close(self) -> float | None:
+        """Return minutes remaining in today's regular session, or None if
+        the broker clock is unavailable. Used to block selector new-entries
+        in the last N minutes (preclose owns that window)."""
+        try:
+            clock = self.client.trading.get_clock()
+        except Exception as e:
+            log.debug("clock lookup failed: %s", e)
+            return None
+        if not getattr(clock, "is_open", False):
+            return 0.0
+        next_close = getattr(clock, "next_close", None)
+        ts = getattr(clock, "timestamp", None)
+        if next_close is None or ts is None:
+            return None
+        try:
+            delta = (next_close - ts).total_seconds() / 60.0
+        except Exception:
+            return None
+        return max(0.0, float(delta))
+
+    def _is_late_session_no_new_entries(self) -> tuple[bool, float | None]:
+        """True if we are inside the late-session no-new-entries window.
+
+        Returns (is_late, minutes_to_close). If the broker clock is
+        unavailable, defaults to False so the bot still trades — better to
+        let the existing gates catch it than to halt all new entries blindly.
+        """
+        cutoff = float(self.cfg.get(
+            "scheduling", "late_session_no_new_entries_minutes", default=30,
+        ))
+        if cutoff <= 0:
+            return (False, None)
+        m = self._minutes_to_close()
+        if m is None:
+            return (False, None)
+        return (m <= cutoff, m)
+
+    def _session_gap_calendar_days(self) -> int:
+        """Calendar-day gap between today's close and the next trading session.
+
+        Used to decide whether a preclose should apply weekend-style hold
+        rules. Returns 1 for normal weekday → next-day, 3 for Friday → Monday,
+        4+ for pre-holiday weekends. Falls back to a Python weekday heuristic
+        if the broker calendar is unavailable.
+        """
+        today = date.today()
+        # Try the broker calendar first (handles holidays correctly).
+        try:
+            from alpaca.trading.requests import GetCalendarRequest
+            req = GetCalendarRequest(start=today, end=today + timedelta(days=10))
+            cal = self.client.trading.get_calendar(filters=req)
+            future = [c for c in (cal or []) if getattr(c, "date", None) and c.date > today]
+            if future:
+                next_day = future[0].date
+                return (next_day - today).days
+        except Exception as e:
+            log.debug("broker calendar lookup failed: %s — using weekday fallback", e)
+        # Fallback: Friday → 3 days, Sat/Sun → next Mon, weekday → 1 day.
+        wd = today.weekday()  # 0=Mon ... 6=Sun
+        if wd == 4:
+            return 3  # Friday → Monday
+        if wd == 5:
+            return 2  # Saturday → Monday
+        if wd == 6:
+            return 1  # Sunday → Monday
+        return 1
 
     def _wait_order_ok(self, order) -> bool:
         """Wait for an order to fill enough to count as usable funding."""
@@ -331,11 +589,9 @@ class TradingOrchestrator:
         if earnings:
             details["earnings"] = earnings.to_dict()
 
-        # Risk alignment: penalize longs in risk_off regime, shorts in risk_on
+        # Risk alignment: penalize long entries in risk-off regimes.
         risk_score = 0.0
         if macro.regime == "risk_off" and tech.score > 0:
-            risk_score = -0.3
-        elif macro.regime == "risk_on" and tech.score < 0:
             risk_score = -0.3
         elif macro.regime == "risk_on" and tech.score > 0:
             risk_score = 0.2
@@ -363,13 +619,13 @@ class TradingOrchestrator:
         symbols = [p.symbol for p in holdings]
         if not symbols:
             return {"positions": positions, "holdings": [], "tech_map": {},
-                    "sent_map": {}, "numeric": {}}
+                    "sent_map": {}, "numeric": {}, "earnings_map": {}, "news": []}
         try:
             bars = self.client.get_stock_bars(symbols, lookback_days=252)
         except Exception as e:
             log.warning("Portfolio signals bars fetch failed: %s", e)
             return {"positions": positions, "holdings": holdings, "tech_map": {},
-                    "sent_map": {}, "numeric": {}}
+                    "sent_map": {}, "numeric": {}, "earnings_map": {}, "news": []}
         tech_map = technicals_for_bars_df(bars)
         news = self.client.get_news(symbols=symbols, limit=80, days_back=3)
         sent_map: dict[str, Any] = {}
@@ -401,8 +657,6 @@ class TradingOrchestrator:
             risk_score = 0.0
             if macro.regime == "risk_off" and tech.score > 0:
                 risk_score = -0.3
-            elif macro.regime == "risk_on" and tech.score < 0:
-                risk_score = -0.3
             elif macro.regime == "risk_on" and tech.score > 0:
                 risk_score = 0.2
             numeric[sym] = self.engine.decide(
@@ -417,6 +671,176 @@ class TradingOrchestrator:
         return {"positions": positions, "holdings": holdings, "tech_map": tech_map,
                 "sent_map": sent_map, "numeric": numeric, "news": news,
                 "earnings_map": earnings_map}
+
+    def _enrich_selector_candidates(
+        self,
+        portfolio: dict[str, Any],
+        candidates: list[Candidate],
+        macro: MacroSignal,
+    ) -> dict[str, Any]:
+        """Add technical, sentiment, numeric, and earnings data for new names.
+
+        Held symbols already arrive through ``_portfolio_signals``. The selector
+        also needs the same basic risk/event data for newly discovered names so
+        it cannot accidentally buy into an imminent earnings event.
+        """
+        symbols = sorted({
+            c.symbol for c in candidates
+            if c.symbol and "/" not in c.symbol and not self._is_cash_proxy(c.symbol)
+        })
+        if not symbols:
+            return portfolio
+
+        tech_map = dict(portfolio.get("tech_map", {}) or {})
+        sent_map = dict(portfolio.get("sent_map", {}) or {})
+        numeric = dict(portfolio.get("numeric", {}) or {})
+        earnings_map = dict(portfolio.get("earnings_map", {}) or {})
+
+        missing_tech = [s for s in symbols if s not in tech_map]
+        if missing_tech:
+            try:
+                bars = self.client.get_stock_bars(missing_tech, lookback_days=252)
+                tech_map.update(technicals_for_bars_df(bars))
+            except Exception as e:
+                log.warning("[selector] candidate technical enrichment failed: %s", e)
+
+        try:
+            news = self.client.get_news(symbols=symbols, limit=100, days_back=3)
+        except Exception as e:
+            log.warning("[selector] candidate news enrichment failed: %s", e)
+            news = portfolio.get("news", []) or []
+
+        for sym in symbols:
+            tech = tech_map.get(sym)
+            if tech is None:
+                continue
+            sent = sent_map.get(sym) or score_news_for_symbol(sym, news)
+            sent_map[sym] = sent
+            earnings = earnings_map.get(sym)
+            if earnings is None and self.earnings_enabled:
+                try:
+                    earnings = fetch_earnings(sym, ttl_hours=self.earnings_ttl_hours)
+                except Exception as e:
+                    log.warning("[%s] selector earnings enrichment failed: %s", sym, e)
+                    earnings = None
+            if earnings:
+                earnings_map[sym] = earnings
+            details: dict[str, Any] = {
+                "technical": tech.to_dict(),
+                "sentiment": sent.to_dict(),
+                "macro": macro.to_dict(),
+            }
+            if earnings:
+                details["earnings"] = earnings.to_dict()
+            risk_score = 0.0
+            if macro.regime == "risk_off" and tech.score > 0:
+                risk_score = -0.3
+            elif macro.regime == "risk_on" and tech.score > 0:
+                risk_score = 0.2
+            numeric[sym] = self.engine.decide(
+                symbol=sym,
+                technical_score=tech.score,
+                fundamental_score=None,
+                sentiment_score=sent.score,
+                macro_score=macro.score,
+                risk_score=risk_score,
+                signal_details=details,
+            )
+
+        portfolio["tech_map"] = tech_map
+        portfolio["sent_map"] = sent_map
+        portfolio["numeric"] = numeric
+        portfolio["earnings_map"] = earnings_map
+        portfolio["news"] = news
+        log.info(
+            "[selector] enriched %d candidate(s): tech=%d sentiment=%d earnings=%d",
+            len(symbols), len(tech_map), len(sent_map), len(earnings_map),
+        )
+        return portfolio
+
+    @staticmethod
+    def _selector_entry_confidence(info: dict[str, Any]) -> float:
+        raw = info.get("confidence")
+        if raw is None:
+            raw = float(info.get("opportunity_score", 0) or 0) / 100.0
+        try:
+            conf = float(raw)
+        except (TypeError, ValueError):
+            conf = 0.0
+        return max(0.0, min(1.0, conf))
+
+    @staticmethod
+    def _cap_sizing_notional(
+        sizing,
+        cap_notional: float,
+        reason: str,
+    ):
+        cap = round(max(0.0, float(cap_notional or 0.0)), 2)
+        if cap <= 0 or cap >= sizing.notional:
+            return sizing
+        qty = round(cap / sizing.entry, 4) if sizing.entry else 0.0
+        risk_usd = sizing.risk_usd * (cap / sizing.notional) if sizing.notional else 0.0
+        limits = dict(sizing.limits or {})
+        limits["post_risk_cap_reason"] = reason
+        limits["post_risk_cap_notional"] = cap
+        return replace(
+            sizing,
+            qty=qty,
+            notional=qty * sizing.entry,
+            risk_usd=risk_usd,
+            reasoning=f"{sizing.reasoning}; {reason}",
+            limits=limits,
+        )
+
+    def _selector_entry_earnings_block(
+        self,
+        sym: str,
+        confidence: float,
+        earnings_map: dict[str, EarningsInfo],
+    ) -> dict[str, Any] | None:
+        """Return a block dict if `sym` should be blocked from new entry.
+
+        Tightened rule (post-2026-04-28 incident):
+        - days_until ∈ {0, 1}: HARD BLOCK, no override path. We do not open
+          new positions on the day of or day before earnings under any
+          circumstances — the CECO/CNC churn on 2026-04-28 was caused by
+          the selector entering names with earnings *today* via the override.
+        - days_until == 2: blocked unless `confidence >= override_confidence`
+          (default 0.90). This is the only override-eligible day.
+        - days_until >= 3 (or None): no block.
+        """
+        if not self.earnings_enabled:
+            return None
+        einfo = earnings_map.get(sym)
+        days_until = einfo.days_until if einfo else None
+        if days_until is None:
+            return None
+        if days_until < 0:
+            return None  # past report
+
+        if days_until <= 1:
+            return {
+                "symbol": sym,
+                "days_until_earnings": days_until,
+                "next_earnings_date": einfo.next_date,
+                "confidence": round(confidence, 3),
+                "override_confidence": None,  # no override permitted
+                "blackout_days": self.entry_earnings_blackout_days,
+                "reason": "hard_block_day_0_or_1",
+            }
+        if days_until <= self.entry_earnings_blackout_days:
+            if confidence >= self.entry_earnings_override:
+                return None
+            return {
+                "symbol": sym,
+                "days_until_earnings": days_until,
+                "next_earnings_date": einfo.next_date,
+                "confidence": round(confidence, 3),
+                "override_confidence": self.entry_earnings_override,
+                "blackout_days": self.entry_earnings_blackout_days,
+                "reason": "below_override_confidence",
+            }
+        return None
 
     # ---------- exits ----------
     def evaluate_exits(
@@ -482,14 +906,13 @@ class TradingOrchestrator:
             tech = tech_map[p.symbol]
             sent = sent_map.get(p.symbol)
             sent_score = sent.score if sent else 0.0
-            is_long = p.side.value == "long" if hasattr(p.side, "value") else p.side == "long"
             plpc = float(p.unrealized_plpc) if hasattr(p, "unrealized_plpc") else 0.0
 
             # Deterministic triggers become TRIGGER FLAGS in the AI payload —
             # they never fire a trade on their own.
-            flipped = (is_long and tech.score < -0.3) or (not is_long and tech.score > 0.3)
-            bad_news = (is_long and sent_score < -0.5) or (not is_long and sent_score > 0.5)
-            stalled = (is_long and tech.score < stall_thr) or (not is_long and tech.score > -stall_thr)
+            flipped = tech.score < -0.3
+            bad_news = sent_score < -0.5
+            stalled = tech.score < stall_thr
 
             einfo = earnings_map.get(p.symbol) if self.earnings_enabled else None
             in_earnings_window = bool(einfo and within_window(einfo, self.earnings_trim_days))
@@ -511,7 +934,7 @@ class TradingOrchestrator:
                 verdict, reason = self._earnings_gate_decision(
                     p=p, einfo=einfo, tech=tech, sent=sent,
                     numeric=numeric.get(p.symbol), macro=macro,
-                    is_long=is_long, plpc=plpc,
+                    plpc=plpc,
                 )
                 if verdict == "close":
                     closes.append((p.symbol, reason))
@@ -548,7 +971,7 @@ class TradingOrchestrator:
             num_dec = numeric.get(p.symbol)
             ctx = {
                 "symbol": p.symbol,
-                "side": "long" if is_long else "short",
+                "side": "long",
                 "qty": str(p.qty),
                 "market_value": abs(float(p.market_value)),
                 "unrealized_plpc": round(plpc, 4),
@@ -612,7 +1035,7 @@ class TradingOrchestrator:
 
     def _earnings_gate_decision(
         self, p, einfo: EarningsInfo, tech, sent, numeric, macro: MacroSignal | None,
-        is_long: bool, plpc: float,
+        plpc: float,
     ) -> tuple[str, str]:
         """Return (verdict, human-readable-reason) for a position entering its
         earnings trim window. verdict ∈ {"close", "trim_50", "hold", "skip_no_ai"}.
@@ -635,7 +1058,7 @@ class TradingOrchestrator:
 
         ctx = {
             "symbol": p.symbol,
-            "side": "long" if is_long else "short",
+            "side": "long",
             "market_value": abs(float(p.market_value)),
             "unrealized_plpc": round(plpc, 4),
             "current_weight_pct": round(abs(float(p.market_value)) / float(self.client.get_account().equity), 4),
@@ -680,16 +1103,43 @@ class TradingOrchestrator:
         rationale = str(result.get("rationale", ""))[:200]
         conf = float(result.get("confidence", 0.0) or 0.0)
         model_used = result.get("_model", "?")
+
+        # Confidence post-filter: a 'hold' verdict near earnings is only
+        # accepted when conviction is exceptional. Otherwise downgrade to
+        # trim_50 — keep some exposure but halve gap risk.
+        original_verdict = verdict
+        downgraded = False
+        days_until = int(einfo.days_until or 0)
+        if verdict == "hold":
+            if days_until <= 1 and conf < self.earnings_day_0_1_hold_min_conf:
+                verdict = "trim_50"
+                downgraded = True
+                rationale = (
+                    f"AI hold conf={conf:.2f} < day_0_1_min={self.earnings_day_0_1_hold_min_conf:.2f}"
+                    f" — downgraded to trim_50. Original: {rationale}"
+                )
+            elif days_until == 2 and conf < self.earnings_day2_hold_min_conf:
+                verdict = "trim_50"
+                downgraded = True
+                rationale = (
+                    f"AI hold conf={conf:.2f} < day2_min={self.earnings_day2_hold_min_conf:.2f}"
+                    f" — downgraded to trim_50. Original: {rationale}"
+                )
+
         ai_reason = (
             f"earnings in {einfo.days_until}d ({einfo.next_date}) — AI {verdict} "
             f"(conf={conf:.2f}, model={model_used}): {rationale}"
         )
         log_decision({
             "event": "earnings_gate", "symbol": p.symbol, "model": model_used,
-            "verdict": verdict, "confidence": conf, "rationale": rationale,
+            "verdict": verdict, "original_verdict": original_verdict,
+            "downgraded": downgraded,
+            "confidence": conf, "rationale": rationale,
         })
-        log.info("[%s] earnings gate (model=%s) -> %s (conf=%.2f): %s",
-                 p.symbol, model_used, verdict, conf, rationale)
+        log.info("[%s] earnings gate (model=%s) -> %s%s (conf=%.2f): %s",
+                 p.symbol, model_used, verdict,
+                 f" (downgraded from {original_verdict})" if downgraded else "",
+                 conf, rationale)
         return (verdict, ai_reason)
 
     # ---------- rebalance ----------
@@ -710,10 +1160,9 @@ class TradingOrchestrator:
         pos_dump: list[dict[str, Any]] = []
         for p in positions:
             mv = abs(float(getattr(p, "market_value", 0) or 0))
-            is_long = (p.side.value == "long") if hasattr(p.side, "value") else (p.side == "long")
             entry = {
                 "symbol": p.symbol,
-                "side": "long" if is_long else "short",
+                "side": "long",
                 "qty": float(getattr(p, "qty", 0) or 0),
                 "avg_entry_price": float(getattr(p, "avg_entry_price", 0) or 0),
                 "current_price": float(getattr(p, "current_price", 0) or 0),
@@ -920,7 +1369,6 @@ class TradingOrchestrator:
         earnings_map: dict,
         macro: MacroSignal,
         equity: float,
-        kill_state: dict[str, Any] | None = None,
         bearish_halt: bool = False,
         dry_run: bool = False,
         scan_candidates: list[dict[str, Any]] | None = None,
@@ -936,7 +1384,7 @@ class TradingOrchestrator:
           - risk profile + trading rules + execution constraints
           - current allocation breakdown (cash%, SPY%, equity%, sector%)
           - macro + intraday tape
-          - system state (kill switch, halts, dry_run)
+          - system state (market halts, dry_run)
         """
         from src.universe import sp500_sectors
         sectors = sp500_sectors()
@@ -1014,7 +1462,6 @@ class TradingOrchestrator:
             if self._is_cash_proxy(p.symbol):
                 continue
             sym = p.symbol
-            is_long = (p.side.value == "long") if hasattr(p.side, "value") else (p.side == "long")
             tech = tech_map.get(sym)
             sent = sent_map.get(sym)
             num = numeric.get(sym)
@@ -1033,11 +1480,11 @@ class TradingOrchestrator:
             chart = self._intraday_chart_for(intraday_bars, sym)
             pos_ctx.append({
                 "symbol": sym,
-                "side": "long" if is_long else "short",
+                "side": "long",
                 "qty": qty_f,
                 "avg_entry_price": round(avg_entry, 4),
                 "current_price": round(cur_price, 4),
-                "market_value_usd": round(mv * (1 if is_long else -1), 2),
+                "market_value_usd": round(mv, 2),
                 "abs_market_value_usd": round(mv, 2),
                 "current_weight_pct": round(mv / equity, 4) if equity else 0.0,
                 "unrealized_pl_usd": round(unreal_pl, 2),
@@ -1075,17 +1522,13 @@ class TradingOrchestrator:
 
         # --- Risk profile ---
         risk_profile = {
-            "max_drawdown_weekly_pct": float(self.cfg.get(
-                "kill_switch", "weekly_drawdown_pct", default=0.05)),
-            "max_drawdown_daily_pct": float(self.cfg.get(
-                "kill_switch", "daily_drawdown_pct", default=0.025)),
             "max_position_pct": float(self.risk.max_position_pct),
             "max_sector_pct": float(self.risk.max_sector_pct),
             "max_positions": int(self.risk.max_positions),
             "max_leverage": float(self.cfg.get("risk", "max_leverage", default=1.0)),
             "cash_reserve_pct": float(self.risk.cash_reserve_pct),
             "cash_reserve_min_pct": float(self.risk.cash_reserve_min_pct),
-            "max_risk_per_trade_pct": 0.005,  # mirrors risk.py hard cap
+            "max_risk_per_trade_pct": float(self.cfg.get("risk", "max_risk_per_trade_pct", default=0.005)),
             "high_conviction_threshold": float(self.risk.high_conviction_threshold),
             "stop_loss_atr_mult": float(self.cfg.get("risk", "stop_loss_atr_mult", default=2.0)),
             "take_profit_atr_mult": float(self.cfg.get("risk", "take_profit_atr_mult", default=4.0)),
@@ -1096,7 +1539,7 @@ class TradingOrchestrator:
             "You are the FINAL authority on every capital allocation decision.",
             "Only act on high-confidence setups; spreading capital evenly is the wrong default.",
             "Capital must be actively optimized intraday — every scan rebalances.",
-            "No trade may execute without your explicit approval (you are the AI gate).",
+            "No trade may execute without your explicit AI decision.",
             "Decisions are intraday-focused with a swing-trade horizon.",
             "Concentrate into highest-conviction names up to max_position_pct.",
             "Free capital from oversized / low-upside positions and redeploy.",
@@ -1120,11 +1563,6 @@ class TradingOrchestrator:
         # --- System state ---
         ec_syms = sorted(list(earnings_close_symbols)) if earnings_close_symbols else []
         system_state = {
-            "kill_switch_halted": bool((kill_state or {}).get("halted", False)),
-            "kill_switch_reasons": (kill_state or {}).get("reasons", []) or [],
-            "weekly_return": (kill_state or {}).get("weekly_return"),
-            "daily_return": (kill_state or {}).get("daily_return"),
-            "trades_today": (kill_state or {}).get("trades_today"),
             "bearish_halt_active": bool(bearish_halt),
             "earnings_close_symbols": ec_syms,
             "dry_run": bool(dry_run),
@@ -1186,6 +1624,99 @@ class TradingOrchestrator:
             return out
         return asyncio.run(_all())
 
+    def _execute_ai_rebalance_action(
+        self,
+        action: Any,
+        equity: float,
+        cash_floor_pct: float,
+        label: str,
+    ) -> dict[str, Any]:
+        """Execute one AI rebalance action without recomputing share size.
+
+        The selector/arbiter emits the share delta. This helper either submits
+        that exact delta or skips fail-closed; it never converts a target weight
+        into a Python-sized trade.
+        """
+        action_dict = action.to_dict()
+        full_exit = (
+            action.side == "sell"
+            and (action.target_notional <= 0 or action.target_pct <= 0 or action.ai_action == "EXIT")
+        )
+        ai_audit = {
+            "source": "ai_direct_rebalance",
+            "label": label,
+            "ai_delta_qty": action.ai_delta_qty,
+            "ai_entry_price": getattr(action, "ai_entry_price", None),
+            "ai_stop_loss": action.ai_stop_loss,
+            "ai_take_profit": action.ai_take_profit,
+            "target_pct": action.target_pct,
+            "target_qty": action.target_qty,
+            "current_qty": getattr(action, "current_qty", None),
+            "delta_notional_reference": action.delta_notional,
+            "current_notional": action.current_notional,
+            "target_notional": action.target_notional,
+            "ai_action": action.ai_action,
+        }
+        try:
+            if full_exit:
+                if action.ai_delta_qty is not None:
+                    try:
+                        if float(action.ai_delta_qty) > 0:
+                            return {**action_dict, "skipped": "ai_delta_qty_side_mismatch"}
+                    except (TypeError, ValueError):
+                        return {**action_dict, "skipped": "invalid_ai_delta_qty"}
+                exec_result = self.executor.close_position(action.symbol, reason=action.reason)
+                action_dict["full_exit_via_close_position"] = True
+                return {**action_dict, "execution": exec_result.to_dict()}
+
+            if action.ai_delta_qty is None:
+                return {**action_dict, "skipped": "missing_ai_delta_qty"}
+            try:
+                delta_qty = float(action.ai_delta_qty)
+            except (TypeError, ValueError):
+                return {**action_dict, "skipped": "invalid_ai_delta_qty"}
+            if abs(delta_qty) <= 0:
+                return {**action_dict, "skipped": "zero_ai_delta_qty"}
+            if action.side == "buy" and delta_qty <= 0:
+                return {**action_dict, "skipped": "ai_delta_qty_side_mismatch"}
+            if action.side == "sell" and delta_qty >= 0:
+                return {**action_dict, "skipped": "ai_delta_qty_side_mismatch"}
+
+            if action.side == "buy":
+                funded_notional = self._funded_buy_notional(
+                    action.symbol, action.delta_notional, equity, cash_floor_pct, label,
+                )
+                if funded_notional + 0.01 < float(action.delta_notional):
+                    return {
+                        **action_dict,
+                        "skipped": "insufficient_confirmed_cash",
+                        "funded_notional": round(funded_notional, 2),
+                    }
+                if not action.ai_stop_loss or not action.ai_take_profit:
+                    return {**action_dict, "skipped": "missing_ai_bracket_params"}
+                exec_result = self.executor.execute_ai_bracket(
+                    symbol=action.symbol,
+                    qty=delta_qty,
+                    stop_loss=float(action.ai_stop_loss),
+                    take_profit=float(action.ai_take_profit),
+                    reason=action.reason,
+                    ai_audit=ai_audit,
+                )
+            elif action.side == "sell":
+                exec_result = self.executor.execute_ai_qty_delta(
+                    symbol=action.symbol,
+                    delta_qty=delta_qty,
+                    reason=action.reason,
+                    ai_audit=ai_audit,
+                )
+            else:
+                return {**action_dict, "skipped": f"invalid_side_{action.side}"}
+
+            return {**action_dict, "execution": exec_result.to_dict()}
+        except Exception as e:
+            log.warning("[%s] %s AI rebalance action failed: %s", action.symbol, label, e)
+            return {**action_dict, "_error": str(e)}
+
     def run_rebalance(
         self,
         macro: MacroSignal,
@@ -1194,7 +1725,6 @@ class TradingOrchestrator:
         dry_run: bool = False,
         allow_adds: bool = True,
         earnings_exit_symbols: set[str] | None = None,
-        kill_state: dict[str, Any] | None = None,
         bearish_halt: bool = False,
     ) -> list[dict[str, Any]]:
         """Execute AI-driven portfolio rebalance.
@@ -1207,7 +1737,7 @@ class TradingOrchestrator:
           * NO post-AI overrides. Earnings windows, bearish-halt status, and
             recent decisions are passed INTO the AI as context — the AI
             decides what to do with them. The system enforces only safety
-            (kill switch + execution-cost floors), not strategy.
+            (execution-cost floors), not strategy.
           * Runs every scan. If the arbiter says HOLD on every position,
             we still log a `rebalance_summary` so behavior is observable.
 
@@ -1280,7 +1810,7 @@ class TradingOrchestrator:
         arbiter_ctx = self._build_arbiter_context(
             holdings=holdings, tech_map=tech_map, sent_map=sent_map,
             numeric=numeric, earnings_map=earnings_map, macro=macro, equity=equity,
-            kill_state=kill_state, bearish_halt=bearish_halt, dry_run=dry_run,
+            bearish_halt=bearish_halt, dry_run=dry_run,
             earnings_close_symbols=earnings_exit_symbols,
         )
         log.info(
@@ -1428,47 +1958,13 @@ class TradingOrchestrator:
                 log.info("[DRY] Rebalance %s", a.to_dict())
                 results.append({"dry_run": True, **a.to_dict()})
                 continue
-            # Is this action reducing or increasing exposure? SELLs that *reduce*
-            # a long or *unwind* a short free cash. SELLs that *grow* a short
-            # consume cash. (For shorts, "sell" on an existing short means add
-            # to the short — consumes buying power.)
-            grows_exposure = a.current_notional < a.target_notional
-            if grows_exposure:
-                funded_notional = self._funded_buy_notional(
-                    a.symbol, a.delta_notional, equity, cash_floor_pct,
-                    "rebalance",
-                )
-                if funded_notional <= 0:
-                    results.append({**a.to_dict(), "skipped": "insufficient_confirmed_cash"})
-                    continue
-                exec_result = self.executor.partial_trade(
-                    symbol=a.symbol, side=a.side,
-                    delta_notional=funded_notional,
-                    reason=a.reason,
-                )
-                action_dict = a.to_dict()
-                if funded_notional != round(float(a.delta_notional), 2):
-                    action_dict["requested_delta_notional"] = action_dict["delta_notional"]
-                    action_dict["delta_notional"] = funded_notional
-                    action_dict["cash_capped"] = True
-            elif a.side == "sell" and (a.target_notional <= 0 or a.target_pct <= 0 or a.ai_action == "EXIT"):
-                exec_result = self.executor.close_position(a.symbol, reason=a.reason)
-                action_dict = a.to_dict()
-                action_dict["full_exit_via_close_position"] = True
-            else:
-                exec_result = self.executor.partial_trade(
-                    symbol=a.symbol, side=a.side,
-                    delta_notional=a.delta_notional,
-                    reason=a.reason,
-                )
-                action_dict = a.to_dict()
-            results.append({**action_dict, "execution": exec_result.to_dict()})
-            if not exec_result.ok:
-                log.warning("[%s] rebalance action did not fill — skipping further dependent actions for safety",
-                            a.symbol)
-                # Re-fetch live account state so any subsequent add sees real cash.
-                # We continue the loop; the _ensure_cash_for() on the next grow
-                # action will now use accurate state.
+            action_result = self._execute_ai_rebalance_action(
+                a, equity=equity, cash_floor_pct=cash_floor_pct, label="rebalance",
+            )
+            results.append(action_result)
+            exec_result = action_result.get("execution") or {}
+            if exec_result and not exec_result.get("ok"):
+                log.warning("[%s] rebalance action did not fill", a.symbol)
 
         # --- Honor AI's SPY-vs-cash split ---
         # When the arbiter set spy_target_pct we move SPY toward that target
@@ -1613,64 +2109,6 @@ class TradingOrchestrator:
             log.warning("SPY rebalance buy failed: %s", e)
             return {"symbol": self.cash_proxy_symbol, "action": "buy_failed", "error": str(e)}
 
-    # ---------- halt-day conservative exits ----------
-    def _halt_day_exits(
-        self,
-        portfolio: dict[str, Any],
-        macro: MacroSignal,
-        equity: float,
-        dry_run: bool,
-    ) -> list[dict[str, Any]]:
-        """On kill-switch halt, keep stop-losses live and no new entries — but still
-        run AI over held positions and close any where AI strongly recommends exiting
-        (profit-lock or damage control). Returns execution result dicts.
-        """
-        if not bool(self.cfg.get("halt_exits", "enabled", default=True)):
-            return []
-        if not self.ai.available():
-            log.info("Halt-day AI exits skipped: AI unavailable")
-            return []
-        holdings = portfolio.get("holdings", [])
-        numeric = portfolio.get("numeric", {})
-        if not holdings:
-            return []
-        portfolio_ctx = {
-            "equity": equity,
-            "positions_count": len(holdings),
-            "context": "HALT-DAY: kill-switch active, evaluating for conservative exits only",
-        }
-        syms = [p.symbol for p in holdings if p.symbol in numeric]
-        log.info("Halt-day: asking AI about %d held positions for profit-taking / damage-control exits",
-                 len(syms))
-        verdicts = self._run_ai_on_held(syms, numeric, macro, portfolio_ctx)
-        min_conf = float(self.cfg.get("halt_exits", "min_ai_confidence", default=0.60))
-        results: list[dict[str, Any]] = []
-        for p in holdings:
-            v = verdicts.get(p.symbol)
-            if not v:
-                continue
-            is_long = p.side.value == "long" if hasattr(p.side, "value") else p.side == "long"
-            # AI says close if: for long, final_action in {sell_short, pass-with-low-conf}
-            # OR explicit exit recommendation. We treat "sell_short" on a long
-            # or "buy" on a short as "close".
-            should_close = False
-            reason = ""
-            if is_long and v.final_action == "sell_short" and v.ai_confidence >= min_conf:
-                should_close = True
-                reason = f"halt-day AI close (flip to short, conf={v.ai_confidence:.2f}): {v.thesis[:100]}"
-            elif not is_long and v.final_action == "buy" and v.ai_confidence >= min_conf:
-                should_close = True
-                reason = f"halt-day AI close (flip to long, conf={v.ai_confidence:.2f}): {v.thesis[:100]}"
-            if should_close:
-                log.info("[%s] halt-day close approved by AI: %s", p.symbol, reason)
-                if dry_run:
-                    results.append({"symbol": p.symbol, "action": "close_dry",
-                                    "reason": reason, "ai_verdict": v.to_dict()})
-                else:
-                    res = self.executor.close_position(p.symbol, reason=reason)
-                    results.append({**res.to_dict(), "reason": reason, "ai_verdict": v.to_dict()})
-        return results
-
     # ---------- post-execution portfolio verifier (Sonnet 4.6) ----------
     def _verify_portfolio_alignment(self, equity: float) -> dict[str, Any] | None:
         """Reconcile actual portfolio against the targets the Opus arbiter set
@@ -1784,20 +2222,24 @@ class TradingOrchestrator:
             p = pos_by_sym.get(sym)
             mv = abs(float(p.market_value)) if p else 0.0
             qty = float(p.qty) if p else 0.0
+            current_price = float(getattr(p, "current_price", 0) or 0) if p else 0.0
             cur_w = (mv / live_equity) if live_equity > 0 else 0.0
             target_usd = tw * live_equity
             gap_usd = target_usd - mv  # positive => under target (need buy)
             gap_pct = (gap_usd / live_equity) if live_equity > 0 else 0.0
+            info = per_symbol.get(sym, {}) or {}
             diff_rows.append({
                 "symbol": sym,
                 "qty": round(qty, 6),
+                "current_price": round(current_price, 4),
                 "market_value_usd": round(mv, 2),
                 "current_weight": round(cur_w, 4),
                 "target_weight": round(tw, 4),
+                "target_qty": info.get("qty"),
                 "gap_usd": round(gap_usd, 2),
                 "gap_pct_of_equity": round(gap_pct, 4),
                 "above_tolerance": abs(gap_usd) > tolerance_usd,
-                "opus_action": (per_symbol.get(sym, {}) or {}).get("action"),
+                "opus_action": info.get("action"),
             })
 
         ctx = {
@@ -1810,6 +2252,11 @@ class TradingOrchestrator:
                 "spy_target_pct": spy_target,
                 "cash_target_pct": cash_target,
                 "per_symbol": {s: {"action": (info or {}).get("action"),
+                                    "qty": (info or {}).get("qty"),
+                                    "delta_qty": (info or {}).get("delta_qty"),
+                                    "entry_price": (info or {}).get("entry_price"),
+                                    "stop_loss": (info or {}).get("stop_loss"),
+                                    "take_profit": (info or {}).get("take_profit"),
                                     "one_sentence_reason": (info or {}).get("one_sentence_reason")}
                                for s, info in per_symbol.items()},
             },
@@ -1851,9 +2298,9 @@ class TradingOrchestrator:
             sym = str(prop.get("symbol", "")).strip()
             side = str(prop.get("side", "")).lower().strip()
             try:
-                delta_usd = abs(float(prop.get("delta_usd", 0) or 0))
+                delta_qty = abs(float(prop.get("delta_qty", 0) or 0))
             except (TypeError, ValueError):
-                rejected.append({"symbol": sym, "reason": "delta_usd not numeric"})
+                rejected.append({"symbol": sym, "reason": "delta_qty not numeric"})
                 continue
             if not sym:
                 rejected.append({"reason": "missing symbol"})
@@ -1875,33 +2322,59 @@ class TradingOrchestrator:
             if side != required_side:
                 rejected.append({"symbol": sym, "reason": f"side {side} would move away from target (need {required_side})"})
                 continue
+            current_price = float(row.get("current_price", 0) or 0)
+            if current_price <= 0:
+                rejected.append({"symbol": sym, "reason": "missing current_price for qty validation"})
+                continue
+            delta_usd = delta_qty * current_price
+            if delta_qty <= 0:
+                rejected.append({"symbol": sym, "reason": "delta_qty must be > 0"})
+                continue
             if delta_usd < min_corrective_usd:
                 rejected.append({"symbol": sym, "reason": f"delta ${delta_usd:.0f} < min ${min_corrective_usd:.0f}"})
                 continue
-            # Cap delta at the actual gap so we never overshoot Opus's target.
-            capped_delta = min(delta_usd, abs(row["gap_usd"]))
-            if capped_delta < min_corrective_usd:
-                rejected.append({"symbol": sym, "reason": "capped delta below min_corrective"})
+            if delta_usd > abs(row["gap_usd"]) * 1.01:
+                rejected.append({"symbol": sym, "reason": f"delta_qty would overshoot gap (${delta_usd:.0f} > ${abs(row['gap_usd']):.0f})"})
+                continue
+            if side == "sell" and delta_qty > abs(float(row.get("qty", 0) or 0)) * 1.01:
+                rejected.append({"symbol": sym, "reason": "delta_qty exceeds held qty"})
                 continue
             try:
                 if side == "buy":
                     floor_pct = max(float(cash_target or 0.0), float(self.risk.cash_reserve_pct))
                     funded_delta = self._funded_buy_notional(
-                        sym, capped_delta, live_equity, floor_pct, "verifier",
+                        sym, delta_usd, live_equity, floor_pct, "verifier",
                     )
-                    if funded_delta < min_corrective_usd:
+                    if funded_delta + 0.01 < delta_usd:
                         rejected.append({"symbol": sym, "reason": "insufficient_confirmed_cash"})
                         continue
-                    capped_delta = funded_delta
-                exec_res = self.executor.partial_trade(
-                    symbol=sym, side=side, delta_notional=capped_delta,
-                    reason=f"verifier reconcile to Opus target {row['target_weight']*100:.1f}% "
-                           f"(gap was ${row['gap_usd']:+.0f})",
-                )
+                    opus_info = per_symbol.get(sym, {}) or {}
+                    stop = opus_info.get("stop_loss")
+                    target = opus_info.get("take_profit")
+                    if not stop or not target:
+                        rejected.append({"symbol": sym, "reason": "missing Opus stop/take for verifier buy"})
+                        continue
+                    exec_res = self.executor.execute_ai_bracket(
+                        symbol=sym,
+                        qty=delta_qty,
+                        stop_loss=float(stop),
+                        take_profit=float(target),
+                        reason=f"verifier reconcile to Opus target {row['target_weight']*100:.1f}% "
+                               f"(gap was ${row['gap_usd']:+.0f})",
+                        ai_audit={"source": "portfolio_verifier", "proposal": prop, "row": row},
+                    )
+                else:
+                    exec_res = self.executor.execute_ai_qty_delta(
+                        symbol=sym,
+                        delta_qty=-delta_qty,
+                        reason=f"verifier reconcile to Opus target {row['target_weight']*100:.1f}% "
+                               f"(gap was ${row['gap_usd']:+.0f})",
+                        ai_audit={"source": "portfolio_verifier", "proposal": prop, "row": row},
+                    )
                 executed.append({
                     "symbol": sym, "side": side,
-                    "proposed_usd": round(delta_usd, 2),
-                    "executed_usd": round(capped_delta, 2),
+                    "proposed_qty": round(delta_qty, 6),
+                    "estimated_usd": round(delta_usd, 2),
                     "current_weight": row["current_weight"],
                     "target_weight": row["target_weight"],
                     "gap_usd_before": row["gap_usd"],
@@ -1928,7 +2401,6 @@ class TradingOrchestrator:
 
     def _compute_floor_breach_flag(
         self,
-        kill_state: dict[str, Any] | None,
         macro: MacroSignal,
         top_score: float | None = None,
     ) -> bool:
@@ -1938,9 +2410,6 @@ class TradingOrchestrator:
         Returns True if any enabled condition fires; False otherwise.
         """
         cfg_breach = self.cfg.get("selector", "floor_breach_conditions", default={}) or {}
-        if cfg_breach.get("kill_switch_active") and (kill_state or {}).get("halted"):
-            log.info("[selector] floor breach allowed: kill-switch halted")
-            return True
         if cfg_breach.get("bear_regime"):
             sev = float(macro.score) < -0.5
             below_200 = float(getattr(macro, "spy_vs_200ema", 0.0) or 0.0) < 0.0
@@ -2034,7 +2503,6 @@ class TradingOrchestrator:
         portfolio: dict[str, Any],
         macro: MacroSignal,
         equity: float,
-        kill_state: dict[str, Any] | None,
         bearish_halt: bool,
         dry_run: bool,
         allow_floor_breach: bool,
@@ -2048,7 +2516,7 @@ class TradingOrchestrator:
         ``currently_held`` flag.
 
         Returns ``(context, pool_meta)`` — ``pool_meta`` maps symbol to
-        ``{"currently_held": bool, "is_crypto": bool, "sector": str}`` for the
+        ``{"currently_held": bool, "sector": str}`` for the
         validator to enforce anti-stagnation server-side.
         """
         holdings = portfolio.get("holdings", [])
@@ -2068,7 +2536,6 @@ class TradingOrchestrator:
             earnings_map=earnings_map,
             macro=macro,
             equity=equity,
-            kill_state=kill_state,
             bearish_halt=bearish_halt,
             dry_run=dry_run,
             scan_candidates=None,
@@ -2153,22 +2620,23 @@ class TradingOrchestrator:
                     "earnings_next_date": (einfo.next_date if einfo else None),
                 }
             block["currently_held"] = currently_held
-            block["is_crypto"] = bool(cand.is_crypto)
+            try:
+                current_qty = float(block.get("qty", 0) or 0) if currently_held else 0.0
+            except (TypeError, ValueError):
+                current_qty = 0.0
+            block["current_qty"] = current_qty
             block["discovery_sources"] = list(cand.sources)
             block["intraday_change_pct"] = round(float(cand.change_pct or 0.0), 4)
-            theme = (
-                "crypto" if cand.is_crypto
-                else sector_guard.theme_bucket_for(
-                    cand.sector or "", sector_to_theme, sym, symbol_overrides
-                )
+            theme = sector_guard.theme_bucket_for(
+                cand.sector or "", sector_to_theme, sym, symbol_overrides
             )
             block["theme_bucket"] = theme
             unified_pool.append(block)
             pool_meta[sym] = {
                 "currently_held": currently_held,
-                "is_crypto": bool(cand.is_crypto),
                 "sector": cand.sector or "Other",
                 "theme_bucket": theme,
+                "current_qty": current_qty,
             }
 
         base["candidate_pool"] = unified_pool
@@ -2183,7 +2651,7 @@ class TradingOrchestrator:
         """Phase 4 cutover: unified-pool selector replaces the two-pipeline split.
 
         Flow:
-          1. preamble: kill-switch, snapshot, macro, portfolio_signals
+          1. preamble: snapshot, macro, portfolio_signals
           2. urgent exits via exit-arbiter (kept)
           3. build unified candidate pool via discovery.py
           4. enrich + build selector context
@@ -2198,13 +2666,16 @@ class TradingOrchestrator:
         self._last_ai_per_symbol = {}
         self._last_ai_spy_target_pct = None
         self._last_ai_cash_target_pct = None
-        kill = check_kill_switch(self.client, self.cfg)
         account, positions = self.client.get_snapshot(force_refresh=True, log_detail=True)
         equity = float(account.equity)
-        log.info("Account: equity=$%.2f cash=$%.2f positions=%d trades_today=%d",
-                 equity, float(account.cash), len(positions), kill.trades_today)
+        log.info("Account: equity=$%.2f cash=$%.2f positions=%d",
+                 equity, float(account.cash), len(positions))
         if not dry_run:
             self._restore_cash_floor(equity)
+
+        # Diversification audit at scan start: surfaces any theme cap
+        # violation immediately, not after a sector_guard repair.
+        self._audit_themes(positions, equity)
 
         macro = self.macro_brief()
         scan_type = self._detect_scan_type()
@@ -2244,7 +2715,16 @@ class TradingOrchestrator:
         if not candidates:
             log.warning("[selector] discovery returned empty pool — skipping cycle")
             log_decision({"event": "selector_skipped", "reason": "empty_pool"})
-            return {"status": "skipped_empty_pool", "exits": exit_results}
+            return {
+                "status": "skipped_empty_pool",
+                "equity": equity,
+                "positions_count": len(positions),
+                "exits": exit_results,
+                "executions": [],
+                "decisions": [],
+            }
+
+        portfolio = self._enrich_selector_candidates(portfolio, candidates, macro)
 
         # 4. Floor-breach decision (heuristic — top-score gate uses numeric pre-AI)
         top_numeric = max(
@@ -2254,10 +2734,8 @@ class TradingOrchestrator:
             default=None,
         )
         allow_floor_breach = self._compute_floor_breach_flag(
-            kill.to_dict(), macro, top_score=top_numeric,
+            macro, top_score=top_numeric,
         )
-        if kill.halted:
-            allow_floor_breach = True
 
         # 5. Build selector context
         ctx, pool_meta = self._build_selector_context(
@@ -2265,7 +2743,6 @@ class TradingOrchestrator:
             portfolio=portfolio,
             macro=macro,
             equity=equity,
-            kill_state=kill.to_dict(),
             bearish_halt=bearish_halt,
             dry_run=dry_run,
             allow_floor_breach=allow_floor_breach,
@@ -2291,10 +2768,13 @@ class TradingOrchestrator:
                           "consecutive_failures": consec})
             return {
                 "status": "skipped_selector_failure",
+                "equity": equity,
+                "positions_count": len(positions),
                 "consecutive_failures": consec,
                 "exits": exit_results,
+                "executions": [],
+                "decisions": [],
                 "pool_size": len(candidates),
-                "kill_switch": kill.to_dict(),
             }
 
         self._reset_selector_failures()
@@ -2419,87 +2899,278 @@ class TradingOrchestrator:
                 log.info("[DRY] Rebalance %s", a.to_dict())
                 executions.append({"dry_run": True, **a.to_dict()})
                 continue
-            grows_exposure = a.current_notional < a.target_notional
-            try:
-                action_dict = a.to_dict()
-                if grows_exposure:
-                    funded_notional = self._funded_buy_notional(
-                        a.symbol, a.delta_notional, equity,
-                        selector_cash_floor_pct, "[selector] rebalance",
-                    )
-                    if funded_notional <= 0:
-                        executions.append({**action_dict, "skipped": "insufficient_confirmed_cash"})
-                        continue
-                    if funded_notional != round(float(a.delta_notional), 2):
-                        action_dict["requested_delta_notional"] = action_dict["delta_notional"]
-                        action_dict["delta_notional"] = funded_notional
-                        action_dict["cash_capped"] = True
-                    exec_result = self.executor.partial_trade(
-                        symbol=a.symbol, side=a.side,
-                        delta_notional=funded_notional, reason=a.reason,
-                    )
-                elif a.side == "sell" and (a.target_notional <= 0 or a.target_pct <= 0 or a.ai_action == "EXIT"):
-                    exec_result = self.executor.close_position(a.symbol, reason=a.reason)
-                    action_dict["full_exit_via_close_position"] = True
-                else:
-                    exec_result = self.executor.partial_trade(
-                        symbol=a.symbol, side=a.side,
-                        delta_notional=a.delta_notional, reason=a.reason,
-                    )
-                executions.append({**action_dict, "execution": exec_result.to_dict()})
-                if not exec_result.ok:
-                    log.warning("[selector] rebalance %s did not fill", a.symbol)
-            except Exception as e:
-                log.warning("[selector] partial_trade failed for %s: %s", a.symbol, e)
-                executions.append({**a.to_dict(), "_error": str(e)})
+            action_result = self._execute_ai_rebalance_action(
+                a, equity=equity, cash_floor_pct=selector_cash_floor_pct,
+                label="[selector] rebalance",
+            )
+            executions.append(action_result)
+            exec_result = action_result.get("execution") or {}
+            if exec_result and not exec_result.get("ok"):
+                log.warning("[selector] rebalance %s did not fill", a.symbol)
 
-        # New-entry loop: any selected symbol not in current positions gets a
-        # BUY for target_pct * equity. Skips crypto (separate executor path).
+        # New-entry loop: any selected symbol not in current positions is sized
+        # by portfolio-selector, then executed as a bracket order using the
+        # AI's exact qty / stop / target.
         held_syms_set = {p.symbol for p in portfolio.get("holdings", [])}
+        # Late-session new-entry block: the 15:30 ET scan was opening
+        # overnight positions that the 15:55 ET preclose immediately closed.
+        # Inside the configured window, only existing positions can be
+        # trimmed/exited; NEW entries are blocked. Preclose owns the
+        # overnight-buy decision instead.
+        late_block, mtc = self._is_late_session_no_new_entries()
+        if late_block:
+            log.warning(
+                "[selector] late-session window: minutes_to_close=%.1f — "
+                "blocking ALL new-entry selector picks",
+                mtc if mtc is not None else -1.0,
+            )
         for sym in result.get("selected_positions", []) or []:
             if sym in held_syms_set or "/" in sym:
                 continue
-            target_pct = float((per_symbol.get(sym) or {}).get("target_pct", 0) or 0)
+            info = per_symbol.get(sym) or {}
+            target_pct = float(info.get("target_pct", 0) or 0)
             if target_pct <= 0:
                 continue
-            notional = round(target_pct * equity, 2)
-            if notional < float(self.cfg.get("risk", "min_trade_usd", default=500)):
+            selector_target_notional = round(target_pct * equity, 2)
+            if selector_target_notional < float(self.cfg.get("risk", "min_trade_usd", default=500)):
                 log.info("[selector] new entry %s skipped (notional $%.0f below min)",
-                         sym, notional)
+                         sym, selector_target_notional)
                 continue
-            reason = (per_symbol.get(sym) or {}).get("one_sentence_reason", "selector entry")
-            if dry_run:
-                log.info("[DRY] Selector new entry %s notional $%.0f", sym, notional)
-                executions.append({"dry_run": True, "symbol": sym, "side": "buy",
-                                   "delta_notional": notional, "reason": reason,
-                                   "is_new_entry": True})
-                continue
-            funded_notional = self._funded_buy_notional(
-                sym, notional, equity, selector_cash_floor_pct,
-                "[selector] new-entry",
-            )
-            if funded_notional <= 0:
-                executions.append({"symbol": sym, "side": "buy",
-                                   "delta_notional": notional, "reason": reason,
-                                   "is_new_entry": True,
-                                   "skipped": "insufficient_confirmed_cash"})
-                continue
-            try:
-                exec_result = self.executor.partial_trade(
-                    symbol=sym, side="buy", delta_notional=funded_notional, reason=reason,
+            reason = info.get("one_sentence_reason", "selector entry")
+            if late_block:
+                log.info(
+                    "[selector] new entry %s skipped: late-session window "
+                    "(minutes_to_close=%.1f, cutoff=%s)",
+                    sym, mtc if mtc is not None else -1.0,
+                    self.cfg.get("scheduling", "late_session_no_new_entries_minutes", default=30),
                 )
-                executions.append({"symbol": sym, "side": "buy",
-                                   "delta_notional": funded_notional,
-                                   "requested_delta_notional": notional,
-                                   "cash_capped": funded_notional != notional,
+                executions.append({
+                    "symbol": sym, "side": "buy",
+                    "requested_delta_notional": selector_target_notional,
+                    "selector_target_pct": target_pct,
+                    "reason": reason,
+                    "is_new_entry": True,
+                    "skipped": "late_session_no_new_entries",
+                    "minutes_to_close": round(mtc, 1) if mtc is not None else None,
+                })
+                continue
+            confidence = self._selector_entry_confidence(info)
+            earnings_block = self._selector_entry_earnings_block(
+                sym, confidence, portfolio.get("earnings_map", {}) or {},
+            )
+            if earnings_block:
+                log.warning(
+                    "[selector] new entry %s blocked: earnings in %sd "
+                    "(reason=%s)",
+                    sym, earnings_block.get("days_until_earnings"),
+                    earnings_block.get("reason", "blackout"),
+                )
+                executions.append({
+                    "symbol": sym, "side": "buy",
+                    "requested_delta_notional": selector_target_notional,
+                    "selector_target_pct": target_pct,
+                    "reason": reason,
+                    "is_new_entry": True,
+                    "skipped": "earnings_blackout",
+                    "earnings": earnings_block,
+                })
+                continue
+            # Theme cap pre-block: prevent the selector from minting a 4th
+            # member of an already-maxed theme (would otherwise be repaired
+            # by sector_guard post-execution).
+            theme_block = self._theme_cap_pre_block(
+                sym=sym,
+                delta_notional=selector_target_notional,
+                positions=positions,
+                equity=equity,
+                pool_meta=pool_meta,
+            )
+            if theme_block:
+                log.warning(
+                    "[selector] new entry %s blocked: theme=%s reason=%s",
+                    sym, theme_block.get("theme"), theme_block.get("reason"),
+                )
+                executions.append({
+                    "symbol": sym, "side": "buy",
+                    "requested_delta_notional": selector_target_notional,
+                    "selector_target_pct": target_pct,
+                    "reason": reason,
+                    "is_new_entry": True,
+                    "skipped": "theme_cap_pre_block",
+                    "theme_violation": theme_block,
+                })
+                continue
+            tech = (portfolio.get("tech_map", {}) or {}).get(sym)
+            if not tech or not tech.price or not tech.atr:
+                audit = {"status": "rejected", "reject_reason": "missing_price_or_atr"}
+                executions.append({
+                    "symbol": sym, "side": "buy",
+                    "requested_delta_notional": selector_target_notional,
+                    "selector_target_pct": target_pct,
+                    "reason": reason,
+                    "is_new_entry": True,
+                    "skipped": "missing_risk_inputs",
+                    "risk_sizer": audit,
+                })
+                continue
+            # AI-direct sizing: portfolio-selector emits exact qty / stop /
+            # take_profit per selected position. Python executes those values
+            # verbatim — no sizing recomputation. risk.validate_ai_sizing()
+            # acts only as a hard-cap safety check (long-only, max position %,
+            # max risk per trade). If the AI omits any of these fields, we
+            # fail-safe and skip the trade — there is no Python fallback.
+            try:
+                ai_qty = float(info.get("qty") or 0)
+                ai_entry = float(info.get("entry_price") or tech.price or 0)
+                ai_stop = float(info.get("stop_loss") or 0)
+                ai_target = float(info.get("take_profit") or 0)
+            except (TypeError, ValueError):
+                ai_qty = ai_entry = ai_stop = ai_target = 0.0
+            if ai_qty <= 0 or ai_entry <= 0 or ai_stop <= 0 or ai_target <= 0:
+                log.error(
+                    "[selector] %s missing AI sizing params "
+                    "(qty=%s entry=%s stop=%s target=%s) — skipping",
+                    sym, ai_qty, ai_entry, ai_stop, ai_target,
+                )
+                executions.append({
+                    "symbol": sym, "side": "buy",
+                    "selector_target_pct": target_pct,
+                    "reason": reason,
+                    "is_new_entry": True,
+                    "skipped": "missing_ai_sizing_params",
+                    "ai_inputs": {"qty": ai_qty, "entry": ai_entry,
+                                  "stop": ai_stop, "target": ai_target},
+                })
+                continue
+            sizing_positions = (
+                self.client.get_positions() if not dry_run
+                else list(portfolio.get("holdings", []) or [])
+            )
+            ok, risk_audit = self.risk.validate_ai_sizing(
+                symbol=sym, qty=ai_qty, entry=ai_entry,
+                stop_loss=ai_stop, take_profit=ai_target,
+                equity=equity, existing_positions=sizing_positions,
+            )
+            if not ok:
+                log.warning(
+                    "[selector] %s AI sizing rejected by safety check: %s",
+                    sym, risk_audit.get("reject_reason", "unknown"),
+                )
+                executions.append({
+                    "symbol": sym, "side": "buy",
+                    "selector_target_pct": target_pct,
+                    "reason": reason,
+                    "is_new_entry": True,
+                    "skipped": "ai_sizing_safety_rejected",
+                    "risk_sizer": risk_audit,
+                })
+                continue
+            sizing = self.risk.build_sizing_from_ai(
+                symbol=sym, qty=ai_qty, entry=ai_entry,
+                stop_loss=ai_stop, take_profit=ai_target,
+                confidence=confidence, reasoning=reason,
+            )
+            risk_sized_notional = round(float(sizing.notional), 2)
+            risk_sizer_payload = {
+                **risk_audit,
+                "selector_target_pct": round(target_pct, 4),
+                "selector_target_notional": selector_target_notional,
+                "ai_direct_notional": risk_sized_notional,
+                "source": "ai_direct",
+            }
+            if dry_run:
+                log.info(
+                    "[DRY] Selector AI-direct entry %s qty=%s @ ~$%.2f stop=$%.2f tgt=$%.2f notional=$%.0f",
+                    sym, sizing.qty, ai_entry, ai_stop, ai_target, sizing.notional,
+                )
+                executions.append({"dry_run": True, "symbol": sym, "side": "buy",
+                                   "delta_notional": risk_sized_notional,
+                                   "selector_target_pct": target_pct,
                                    "reason": reason,
                                    "is_new_entry": True,
+                                   "sizing": sizing.to_dict(),
+                                   "risk_sizer": risk_sizer_payload})
+                continue
+            funded_notional = self._funded_buy_notional(
+                sym, sizing.notional, equity, selector_cash_floor_pct,
+                "[selector] new-entry",
+            )
+            if funded_notional + 0.01 < sizing.notional:
+                # Insufficient confirmed cash for the AI's full qty. We do NOT
+                # silently scale qty down — the AI is the sole sizing
+                # authority. Reject the trade; the AI will see the new cash
+                # level next scan and resize accordingly.
+                log.warning(
+                    "[selector] %s AI qty=%s ($%.0f) exceeds confirmed funding "
+                    "($%.0f) — rejecting (no Python-side qty scaling)",
+                    sym, sizing.qty, sizing.notional, funded_notional,
+                )
+                executions.append({"symbol": sym, "side": "buy",
+                                   "delta_notional": risk_sized_notional,
+                                   "selector_target_pct": target_pct,
+                                   "reason": reason,
+                                   "is_new_entry": True,
+                                   "skipped": "insufficient_confirmed_cash",
+                                   "funded_notional": round(funded_notional, 2),
+                                   "sizing": sizing.to_dict(),
+                                   "risk_sizer": risk_sizer_payload})
+                continue
+            decision_obj = TradeDecision(
+                symbol=sym,
+                action="buy",
+                confidence=confidence,
+                combined_score=float((portfolio.get("numeric", {}) or {}).get(sym).combined_score)
+                if (portfolio.get("numeric", {}) or {}).get(sym) else 0.0,
+                signal_scores={
+                    "technical": float(getattr(tech, "score", 0.0) or 0.0),
+                    "selector_opportunity": float(info.get("opportunity_score", 0) or 0) / 100.0,
+                },
+                signal_details={
+                    "technical": tech.to_dict(),
+                    "sentiment": ((portfolio.get("sent_map", {}) or {}).get(sym).to_dict()
+                                  if (portfolio.get("sent_map", {}) or {}).get(sym) else None),
+                    "earnings": ((portfolio.get("earnings_map", {}) or {}).get(sym).to_dict()
+                                 if (portfolio.get("earnings_map", {}) or {}).get(sym) else None),
+                    "selector": info,
+                    "risk_sizer": risk_sizer_payload,
+                },
+                reasoning=[
+                    f"ai-direct entry qty={sizing.qty} stop=${ai_stop:.2f} tgt=${ai_target:.2f}",
+                    f"selector target_pct={target_pct:.1%} notional=${risk_sized_notional:,.0f}",
+                    reason,
+                ],
+            )
+            try:
+                exec_result = self.executor.execute_ai_bracket(
+                    symbol=sym, qty=sizing.qty,
+                    stop_loss=sizing.stop_loss,
+                    take_profit=sizing.take_profit,
+                    reason=reason,
+                    decision=decision_obj,
+                    ai_audit=risk_sizer_payload,
+                )
+                executions.append({"symbol": sym, "side": "buy",
+                                   "delta_notional": risk_sized_notional,
+                                   "selector_target_pct": target_pct,
+                                   "ai_qty": sizing.qty,
+                                   "ai_stop_loss": sizing.stop_loss,
+                                   "ai_take_profit": sizing.take_profit,
+                                   "reason": reason,
+                                   "is_new_entry": True,
+                                   "sizing": sizing.to_dict(),
+                                   "risk_sizer": risk_sizer_payload,
+                                   "decision": decision_obj.to_dict(),
                                    "execution": exec_result.to_dict()})
             except Exception as e:
-                log.warning("[selector] new-entry partial_trade failed for %s: %s", sym, e)
+                log.warning("[selector] AI-direct bracket order failed for %s: %s", sym, e)
                 executions.append({"symbol": sym, "side": "buy",
-                                   "delta_notional": notional, "reason": reason,
-                                   "is_new_entry": True, "_error": str(e)})
+                                   "delta_notional": risk_sized_notional,
+                                   "selector_target_pct": target_pct,
+                                   "reason": reason,
+                                   "is_new_entry": True,
+                                   "sizing": sizing.to_dict(),
+                                   "risk_sizer": risk_sizer_payload,
+                                   "_error": str(e)})
 
         # 8. Apply SPY target + verifier
         cash_proxy_action = None
@@ -2523,7 +3194,6 @@ class TradingOrchestrator:
             "equity": equity,
             "positions_count": len(positions),
             "macro": macro.to_dict(),
-            "kill_switch": kill.to_dict(),
             "selector": {
                 "pool_size": len(candidates),
                 "sources_breakdown": breakdown,
@@ -2553,40 +3223,17 @@ class TradingOrchestrator:
         if self.cfg.get("selector", "enabled", default=False):
             return self._run_scan_with_selector(dry_run=dry_run)
         log.info("=== Starting scan (dry_run=%s) ===", dry_run)
-        kill = check_kill_switch(self.client, self.cfg)
         # Independent valuation: equity, market_value, unrealized_pl[pc],
         # current_price are recomputed from Alpha-Vantage-sourced prices
         # (Alpaca's paper-account fields are unreliable). Full snapshot
         # audit log fires here.
         account, positions = self.client.get_snapshot(force_refresh=True, log_detail=True)
         equity = float(account.equity)
-        log.info("Account: computed_equity=$%.2f, cash=$%.2f, positions=%d, trades_today=%d",
-                 equity, float(account.cash), len(positions), kill.trades_today)
+        log.info("Account: computed_equity=$%.2f, cash=$%.2f, positions=%d",
+                 equity, float(account.cash), len(positions))
         if not dry_run:
             self._restore_cash_floor(equity)
         macro = self.macro_brief()
-
-        # ---- Kill-switch halt path: no new entries, but AI-gated profit-taking exits ----
-        if kill.halted:
-            log.warning("Kill switch HALTED: %s", kill.reasons)
-            # Fetch portfolio signals so AI has context
-            portfolio = self._portfolio_signals(macro)
-            halt_exits = self._halt_day_exits(portfolio, macro, equity, dry_run)
-            # Sweep any freed cash into SPY (still "cash-equivalent")
-            cash_proxy_action = None if dry_run else self._sweep_cash_to_proxy(equity)
-            summary = {
-                "ts": pd.Timestamp.utcnow().isoformat(),
-                "equity": equity,
-                "positions_count": len(positions),
-                "halted": True,
-                "macro": macro.to_dict(),
-                "kill_switch": kill.to_dict(),
-                "halt_exits": halt_exits,
-                "cash_proxy": cash_proxy_action,
-            }
-            _save_research("scan", summary)
-            log.info("Scan complete (halted): halt-day exits=%d", len(halt_exits))
-            return summary
 
         # Shared portfolio signal bundle (used for exits + rebalance)
         portfolio = self._portfolio_signals(macro)
@@ -2630,7 +3277,6 @@ class TradingOrchestrator:
             macro=macro, portfolio=portfolio, equity=equity,
             dry_run=dry_run, allow_adds=not bearish_halt,
             earnings_exit_symbols=earnings_exit_syms,
-            kill_state=kill.to_dict(),
             bearish_halt=bearish_halt,
         )
 
@@ -2660,7 +3306,6 @@ class TradingOrchestrator:
                 "equity": equity,
                 "positions_count": len(positions),
                 "macro": macro.to_dict(),
-                "kill_switch": kill.to_dict(),
                 "bearish_halt": {"score": macro.score, "vix_regime": macro.vix_regime,
                                  "threshold": halt_score},
                 "exits": exit_results,
@@ -2695,7 +3340,7 @@ class TradingOrchestrator:
             d = self.evaluate_symbol(tech, macro, news_items)
             decisions.append(d)
 
-        actions = [d for d in decisions if d.action in ("buy", "sell_short")]
+        actions = [d for d in decisions if d.action == "buy"]
         log.info("Actionable numeric signals: %d / %d", len(actions), len(decisions))
 
         # --- AI layer: run subagents on top candidates; if available, AI is the gate ---
@@ -2739,23 +3384,20 @@ class TradingOrchestrator:
         min_conf = float(self.cfg.get("risk", "min_confidence", default=0.40))
         executions: list[dict[str, Any]] = []
 
-        # Candidates to execute: if AI is active, ONLY those AI approved (final_action in buy/sell_short).
+        # Candidates to execute: if AI is active, ONLY those AI approved for buys.
         # If AI is inactive, numeric-only (current behavior).
         if ai_active:
             pipeline_candidates = []
             for sym, verdict in ai_verdicts.items():
-                if verdict.final_action not in ("buy", "sell_short"):
+                if verdict.final_action != "buy":
                     continue
                 if verdict.ai_confidence <= 0:
                     continue
                 numeric = next((d for d in decisions if d.symbol == sym), None)
                 if not numeric:
                     continue
-                # Blend AI confidence with numeric (if same direction)
-                num_dir_matches = (
-                    (verdict.final_action == "buy" and numeric.combined_score >= 0)
-                    or (verdict.final_action == "sell_short" and numeric.combined_score <= 0)
-                )
+                # Blend AI confidence with numeric when the numeric score is long-biased.
+                num_dir_matches = numeric.combined_score >= 0
                 numeric_conf = numeric.confidence if num_dir_matches else 0.0
                 blended_conf = ai_weight * verdict.ai_confidence + (1 - ai_weight) * numeric_conf
                 if blended_conf < min_conf:
@@ -2819,15 +3461,13 @@ class TradingOrchestrator:
             atr = tech_detail.get("atr")
             if not price or not atr:
                 continue
-            side = "buy" if d.action == "buy" else "sell_short"
             sizing = self.risk.size_position(
                 symbol=d.symbol,
-                side=side,
+                side="buy",
                 price=price, atr=atr,
                 confidence=d.confidence,
                 equity=equity,
                 existing_positions=positions,
-                is_crypto=False,
             )
             if not sizing:
                 continue
@@ -2835,7 +3475,7 @@ class TradingOrchestrator:
                 log.info("[DRY] Would execute %s", sizing.to_dict())
                 executions.append({"dry_run": True, "sizing": sizing.to_dict(), "decision": d.to_dict()})
             else:
-                # Ensure real cash covers the notional; sell SPY cash-proxy if short.
+                # Ensure real cash covers the notional; sell SPY cash-proxy if needed.
                 # Re-fetched per-iteration so a prior unfilled trade doesn't leave
                 # us thinking we have cash we don't.
                 if not self._ensure_cash_for(sizing.notional, equity):
@@ -2891,7 +3531,6 @@ class TradingOrchestrator:
             "equity": equity,
             "positions_count": len(positions),
             "macro": macro.to_dict(),
-            "kill_switch": kill.to_dict(),
             "candidates_evaluated": len(decisions),
             "actionable_numeric": len(actions),
             "ai_active": ai_active,
@@ -2947,10 +3586,6 @@ class TradingOrchestrator:
         """~5 min before the close: decide whether to hold each position overnight,
         and optionally open new positions likely to gap up at the next open."""
         log.info("=== Pre-close overnight decision (dry_run=%s) ===", dry_run)
-        kill = check_kill_switch(self.client, self.cfg)
-        if kill.halted:
-            log.warning("Kill switch HALTED: %s", kill.reasons)
-            return {"halted": True, "kill_switch": kill.to_dict()}
 
         # HARD RULE: preclose closes/opens touch capital, so they must route
         # through the Opus 4.7 arbiter. No AI → no preclose trades.
@@ -2959,9 +3594,26 @@ class TradingOrchestrator:
                 "run_preclose: AI (Opus 4.7) unavailable — skipping all preclose "
                 "trade actions (fail-safe). Stop-losses remain live."
             )
-            return {"skipped": "ai_unavailable"}
+            # Best-effort equity read for the notification — preclose ran too
+            # early to have it computed yet, so do a quick snapshot here.
+            try:
+                _account, _positions = self.client.get_snapshot(log_detail=False)
+                _equity = float(_account.equity)
+                _pos_count = len([p for p in _positions if "/" not in p.symbol])
+            except Exception:
+                _equity = 0.0
+                _pos_count = 0
+            return {
+                "skipped": "ai_unavailable",
+                "equity": _equity,
+                "positions_count": _pos_count,
+                "hold_reports": [],
+                "exits": [],
+                "new_executions": [],
+                "market_bias": 0.0,
+            }
 
-        # Config knobs
+        # Config knobs (weekday defaults)
         hold_threshold = float(self.cfg.get("overnight", "hold_threshold", default=0.0))
         buy_threshold = float(self.cfg.get("overnight", "buy_threshold", default=0.35))
         bearish_buy_threshold = float(
@@ -2973,6 +3625,26 @@ class TradingOrchestrator:
         enable_new_buys = bool(self.cfg.get("overnight", "enable_new_buys", default=True))
         max_rsi_new_buy = float(self.cfg.get("overnight", "max_rsi_for_new_buy", default=78))
         sequential_cash = bool(self.cfg.get("overnight", "sequential_cash_check", default=True))
+
+        # Weekend / pre-holiday detection: when the gap to the next trading
+        # session is ≥ 2 calendar days, swap in stricter weekend thresholds
+        # and lower the bar to override an AI hold verdict (easier to close
+        # before a multi-day overnight).
+        session_gap_days = self._session_gap_calendar_days()
+        weekend_session = session_gap_days >= 2
+        weekend_min_exit_conf: float | None = None
+        if weekend_session:
+            wk = self.cfg.get("overnight", "weekend", default={}) or {}
+            hold_threshold = float(wk.get("hold_threshold", 0.20))
+            buy_threshold = float(wk.get("buy_threshold", 0.55))
+            bearish_buy_threshold = float(wk.get("bearish_buy_threshold", 0.65))
+            weekend_min_exit_conf = float(wk.get("exit_arbiter_min_confidence", 0.40))
+            log.info(
+                "Preclose weekend mode: session_gap=%d days, "
+                "hold_threshold=%.2f buy_threshold=%.2f exit_min_conf=%.2f",
+                session_gap_days, hold_threshold, buy_threshold,
+                weekend_min_exit_conf,
+            )
 
         account, positions = self.client.get_snapshot(force_refresh=True, log_detail=True)
         equity = float(account.equity)
@@ -3019,7 +3691,6 @@ class TradingOrchestrator:
         exit_results: list[dict[str, Any]] = []
         for p in equity_positions:
             sym = p.symbol
-            is_long = (p.side.value == "long") if hasattr(p.side, "value") else (p.side == "long")
             tech = tech_held.get(sym)
             tech_score = tech.score if tech else 0.0
             sent = score_news_for_symbol(sym, news_held)
@@ -3039,7 +3710,7 @@ class TradingOrchestrator:
                 _earn_verdict, _earn_reason = self._earnings_gate_decision(
                     p=p, einfo=_einfo_pre, tech=tech, sent=sent,
                     numeric=None, macro=None,
-                    is_long=is_long, plpc=_plpc,
+                    plpc=_plpc,
                 )
                 if _earn_verdict == "close":
                     hold_reports.append({"symbol": sym, "decision": "close_earnings_gate"})
@@ -3059,11 +3730,24 @@ class TradingOrchestrator:
                     hold_reports.append({"symbol": sym, "decision": "hold_earnings_gate"})
                     continue
                 if _earn_verdict == "trim_50":
+                    # Execute the trim now and skip the overnight decision —
+                    # the position size is already deliberately reduced.
                     log.info(
-                        "[%s] preclose earnings gate: trim_50 — continuing with overnight decision",
+                        "[%s] preclose earnings gate: trim_50 — executing 50%% trim",
                         sym,
                     )
-                # skip_no_ai or trim_50: fall through to overnight decision
+                    hold_reports.append({"symbol": sym, "decision": "trim_50_earnings_gate"})
+                    if dry_run:
+                        exit_results.append({
+                            "symbol": sym, "action": "trim_50_dry", "reason": _earn_reason,
+                        })
+                    else:
+                        _res = self.executor.reduce_position_pct(
+                            sym, percentage=50.0, reason=_earn_reason,
+                        )
+                        exit_results.append({**_res.to_dict(), "reason": _earn_reason})
+                    continue
+                # skip_no_ai: fall through to overnight decision
 
             intraday = self._slice_symbol(intraday_held, sym)
             ov = score_overnight(sym, intraday, tech_score, sent_score, market_bias)
@@ -3072,20 +3756,21 @@ class TradingOrchestrator:
                 hold_reports.append({"symbol": sym, "decision": "hold_no_data"})
                 continue
 
-            # For long positions, bullish overnight score is favorable.
-            # For short positions, bearish overnight score is favorable.
-            directional = ov.score if is_long else -ov.score
+            directional = ov.score
             decision = "hold" if directional >= hold_threshold else "close"
             report = {
-                "symbol": sym, "is_long": is_long,
+                "symbol": sym,
                 "overnight": ov.to_dict(),
                 "directional_score": round(directional, 3),
                 "decision": decision,
+                "weekend_session": weekend_session,
             }
             hold_reports.append(report)
-            log.info("[%s] %s directional=%+.2f (ov=%+.2f) notes=%s -> %s",
-                     sym, "LONG" if is_long else "SHORT",
-                     directional, ov.score, ov.notes, decision.upper())
+            log.info("[%s] directional=%+.2f (ov=%+.2f) notes=%s -> %s",
+                     sym, directional, ov.score, ov.notes, decision.upper())
+            # Reset the veto-circuit-breaker counter on a healthy directional day.
+            if directional >= 0:
+                self._reset_preclose_veto(sym)
             if decision == "close":
                 # Route every preclose close through Opus 4.7 exit-arbiter.
                 num_dec = self.engine.decide(
@@ -3099,8 +3784,10 @@ class TradingOrchestrator:
                 )
                 arbiter_ctx = {
                     "symbol": sym,
-                    "side": "long" if is_long else "short",
+                    "side": "long",
                     "context": "PRECLOSE overnight-hold decision",
+                    "weekend_session": weekend_session,
+                    "session_gap_calendar_days": session_gap_days,
                     "market_value": abs(float(p.market_value)),
                     "unrealized_plpc": float(p.unrealized_plpc) if hasattr(p, "unrealized_plpc") else 0.0,
                     "current_price": float(tech.price) if tech and tech.price is not None else None,
@@ -3112,6 +3799,7 @@ class TradingOrchestrator:
                     "exit_triggers": {
                         "preclose_directional_score": round(directional, 3),
                         "hold_threshold": hold_threshold,
+                        "weekend_session": weekend_session,
                     },
                     "context_note": (
                         "Decide whether to close this position before the bell. "
@@ -3126,16 +3814,55 @@ class TradingOrchestrator:
                 ai_conf = float(verdict.get("confidence", 0.0) or 0.0)
                 ai_reasoning = str(verdict.get("reasoning", ""))[:200]
                 model_used = verdict.get("_model", "?")
-                min_exit_conf = float(self.cfg.get("exit_arbiter", "min_confidence", default=0.55))
+                # Min-conf for an AI 'exit' verdict to actually execute.
+                # On weekend sessions we use a lower bar so a confidence-0.40
+                # AI exit is enough to close (vs the 0.55 default). Outside
+                # weekends the preclose-specific override (0.50) takes over.
+                if weekend_session and weekend_min_exit_conf is not None:
+                    min_exit_conf = weekend_min_exit_conf
+                else:
+                    min_exit_conf = float(self.cfg.get(
+                        "overnight", "preclose_exit_arbiter_min_confidence",
+                        default=float(self.cfg.get("exit_arbiter", "min_confidence", default=0.55)),
+                    ))
                 log_decision({
                     "event": "preclose_exit_arbiter", "symbol": sym, "model": model_used,
                     "action": ai_action, "confidence": ai_conf, "reasoning": ai_reasoning,
+                    "min_exit_conf_used": round(min_exit_conf, 2),
+                    "weekend_session": weekend_session,
                     "triggers": arbiter_ctx["exit_triggers"],
                 })
-                log.info("[%s] preclose exit-arbiter (model=%s) -> %s conf=%.2f: %s",
-                         sym, model_used, ai_action, ai_conf, ai_reasoning)
+                log.info("[%s] preclose exit-arbiter (model=%s) -> %s conf=%.2f "
+                         "(min_exit_conf=%.2f, weekend=%s): %s",
+                         sym, model_used, ai_action, ai_conf,
+                         min_exit_conf, weekend_session, ai_reasoning)
                 if ai_action != "exit" or ai_conf < min_exit_conf:
                     log.info("[%s] preclose close vetoed by AI — holding overnight", sym)
+                    self._record_preclose_veto(sym)
+                    # Veto circuit-breaker: if the AI has held the same name
+                    # through 2+ consecutive negative-directional preclose
+                    # decisions, force a 50% trim now.
+                    if self._veto_circuit_breaker_should_trim(sym, directional):
+                        trim_reason = (
+                            f"veto-cap trim_50: AI vetoed close "
+                            f"{self._preclose_veto_count(sym)}x in a row "
+                            f"(directional={directional:+.2f}, last AI: {ai_reasoning})"
+                        )
+                        log.warning("[%s] %s", sym, trim_reason)
+                        if dry_run:
+                            exit_results.append({
+                                "symbol": sym, "action": "trim_50_dry",
+                                "reason": trim_reason, "ai_verdict": verdict,
+                            })
+                        else:
+                            res = self.executor.reduce_position_pct(
+                                sym, percentage=50.0, reason=trim_reason,
+                            )
+                            exit_results.append({
+                                **res.to_dict(), "reason": trim_reason,
+                                "ai_verdict": verdict,
+                            })
+                        self._reset_preclose_veto(sym)
                     continue
                 reason = (
                     f"preclose AI close (conf={ai_conf:.2f}, model={model_used}): {ai_reasoning}"
@@ -3146,6 +3873,7 @@ class TradingOrchestrator:
                 else:
                     res = self.executor.close_position(sym, reason=reason)
                     exit_results.append({**res.to_dict(), "reason": reason, "ai_verdict": verdict})
+                self._reset_preclose_veto(sym)
 
         # ---------- Find new overnight candidates ----------
         new_executions: list[dict[str, Any]] = []
@@ -3296,7 +4024,6 @@ class TradingOrchestrator:
                     confidence=ai_conf * size_mult,
                     equity=equity,
                     existing_positions=positions,
-                    is_crypto=False,
                 )
                 if not sizing:
                     continue
@@ -3330,7 +4057,7 @@ class TradingOrchestrator:
                     new_executions.append({"dry_run": True, "sizing": sizing.to_dict(),
                                            "decision": decision_obj.to_dict()})
                 else:
-                    # Ensure real cash covers the notional; sell SPY if short.
+                    # Ensure real cash covers the notional; sell SPY if needed.
                     if not self._ensure_cash_for(
                         sizing.notional,
                         equity,
@@ -3369,7 +4096,8 @@ class TradingOrchestrator:
             "equity": equity,
             "positions_count": len(positions),
             "market_bias": round(market_bias, 3),
-            "kill_switch": kill.to_dict(),
+            "weekend_session": weekend_session,
+            "session_gap_calendar_days": session_gap_days,
             "hold_reports": hold_reports,
             "exits": exit_results,
             "candidate_reports": cand_reports,
@@ -3378,120 +4106,60 @@ class TradingOrchestrator:
             "thresholds": {
                 "hold": hold_threshold, "buy": buy_threshold,
                 "max_new": max_new, "size_mult": size_mult,
+                "weekend_session": weekend_session,
             },
         }
+        # Per-decision tally for the auditable summary line — surfaces
+        # "what scored, what held, what got AI-vetoed, what closed for earnings"
+        # at one glance so a missing intraday-data path doesn't go unnoticed.
+        tally: dict[str, int] = {
+            "held": len(hold_reports),
+            "scored": 0,
+            "hold": 0,
+            "close": 0,
+            "no_data": 0,
+            "earnings_close": 0,
+            "earnings_trim_50": 0,
+            "earnings_hold": 0,
+            "ai_vetoed_held": 0,
+            "veto_cap_trim": 0,
+        }
+        for rep in hold_reports:
+            d = rep.get("decision", "")
+            if d == "hold":
+                tally["scored"] += 1
+                tally["hold"] += 1
+            elif d == "close":
+                tally["scored"] += 1
+                tally["close"] += 1
+            elif d == "hold_no_data":
+                tally["no_data"] += 1
+            elif d == "close_earnings_gate":
+                tally["earnings_close"] += 1
+            elif d == "trim_50_earnings_gate":
+                tally["earnings_trim_50"] += 1
+            elif d == "hold_earnings_gate":
+                tally["earnings_hold"] += 1
+        # AI-vetoed holds are reports where decision was "close" but no exit
+        # row exists for that symbol (i.e., AI returned hold and we kept it).
+        exited_syms = {x.get("symbol") for x in exit_results if x.get("symbol")}
+        for rep in hold_reports:
+            if rep.get("decision") == "close" and rep.get("symbol") not in exited_syms:
+                tally["ai_vetoed_held"] += 1
+        for x in exit_results:
+            if "veto-cap" in str(x.get("reason", "")):
+                tally["veto_cap_trim"] += 1
+        summary["tally"] = tally
         _save_research("preclose", summary)
+        log.info(
+            "Preclose summary: held=%d scored=%d hold=%d close=%d no_data=%d "
+            "earnings(close=%d trim50=%d hold=%d) ai_vetoed=%d veto_cap_trim=%d "
+            "exits=%d new_buys=%d weekend=%s",
+            tally["held"], tally["scored"], tally["hold"], tally["close"],
+            tally["no_data"], tally["earnings_close"], tally["earnings_trim_50"],
+            tally["earnings_hold"], tally["ai_vetoed_held"], tally["veto_cap_trim"],
+            len(exit_results), len(new_executions), weekend_session,
+        )
         log.info("Preclose complete: closes=%d, new_buys=%d",
                  len(exit_results), len(new_executions))
-        return summary
-
-    def run_crypto_scan(self, dry_run: bool = False) -> dict[str, Any]:
-        log.info("=== Crypto scan (dry_run=%s) ===", dry_run)
-        kill = check_kill_switch(self.client, self.cfg)
-        if kill.halted:
-            return {"halted": True, "kill_switch": kill.to_dict()}
-
-        account, positions = self.client.get_snapshot(force_refresh=True, log_detail=True)
-        equity = float(account.equity)
-
-        symbols = crypto_universe(self.cfg)
-        if not symbols:
-            return {"skipped": "no crypto universe"}
-
-        # HARD RULE: crypto trades, like every other money-moving action, must
-        # be approved by the Opus 4.7 decision-arbiter. No AI → no trades.
-        if not self.ai.available():
-            log.critical(
-                "run_crypto_scan: AI (Opus 4.7) unavailable — skipping all "
-                "crypto executions (fail-safe)."
-            )
-            return {"skipped": "ai_unavailable", "equity": equity}
-
-        bars = self.client.get_crypto_bars(symbols, lookback_hours=24 * 60)
-        executions: list[dict[str, Any]] = []
-        for sym in symbols:
-            try:
-                g = bars.xs(sym, level="symbol")
-                tech = compute_technicals(sym, g)
-                if not tech:
-                    continue
-                # Technical + macro become INPUTS, never triggers. The numeric
-                # decision is packaged as context for the Opus entry arbiter.
-                numeric = self.engine.decide(
-                    symbol=sym,
-                    technical_score=tech.score,
-                    fundamental_score=None,
-                    sentiment_score=None,
-                    macro_score=None,
-                    risk_score=0.0,
-                    signal_details={"technical": tech.to_dict()},
-                )
-                log_decision({"symbol": sym, "numeric": numeric.to_dict()})
-
-                arbiter_ctx = {
-                    "symbol": sym,
-                    "asset_class": "crypto",
-                    "current_price": tech.price,
-                    "position_status": "not_owned",
-                    "numeric_decision": numeric.to_dict(),
-                    "technical_analyst": tech.to_dict(),
-                    "fundamental_analyst": {"note": "n/a for crypto"},
-                    "sentiment_analyst": {"note": "skipped"},
-                    "macro": {"note": "crypto 24/7 — macro regime not applied"},
-                    "portfolio": {
-                        "equity": equity,
-                        "positions_count": len(positions),
-                    },
-                    "risk_constraints": {
-                        "max_position_pct": float(self.risk.max_position_pct),
-                        "cash_reserve_pct": float(self.risk.cash_reserve_pct),
-                    },
-                }
-                verdict = run_entry_arbiter_single(self.cfg, arbiter_ctx)
-                if not verdict:
-                    log.critical("[%s] crypto entry arbiter unavailable/errored — skipping", sym)
-                    continue
-                action = str(verdict.get("final_action", "")).strip().lower()
-                conf = float(verdict.get("confidence", 0.0) or 0.0)
-                thesis = str(verdict.get("thesis", ""))[:200]
-                model_used = verdict.get("_model", "?")
-                log_decision({
-                    "event": "crypto_entry_arbiter", "symbol": sym,
-                    "model": model_used, "action": action,
-                    "confidence": conf, "thesis": thesis,
-                })
-                min_conf = float(self.cfg.get("risk", "min_confidence", default=0.40))
-                if action != "buy" or conf < min_conf:
-                    log.info("[%s] crypto arbiter -> %s conf=%.2f (below %.2f) — skip",
-                             sym, action, conf, min_conf)
-                    continue
-                final_decision = TradeDecision(
-                    symbol=sym, action="buy", confidence=conf,
-                    combined_score=numeric.combined_score,
-                    signal_scores=numeric.signal_scores,
-                    signal_details={**numeric.signal_details, "ai_verdict": verdict},
-                    reasoning=numeric.reasoning + [
-                        f"ai=buy@{conf:.2f} (model={model_used})",
-                        f"thesis: {thesis}",
-                    ],
-                )
-                sizing = self.risk.size_position(
-                    symbol=sym, side="buy",
-                    price=tech.price, atr=tech.atr,
-                    confidence=conf,
-                    equity=equity,
-                    existing_positions=positions,
-                    is_crypto=True,
-                )
-                if sizing:
-                    if dry_run:
-                        executions.append({"dry": True, "sizing": sizing.to_dict(),
-                                           "decision": final_decision.to_dict()})
-                    else:
-                        res = self.crypto_executor.execute(final_decision, sizing)
-                        executions.append(res.to_dict())
-            except Exception as e:
-                log.warning("Crypto eval for %s failed: %s", sym, e)
-        summary = {"executions": executions, "equity": equity}
-        _save_research("crypto_scan", summary)
         return summary

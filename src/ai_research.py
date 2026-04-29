@@ -35,8 +35,9 @@ AGENTS_DIR = Path(__file__).resolve().parents[1] / ".claude" / "agents"
 # MODEL ROUTER — centralized selection for all AI calls in the bot.
 #
 # HARD RULE: Any AI output that can directly lead to buying, selling, sizing,
-# or otherwise modifying exposure MUST use TRADE_CRITICAL_MODEL (Sonnet 4.6 or
-# Opus 4.7). Cheaper models are permitted ONLY for pure input agents (technical/
+# or otherwise modifying exposure MUST use TRADE_CRITICAL_MODEL (configured via
+# ai.trade_critical_model — currently Sonnet 4.6, switchable to Opus 4.7).
+# Cheaper models are permitted ONLY for pure input agents (technical/
 # fundamental/sentiment analysts whose structured output is fed into the
 # arbiter) or for non-critical summarization / formatting.
 # ---------------------------------------------------------------------------
@@ -66,7 +67,7 @@ def get_ai_model(task_type: str, config: "Config | None" = None) -> str:
     """Return the model id to use for a given task_type.
 
     task_type in {"trade_critical", "non_critical"}.
-    trade_critical → Opus 4.7 (any decision that can move money).
+    trade_critical → trade_critical_model from config (any decision that can move money).
     non_critical  → cheap/fast model (analyst inputs, logging, UI).
     """
     if task_type == "trade_critical":
@@ -162,13 +163,14 @@ class AIResearcher:
     def __init__(self, config: Config):
         self.cfg = config
         self.enabled = bool(config.get("ai", "enabled", default=False))
-        # Trade-critical (Opus 4.7) — any decision that can move money.
+        # Trade-critical model — any decision that can move money. Configured via
+        # ai.trade_critical_model (switchable between Opus and Sonnet).
         self.trade_critical_model = config.get(
             "ai", "trade_critical_model",
             default=config.get("ai", "model", default=TRADE_CRITICAL_MODEL_DEFAULT),
         )
         # Legacy alias: self.model always points at the trade-critical model so
-        # any unqualified caller ends up on Opus by default.
+        # any unqualified caller ends up on the trade-critical model by default.
         self.model = self.trade_critical_model
         self.haiku_model = config.get("ai", "haiku_model", default=NON_CRITICAL_MODEL_DEFAULT)
         self.non_critical_model = config.get(
@@ -181,7 +183,7 @@ class AIResearcher:
         }
         per_agent_model = config.get("ai", "model_per_agent", default={}) or {}
         # Only consulted for agents NOT in TRADE_CRITICAL_AGENTS — those are
-        # always forced to Opus and per-agent overrides are ignored.
+        # always forced to trade_critical_model and per-agent overrides are ignored.
         self.model_per_agent: dict[str, str] = {
             str(k): str(v) for k, v in per_agent_model.items()
         }
@@ -222,10 +224,10 @@ class AIResearcher:
 
         If the agent is in TRADE_CRITICAL_AGENTS, the model is FORCED to the
         trade-critical model regardless of what was passed in — this is the
-        central enforcement point of the 'all trade decisions → Opus 4.7' rule.
+        central enforcement point of the 'all trade decisions → trade_critical_model' rule.
         """
         agent = load_agent(agent_name)
-        # Hard enforcement: any trade-critical agent must run on Opus 4.7.
+        # Hard enforcement: any trade-critical agent must run on trade_critical_model.
         if agent_name in TRADE_CRITICAL_AGENTS or task_type == "trade_critical":
             forced = self.trade_critical_model
             if model is not None and model != forced:

@@ -21,9 +21,6 @@ from src.config import Config
 
 log = logging.getLogger(__name__)
 
-CRYPTO_SUFFIXES = ("/USD", "/USDT", "/USDC", "/EUR")
-
-
 @dataclass
 class Violation:
     kind: str                 # "gics_sector" | "theme_count" | "theme_weight"
@@ -56,10 +53,6 @@ class GuardResult:
         }
 
 
-def _is_crypto(symbol: str) -> bool:
-    return any(symbol.upper().endswith(s) for s in CRYPTO_SUFFIXES)
-
-
 def _build_sector_to_theme(cfg: Config) -> dict[str, str]:
     """Invert the cfg ``diversification.themes`` map for O(1) sector->theme lookup."""
     themes = cfg.get("diversification", "themes", default={}) or {}
@@ -84,8 +77,7 @@ def theme_bucket_for(
     """Map a (symbol, GICS sector) to a theme bucket.
 
     Symbol-level overrides win over the sector map. Falls back to ``"other"``
-    only when neither matches. Crypto callers should short-circuit to
-    ``"crypto"`` before reaching this function.
+    only when neither matches.
     """
     if symbol and symbol_overrides:
         sym = symbol.upper().strip()
@@ -115,8 +107,7 @@ def validate(
     """Validate an allocation plan against the diversification caps.
 
     Selected = symbols with ``target_pct > 0`` AND ``target_weights[sym] > 0``.
-    SPY / cash_proxy and crypto are excluded from the count and weight checks
-    (they are structural buckets, not equity bets).
+    SPY / cash_proxy is excluded from the count and weight checks.
     """
     max_per_sector = int(cfg.get("diversification", "max_per_gics_sector", default=3) or 3)
     max_per_theme = int(cfg.get("diversification", "max_per_theme", default=3) or 3)
@@ -130,8 +121,6 @@ def validate(
     for sym, weight in target_weights.items():
         sym_u = sym.upper()
         if sym_u == proxy:
-            continue
-        if _is_crypto(sym_u):
             continue
         try:
             w = float(weight or 0)

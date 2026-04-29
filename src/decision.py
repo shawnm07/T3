@@ -4,7 +4,7 @@ This module produces a weighted consensus view across technical, fundamental,
 sentiment, macro, and risk signals. The `action` field on TradeDecision is a
 *hypothesis* consumed by the Opus 4.7 AI arbiters — it is NEVER permitted to
 directly trigger an order. Every trade in the bot (entry, exit, rebalance,
-earnings close, preclose, crypto) must be approved by AI before execution.
+earnings close, and preclose) must be approved by AI before execution.
 See src/ai_pipeline.py and src/ai_research.py for the enforcement layer.
 """
 from __future__ import annotations
@@ -20,7 +20,7 @@ log = logging.getLogger(__name__)
 @dataclass
 class TradeDecision:
     symbol: str
-    action: str  # "buy" | "sell_short" | "close" | "hold"
+    action: str  # "buy" | "close" | "hold"
     confidence: float
     combined_score: float
     signal_scores: dict[str, float] = field(default_factory=dict)
@@ -96,8 +96,6 @@ class DecisionEngine:
         tech = scores.get("technical", 0)
         if combined >= self.min_confidence and positive >= 2 and tech > 0:
             action = "buy"
-        elif combined <= -self.min_confidence and negative >= 2 and tech < 0:
-            action = "sell_short"
         else:
             action = "hold"
             reasoning.append(
@@ -126,8 +124,4 @@ class DecisionEngine:
             if current_signal.combined_score < -0.2:
                 current_signal.action = "close"
                 current_signal.reasoning.append("long position with bearish combined signal")
-        elif position_side == "short":
-            if current_signal.combined_score > 0.2:
-                current_signal.action = "close"
-                current_signal.reasoning.append("short position with bullish combined signal")
         return current_signal

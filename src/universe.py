@@ -1,4 +1,4 @@
-"""Trading universe construction: S&P 500 + custom watchlist + crypto."""
+"""Trading universe construction: S&P 500 + custom watchlist."""
 from __future__ import annotations
 import io
 import logging
@@ -144,7 +144,3 @@ def build_stock_universe(config: Config) -> list[str]:
         seen.add(t)
         deduped.append(t)
     return deduped
-
-
-def crypto_universe(config: Config) -> list[str]:
-    return list(config.get("universe", "crypto", default=[]) or [])

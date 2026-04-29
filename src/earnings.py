@@ -100,7 +100,7 @@ def _extract_next_date(ticker) -> str | None:
 
 def fetch_earnings(symbol: str, ttl_hours: float = 24) -> EarningsInfo:
     """Return EarningsInfo for symbol, using disk cache. Never raises."""
-    if not symbol or "/" in symbol:  # crypto never reports earnings
+    if not symbol or "/" in symbol:
         return EarningsInfo(symbol=symbol, next_date=None, days_until=None)
 
     cache = _load_cache()

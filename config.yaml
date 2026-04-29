@@ -21,13 +21,7 @@ risk:
   # max_position_pct (0.50) over subsequent scans based on conviction.
   initial_entry_cap_pct: 0.15
   # Stall-out exit: close longs whose tech score has drifted below this (run is over).
-  # Symmetric for shorts.
   exit_stall_threshold: 0.10
-
-kill_switch:
-  weekly_drawdown_pct: 0.05
-  daily_drawdown_pct: 0.025
-  max_daily_trades: 50
 
 universe:
   include_sp500: true
@@ -50,10 +44,6 @@ universe:
     - UNH
     - V
     - JPM
-  crypto:
-    - BTC/USD
-    - ETH/USD
-    - SOL/USD
   exclude_tickers: []
 
 screener:
@@ -78,9 +68,14 @@ scheduling:
     - "14:00"
     - "15:30"
   eod_time: "16:15"
-  crypto_interval_hours: 4
   weekly_review_day: friday
   weekly_review_time: "17:00"
+  # Block new selector entries this many minutes before the closing bell.
+  # The 15:30 ET scan was opening overnight positions that the 15:55 ET
+  # preclose immediately closed. Existing positions can still be trimmed
+  # or exited; only NEW entries are blocked. The preclose's own overnight
+  # buy path runs intentionally late and is unaffected.
+  late_session_no_new_entries_minutes: 30
 
 overnight:
   # Pre-close (~5 min before bell) overnight-hold decision.
@@ -93,6 +88,30 @@ overnight:
   size_multiplier: 0.5        # shrink normal sizing for overnight carry (0..1)
   scan_candidates: 30         # top-N technical longs to score for overnight gap
   enable_new_buys: true       # false = only close losers, don't open new overnight trades
+  # Weekend (Fri→Mon) and pre-holiday hold rules. Activated when the next
+  # trading session is ≥ 2 calendar days away. Weekend gap risk is
+  # materially higher than a single overnight, so we demand stronger
+  # directional support to hold and lower the bar to override an AI veto.
+  weekend:
+    hold_threshold: 0.20            # directional must be solidly positive to carry over a weekend
+    buy_threshold: 0.55             # new overnight buys need stronger conviction
+    bearish_buy_threshold: 0.65     # even higher when SPY tape is bearish
+    exit_arbiter_min_confidence: 0.40  # AI 'hold' below this → close anyway (easier to close on Friday)
+  # Preclose-only override of the exit-arbiter min-confidence. Pre-close
+  # closes are the cheapest exit (we have all-day data); we should be more
+  # willing to act on AI 'exit' verdicts at modest confidence than during
+  # intraday volatility-driven exits.
+  preclose_exit_arbiter_min_confidence: 0.50
+  # Per-symbol consecutive-veto circuit breaker. If the exit-arbiter
+  # vetoes the preclose-close of the same symbol N times in a row while
+  # directional is negative, the next negative-directional preclose
+  # forces a 50% trim. Resets on a successful close or a positive
+  # directional day.
+  veto_circuit_breaker:
+    enabled: true
+    trim_after_consecutive_vetoes: 2
+    state_file: data/state/preclose_veto_history.json
+    ttl_days: 7
 
 execution:
   # After submitting an order, poll Alpaca for terminal status before continuing.
@@ -106,8 +125,8 @@ cash_proxy:
   # Park idle cash (above cash_reserve_pct floor) in SPY so uninvested equity
   # tracks the benchmark instead of sitting at 0% yield. SPY is treated like
   # cash: auto-sold to fund new positions when real cash is insufficient, and
-  # auto-bought with proceeds from closed positions. SPY is excluded from
-  # max_positions, sector concentration, and normal exit logic.
+  # auto-bought with proceeds from closed positions. During pre-close, SPY is
+  # evaluated like any other equity and may be held or exited by the AI.
   enabled: true
   symbol: SPY
   min_rebalance_usd: 500        # don't churn on tiny deltas
@@ -161,25 +180,32 @@ exit_arbiter:
   # *inputs* to this decision — they never fire a trade on their own.
   min_confidence: 0.55
 
-halt_exits:
-  # On kill-switch halt: keep stop-losses live, no new entries, but still allow
-  # AI-recommended profit-taking or damage-control exits. Conservative mode.
-  enabled: true
-  min_ai_confidence: 0.60          # AI must be this confident that closing is right
-
 earnings:
-  # Avoid the binary-event lottery around earnings. Block new entries within
-  # block_entry_days of a report; held-position close decisions go through the
-  # AI earnings-gate agent (close / trim_50 / hold) — falls back to numeric
-  # high_conviction_override if AI is unavailable.
+  # Avoid the binary-event lottery around earnings. Held-position close
+  # decisions go through the AI earnings-gate agent (close / trim_50 / hold)
+  # but the gate now only fires inside a 2-day window and applies confidence
+  # downgrades on day 0/1 'hold' verdicts.
   enabled: true
   use_ai_gate: true                # AI decides close/trim/hold for earnings-window holds
-  block_entry_days: 5              # legacy — kept for reference; new_entry_earnings_blackout_days is used for entries
-  new_entry_earnings_blackout_days: 7   # no NEW entries if earnings within 7 calendar days
-  new_entry_earnings_override_confidence: 0.85  # allow entry only if conf >= this
-  trim_exit_days: 3                # within N days, AI gate decides hold/trim/close
-  high_conviction_override: 0.85   # numeric fallback threshold when AI unavailable
+  # 2-day window: gate fires for days_until ∈ {0, 1, 2}. Days 3+ are not gated.
+  trim_exit_days: 2
+  # When the AI gate returns 'hold' on day 0 or day 1, downgrade to trim_50
+  # unless conviction is exceptional. The bar is high because day-of and
+  # day-before earnings are pure event risk.
+  day_0_1_hold_min_confidence: 0.90
+  # When the AI gate returns 'hold' on day 2, downgrade to trim_50 unless
+  # conviction is solid. Day 2 is the last "OK to hold" day under the new rule.
+  day2_hold_min_confidence: 0.75
+  # New entries: hard-block on day 0 or day 1 (no override). Day 2 allowed
+  # only if AI confidence ≥ override.
+  new_entry_earnings_blackout_days: 2
+  new_entry_earnings_override_confidence: 0.90
+  # Numeric fallback threshold when AI is unavailable. AI is the only
+  # authority on close — if AI is unavailable the position is held (fail-safe).
+  high_conviction_override: 0.85
   cache_ttl_hours: 24              # how long to cache an earnings-date lookup
+  # Legacy alias (older callers) — kept for backward compatibility only.
+  block_entry_days: 2
 
 ai:
   enabled: true                    # if true + ANTHROPIC_API_KEY set, runs subagents each scan
@@ -250,7 +276,6 @@ selector:
   retry_validation_failures: 1     # extra retry on count/range or anti-stagnation errors
   state_file: data/state/selector_state.json   # persists consecutive_failures counter
   floor_breach_conditions:
-    kill_switch_active: true       # allow <3 positions when kill-switch is halted
     top_score_below: 0.50          # allow <3 when no candidate scores above this
     bear_regime: true              # allow <3 when macro_score < -0.5 AND SPY 50dma < 200dma
 
@@ -269,7 +294,6 @@ discovery:
   max_pool_per_sector: 0.40        # sector cap on pool, not portfolio
   always_include_watchlist: true
   always_include_held: true
-  crypto_in_pool: true             # unified equity+crypto selector
 
 # Market data layer (Alpha Vantage primary, NEVER Alpaca for charts/news).
 # Falls back to tradingview-screener (no API key) and yfinance only.
@@ -329,12 +353,7 @@ diversification:
     ETN: ai_data_center
     PWR: ai_data_center
     EMR: ai_data_center
-    # Crypto-correlated equities (move with BTC/ETH)
-    COIN: crypto_proxy
-    MSTR: crypto_proxy
-
 # Journal logging knobs for the new selector events.
 journal:
   log_full_pool: true              # log every symbol in the candidate pool
   log_full_rankings: true          # log every candidate's opportunity_score + remaining_upside
-

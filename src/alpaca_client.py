@@ -5,11 +5,9 @@ import time
 from datetime import datetime, timedelta, timezone
 from typing import Iterable
 
-from alpaca.data.historical import CryptoHistoricalDataClient, StockHistoricalDataClient
+from alpaca.data.historical import StockHistoricalDataClient
 from alpaca.data.historical.news import NewsClient
 from alpaca.data.requests import (
-    CryptoBarsRequest,
-    CryptoLatestQuoteRequest,
     NewsRequest,
     StockBarsRequest,
     StockLatestQuoteRequest,
@@ -41,7 +39,6 @@ class AlpacaClient:
         creds = dict(api_key=config.alpaca.api_key, secret_key=config.alpaca.api_secret)
         self.trading = TradingClient(paper=paper, **creds)
         self.stock_data = StockHistoricalDataClient(**creds)
-        self.crypto_data = CryptoHistoricalDataClient(**creds)
         self.news_client = NewsClient(**creds)
         self._data_timeout = 30
         # Lazy-initialised pricing service (imported here to avoid a circular
@@ -120,21 +117,6 @@ class AlpacaClient:
         req = StockLatestQuoteRequest(symbol_or_symbols=[symbol])
         return self.stock_data.get_stock_latest_quote(req)[symbol]
 
-    # ---------- crypto ----------
-    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=15))
-    def get_crypto_bars(self, symbols: Iterable[str], timeframe=TimeFrame.Hour, lookback_hours: int = 24 * 30):
-        end = datetime.now(timezone.utc)
-        start = end - timedelta(hours=lookback_hours)
-        req = CryptoBarsRequest(
-            symbol_or_symbols=list(symbols), timeframe=timeframe, start=start, end=end,
-        )
-        return self.crypto_data.get_crypto_bars(req).df
-
-    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=15))
-    def get_crypto_quote(self, symbol: str):
-        req = CryptoLatestQuoteRequest(symbol_or_symbols=[symbol])
-        return self.crypto_data.get_crypto_latest_quote(req)[symbol]
-
     # ---------- news ----------
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=15))
     def get_news(self, symbols: Iterable[str] | None = None, limit: int = 50, days_back: int = 3):
@@ -182,6 +164,19 @@ class AlpacaClient:
             req = MarketOrderRequest(**kwargs)
         order = self.trading.submit_order(req)
         log.info("Submitted %s %s %s qty=%s order_id=%s", side, symbol, req.order_class or "simple", qty, order.id)
+        self.invalidate_snapshot()
+        return order
+
+    def submit_qty(self, symbol: str, qty: float, side: str, tif: str = "day"):
+        """Submit a plain market order sized by exact share count (no bracket)."""
+        side_enum = OrderSide.BUY if side.lower() == "buy" else OrderSide.SELL
+        tif_enum = {"day": TimeInForce.DAY, "gtc": TimeInForce.GTC, "ioc": TimeInForce.IOC}[tif.lower()]
+        req = MarketOrderRequest(
+            symbol=symbol, qty=qty,
+            side=side_enum, time_in_force=tif_enum,
+        )
+        order = self.trading.submit_order(req)
+        log.info("Submitted qty %s %s %s order_id=%s", side, symbol, qty, order.id)
         self.invalidate_snapshot()
         return order
 

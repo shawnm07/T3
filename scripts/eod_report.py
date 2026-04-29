@@ -11,6 +11,7 @@ import pandas as pd
 
 from src.alpaca_client import AlpacaClient
 from src.config import Config
+from src.daily_pnl import get_daily_pnl, get_spy_daily_pct
 from src.journal import log_decision, read_recent_trades
 from src.logging_setup import setup_logging
 from src.telegram_notifier import notify_eod, send_alert
@@ -28,38 +29,41 @@ def main() -> int:
         account, positions = client.get_snapshot()
         hist = client.get_portfolio_history(period="1M", timeframe="1D")
 
-        # Daily return: use computed equity vs account.last_equity (prior day's close).
-        # Falls back to portfolio_history below if last_equity is unavailable.
+        # Daily return: anchored to today's cached open-of-day equity baseline
+        # (set by the first scan of the trading day). This matches the Daily%
+        # shown in scan messages, and doesn't depend on Alpaca's last_equity.
         current_equity = float(account.equity)
-        last_equity = float(getattr(account, "last_equity", 0) or 0)
-        if last_equity > 0:
-            daily_ret = (current_equity / last_equity) - 1
-        else:
-            daily_ret = 0
+        pnl = get_daily_pnl(current_equity)
+        daily_ret = pnl.pnl_pct
+        log.info("EOD daily return: %.2f%% vs baseline $%.2f set %s",
+                 daily_ret * 100, pnl.baseline_equity, pnl.baseline_date)
 
         equity_series = hist.equity or []
-        # Fallback: if account.last_equity was unavailable, try portfolio history.
-        if daily_ret == 0 and len(equity_series) >= 2 and equity_series[-2]:
-            daily_ret = (equity_series[-1] / equity_series[-2]) - 1
-
         if len(equity_series) >= 2:
             period_start = equity_series[0]
             period_ret = (equity_series[-1] / period_start) - 1 if period_start else 0
         else:
             period_ret = 0
 
-        # SPY benchmark
+        # SPY benchmark via Twelve Data → yfinance → Alpha Vantage → Alpaca.
+        try:
+            spy_daily, spy_src = get_spy_daily_pct(alpaca_client=client)
+            log.info("SPY daily: %.2f%% [src=%s]", spy_daily * 100, spy_src)
+        except Exception as e:
+            log.warning("SPY benchmark fetch failed: %s", e)
+            spy_daily = 0
+        # 30d SPY (period benchmark) still uses Alpaca bars — only needed for
+        # the JSON research report, not the Telegram message.
         try:
             spy_bars = client.get_stock_bars(["SPY"], lookback_days=30)
             spy = spy_bars.xs("SPY", level="symbol") if "symbol" in spy_bars.index.names else spy_bars
             if len(spy) >= 2:
-                spy_daily = (float(spy["close"].iloc[-1]) / float(spy["close"].iloc[-2])) - 1
                 spy_30d = (float(spy["close"].iloc[-1]) / float(spy["close"].iloc[0])) - 1
             else:
-                spy_daily = spy_30d = 0
+                spy_30d = 0
         except Exception as e:
-            log.warning("SPY benchmark fetch failed: %s", e)
-            spy_daily = spy_30d = 0
+            log.warning("SPY 30d fetch failed: %s", e)
+            spy_30d = 0
 
         trades = read_recent_trades(limit=200)
         today = datetime.now(timezone.utc).date().isoformat()
@@ -102,7 +106,9 @@ def main() -> int:
         out = Path(__file__).resolve().parents[1] / "data" / "research" / f"{today}_eod.json"
         out.write_text(json.dumps(report, indent=2, default=str))
 
-        # Send EOD notification
+        # Send EOD notification. Equity passed = total account balance
+        # (cash + positions); the EOD message renders just one Account line
+        # rather than splitting equity/cash per user preference.
         notify_eod(
             daily_return=daily_ret,
             daily_vs_spy=daily_ret - spy_daily,

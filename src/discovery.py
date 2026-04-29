@@ -8,7 +8,6 @@ discovered candidates} for the portfolio-selector to rank. Sources:
   - Alpha Vantage NEWS_SENTIMENT outliers (topic-driven discovery)
   - tradingview-screener volume-breakout + bollinger-squeeze scans
   - Custom watchlist (from config.universe.custom_watchlist)
-  - Crypto pool (from config.universe.crypto)
 
 After dedup + screener-floor filtering + sector cap, the pool is capped at
 ``discovery.pool_size_max`` symbols.
@@ -44,7 +43,6 @@ class Candidate:
     change_pct: float = 0.0
     volume: int = 0
     market_cap_usd: float = 0.0
-    is_crypto: bool = False
     is_held: bool = False
 
     def add_source(self, src: str) -> None:
@@ -81,9 +79,8 @@ def discover_candidates(
     if cfg.get("discovery", "always_include_held", default=True):
         for sym in held:
             if "/" in sym:
-                _upsert(pool, sym, "held", sectors, is_crypto=True, is_held=True)
-            else:
-                _upsert(pool, sym, "held", sectors, is_held=True)
+                continue
+            _upsert(pool, sym, "held", sectors, is_held=True)
             breakdown["held"] += 1
 
     # 2. Custom watchlist (always merged unless disabled)
@@ -187,23 +184,13 @@ def discover_candidates(
                     sector_hint=row.get("sector", ""))
             breakdown["tv_squeeze"] += 1
 
-    # 6. Crypto
-    if cfg.get("discovery", "crypto_in_pool", default=True):
-        for pair in (cfg.get("universe", "crypto", default=[]) or []):
-            sym = str(pair).upper()
-            if sym in excluded:
-                continue
-            _upsert(pool, sym, "crypto_universe", sectors,
-                    is_crypto=True, sector_hint="Crypto")
-            breakdown["crypto"] += 1
-
-    # 7. Apply screener floors (skip held — they bypass floors)
+    # 6. Apply screener floors (skip held — they bypass floors)
     pool = _apply_screener_floors(pool, cfg, held)
 
-    # 8. Sector cap on the pool (held bypass the cap)
+    # 7. Sector cap on the pool (held bypass the cap)
     pool = _apply_sector_cap(pool, cfg, held)
 
-    # 9. Hard cap pool_size_max (held + crypto always retained)
+    # 8. Hard cap pool_size_max (held always retained)
     pool_max = int(cfg.get("discovery", "pool_size_max", default=50) or 50)
     candidates = _truncate_pool(list(pool.values()), pool_max, held)
 
@@ -235,7 +222,6 @@ def _upsert(
     change_pct: float = 0.0,
     volume: int = 0,
     market_cap_usd: float = 0.0,
-    is_crypto: bool = False,
     is_held: bool = False,
     sector_hint: str = "",
 ) -> None:
@@ -244,7 +230,7 @@ def _upsert(
         return
     cand = pool.get(sym)
     if cand is None:
-        sector = "Crypto" if is_crypto else (sectors.get(sym, "") or sector_hint or "Other")
+        sector = sectors.get(sym, "") or sector_hint or "Other"
         cand = Candidate(
             symbol=sym,
             sector=sector,
@@ -252,7 +238,6 @@ def _upsert(
             change_pct=float(change_pct or 0.0),
             volume=int(volume or 0),
             market_cap_usd=float(market_cap_usd or 0.0),
-            is_crypto=is_crypto,
             is_held=is_held,
         )
         pool[sym] = cand
@@ -290,7 +275,7 @@ def _extract_news_outliers(feed: list[dict], relevance_threshold: float) -> list
             if rel < relevance_threshold:
                 continue
             sym = (ts.get("ticker") or "").upper()
-            if not sym or "_" in sym:  # skip CRYPTO:BTC etc
+            if not sym or "_" in sym:
                 continue
             mag = abs(score) * rel
             if mag > intensity.get(sym, 0.0):
@@ -387,7 +372,7 @@ def _apply_screener_floors(
     out: dict[str, Candidate] = {}
     dropped = 0
     for sym, cand in pool.items():
-        if cand.is_held or cand.is_crypto:
+        if cand.is_held:
             out[sym] = cand
             continue
         if cand.price > 0 and cand.price < min_price:
@@ -421,16 +406,13 @@ def _apply_sector_cap(
     keep: dict[str, Candidate] = {}
     dropped = 0
     for sector, members in by_sector.items():
-        # Crypto is structurally a separate bucket and always passes. Held
-        # equities are NO LONGER exempt — they compete for sector slots like
+        # Held equities are NO LONGER exempt — they compete for sector slots like
         # any other candidate so a saturated book cannot crowd out alternatives
         # the AI never gets to see. Held names retain a ranking advantage via
         # is_held in the sort key.
-        crypto = [c for c in members if c.is_crypto]
-        rest = [c for c in members if not c.is_crypto]
+        rest = list(members)
         rest.sort(key=lambda c: (-int(c.is_held), -len(c.sources), -abs(c.change_pct)))
-        keep_count = max(0, max_per_sector - len(crypto))
-        kept = crypto + rest[:keep_count]
+        kept = rest[:max_per_sector]
         dropped += len(members) - len(kept)
         for c in kept:
             keep[c.symbol] = c
@@ -444,12 +426,12 @@ def _truncate_pool(
 ) -> list[Candidate]:
     if len(candidates) <= pool_max:
         return candidates
-    held_or_crypto = [c for c in candidates if c.is_held or c.is_crypto]
-    rest = [c for c in candidates if not (c.is_held or c.is_crypto)]
+    held_candidates = [c for c in candidates if c.is_held]
+    rest = [c for c in candidates if not c.is_held]
     # Rank by source count then absolute change% so multi-source signals win.
     rest.sort(key=lambda c: (-len(c.sources), -abs(c.change_pct)))
-    keep_count = max(0, pool_max - len(held_or_crypto))
-    truncated = held_or_crypto + rest[:keep_count]
+    keep_count = max(0, pool_max - len(held_candidates))
+    truncated = held_candidates + rest[:keep_count]
     log.info("[discovery] truncated pool from %d to %d (held=%d kept all)",
-             len(candidates), len(truncated), len(held_or_crypto))
+             len(candidates), len(truncated), len(held_candidates))
     return truncated

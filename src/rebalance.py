@@ -38,6 +38,14 @@ class RebalanceAction:
     ai_confidence: float = 0.0
     target_pct: float = 0.0
     target_qty: float | None = None
+    current_qty: float = 0.0
+    # AI-direct fields: when the selector emits an exact share delta + refreshed
+    # bracket levels, the orchestrator submits that qty directly instead of
+    # going through the notional-based partial_trade path.
+    ai_delta_qty: float | None = None
+    ai_entry_price: float | None = None
+    ai_stop_loss: float | None = None
+    ai_take_profit: float | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -55,6 +63,15 @@ class RebalanceAction:
             "target_pct": round(float(self.target_pct), 4),
             "target_qty": (round(float(self.target_qty), 4)
                            if self.target_qty is not None else None),
+            "current_qty": round(float(self.current_qty), 4),
+            "ai_delta_qty": (round(float(self.ai_delta_qty), 4)
+                             if self.ai_delta_qty is not None else None),
+            "ai_entry_price": (round(float(self.ai_entry_price), 2)
+                               if self.ai_entry_price is not None else None),
+            "ai_stop_loss": (round(float(self.ai_stop_loss), 2)
+                             if self.ai_stop_loss is not None else None),
+            "ai_take_profit": (round(float(self.ai_take_profit), 2)
+                               if self.ai_take_profit is not None else None),
         }
 
 
@@ -145,9 +162,12 @@ def compute_rebalance_plan(
             continue
         if "/" in sym:
             continue
-        is_long = (p.side.value == "long") if hasattr(p.side, "value") else (p.side == "long")
         plpc = float(p.unrealized_plpc) if hasattr(p, "unrealized_plpc") else 0.0
         current_notional = abs(float(p.market_value))
+        try:
+            current_qty = abs(float(getattr(p, "qty", 0) or 0))
+        except (TypeError, ValueError):
+            current_qty = 0.0
         tech = tech_map.get(sym)
         tech_score = float(tech.score) if tech else 0.0
 
@@ -181,14 +201,43 @@ def compute_rebalance_plan(
             ai_confidence = float(info.get("confidence", 0) or 0)
         except (TypeError, ValueError):
             ai_confidence = 0.0
-        target_qty = info.get("target_qty")
+        target_qty = info.get("qty", info.get("target_qty"))
         try:
             target_qty_f = float(target_qty) if target_qty is not None else None
         except (TypeError, ValueError):
             target_qty_f = None
+        # AI-direct sizing fields: exact share delta, refreshed bracket levels.
+        ai_delta_qty_raw = info.get("delta_qty")
+        try:
+            ai_delta_qty_f = float(ai_delta_qty_raw) if ai_delta_qty_raw is not None else None
+        except (TypeError, ValueError):
+            ai_delta_qty_f = None
+        ai_entry_raw = info.get("entry_price")
+        try:
+            ai_entry_f = float(ai_entry_raw) if ai_entry_raw is not None else None
+        except (TypeError, ValueError):
+            ai_entry_f = None
+        ai_stop_raw = info.get("stop_loss")
+        try:
+            ai_stop_f = float(ai_stop_raw) if ai_stop_raw is not None else None
+        except (TypeError, ValueError):
+            ai_stop_f = None
+        ai_target_raw = info.get("take_profit")
+        try:
+            ai_target_f = float(ai_target_raw) if ai_target_raw is not None else None
+        except (TypeError, ValueError):
+            ai_target_f = None
 
+        price_for_qty = (
+            ai_entry_f
+            or (current_notional / current_qty if current_qty > 0 else None)
+        )
         target_notional = target_weight * equity
+        if target_qty_f is not None and price_for_qty and price_for_qty > 0:
+            target_notional = max(0.0, target_qty_f * price_for_qty)
         delta = target_notional - current_notional  # positive = ADD, negative = TRIM/EXIT
+        if ai_delta_qty_f is not None and abs(ai_delta_qty_f) > 0 and price_for_qty and price_for_qty > 0:
+            delta = ai_delta_qty_f * price_for_qty
         abs_delta = abs(delta)
 
         # Execution-cost floors (NOT opinion overrides). EXIT (target=0) bypasses
@@ -213,11 +262,14 @@ def compute_rebalance_plan(
             max_notional = equity * max_position_pct
             if current_notional >= max_notional and not is_exit:
                 continue
-            capped_delta = min(abs_delta, max_notional - current_notional)
-            if capped_delta < min_delta_usd:
+            if current_notional + abs_delta > max_notional * 1.01 and not is_exit:
+                log.error(
+                    "[%s] AI rebalance delta would breach max_position_pct "
+                    "(current=$%.0f delta=$%.0f cap=$%.0f) — skipping",
+                    sym, current_notional, abs_delta, max_notional,
+                )
                 continue
-            abs_delta = capped_delta
-            side = "buy" if is_long else "sell"
+            side = "buy"
 
         if abs_delta <= 0:
             continue
@@ -247,6 +299,11 @@ def compute_rebalance_plan(
             ai_confidence=ai_confidence,
             target_pct=target_weight,
             target_qty=target_qty_f,
+            current_qty=current_qty,
+            ai_delta_qty=ai_delta_qty_f,
+            ai_entry_price=ai_entry_f,
+            ai_stop_loss=ai_stop_f,
+            ai_take_profit=ai_target_f,
         ))
 
     # Trims/exits first, adds second — so freed cash funds adds.

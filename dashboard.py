@@ -1,4 +1,4 @@
-"""Rich CLI dashboard: account, positions, recent trades, pending approvals, kill switch."""
+"""Rich CLI dashboard: account, positions, and recent trades."""
 from __future__ import annotations
 import json
 import sys
@@ -12,8 +12,7 @@ from rich.table import Table
 
 from src.alpaca_client import AlpacaClient
 from src.config import Config
-from src.journal import list_pending_approvals, read_recent_decisions, read_recent_trades
-from src.kill_switch import check_kill_switch, is_manually_halted, trades_today
+from src.journal import read_recent_trades
 
 console = Console()
 
@@ -53,30 +52,6 @@ def main() -> int:
         console.print(t)
     else:
         console.print("[dim]No open positions.[/dim]")
-
-    halted, reason = is_manually_halted()
-    kill_status = "[red]HALTED[/red] " + reason if halted else "[green]Active[/green]"
-    console.print(Panel(
-        f"Kill switch: {kill_status} | Trades today: {trades_today()}",
-        title="Risk",
-    ))
-
-    pending = list_pending_approvals()
-    if pending:
-        t = Table(title=f"[yellow]Pending Approvals ({len(pending)})[/yellow]")
-        for col in ("ID", "Symbol", "Action", "Notional", "Conf", "Reasoning"):
-            t.add_column(col)
-        for p in pending:
-            s = p.get("sizing", {})
-            d = p.get("decision", {})
-            t.add_row(
-                p["id"], s.get("symbol", "?"), d.get("action", "?"),
-                f"${s.get('notional', 0):.0f}",
-                f"{d.get('confidence', 0):.2f}",
-                "; ".join(d.get("reasoning", []))[:60],
-            )
-        console.print(t)
-        console.print("[dim]Approve with: py scripts/approve.py --id <ID> yes[/dim]")
 
     trades = read_recent_trades(limit=10)
     if trades:

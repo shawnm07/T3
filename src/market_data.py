@@ -1,13 +1,12 @@
 """Market-data layer for the trading bot.
 
-Single entry point for ALL price/bar/news/movers data. Replaces direct
-``AlpacaClient.get_stock_bars`` / ``get_crypto_bars`` / ``get_news`` calls
-in the discovery + scoring path.
+Single entry point for price/bar/news/movers data in the discovery + scoring
+path.
 
 Per user instruction (see memory/data_source_preferences.md): Alpha Vantage
 is the primary data source; ``tradingview-screener`` and ``yfinance`` are
 fallbacks. Alpaca is NEVER used here for charts/bars/news. Alpaca is
-retained only for positions, account, kill-switch, and order submission.
+retained only for positions, account, and order submission.
 
 Endpoint coverage:
   - daily bars (TIME_SERIES_DAILY_ADJUSTED)
@@ -15,8 +14,6 @@ Endpoint coverage:
   - latest quote (GLOBAL_QUOTE)
   - top movers / gainers / losers / most-active (TOP_GAINERS_LOSERS)
   - news + sentiment (NEWS_SENTIMENT)
-  - crypto intraday (CRYPTO_INTRADAY)
-  - crypto daily (DIGITAL_CURRENCY_DAILY)
 
 Caching: in-memory + on-disk JSON under ``data/cache/av/<endpoint>/<key>.json``
 with per-endpoint TTLs. Persistent within a trading day.
@@ -51,8 +48,6 @@ _DEFAULT_TTL = {
     "quote": 60,
     "top_movers": 5 * 60,
     "news_sentiment": 10 * 60,
-    "crypto_intraday": 5 * 60,
-    "crypto_daily": 4 * 3600,
 }
 
 
@@ -339,42 +334,6 @@ class MarketDataService:
         self._cache.set("news_sentiment", cache_key, feed)
         return feed
 
-    def get_crypto_intraday(self, pair: str, interval: str = "5min") -> pd.DataFrame:
-        """Intraday bars for a crypto pair like 'BTC/USD'."""
-        symbol, market = _split_crypto(pair)
-        if not symbol:
-            return pd.DataFrame(columns=["open", "high", "low", "close", "volume"])
-        cache_key = f"{symbol}_{market}_{interval}"
-        cached = self._cache.get("crypto_intraday", cache_key, self._ttl["crypto_intraday"])
-        if cached is not None:
-            return _df_from_bars_records(cached)
-        data = self._av_call(
-            "CRYPTO_INTRADAY",
-            {"symbol": symbol, "market": market, "interval": interval, "outputsize": "compact"},
-        )
-        df = _parse_av_intraday(data) if data else None
-        if df is None:
-            df = pd.DataFrame(columns=["open", "high", "low", "close", "volume"])
-        self._cache.set("crypto_intraday", cache_key, _bars_records_from_df(df))
-        return df
-
-    def get_crypto_daily(self, pair: str) -> pd.DataFrame:
-        symbol, market = _split_crypto(pair)
-        if not symbol:
-            return pd.DataFrame(columns=["open", "high", "low", "close", "volume"])
-        cache_key = f"{symbol}_{market}"
-        cached = self._cache.get("crypto_daily", cache_key, self._ttl["crypto_daily"])
-        if cached is not None:
-            return _df_from_bars_records(cached)
-        data = self._av_call(
-            "DIGITAL_CURRENCY_DAILY", {"symbol": symbol, "market": market}
-        )
-        df = _parse_av_crypto_daily(data, market) if data else None
-        if df is None:
-            df = pd.DataFrame(columns=["open", "high", "low", "close", "volume"])
-        self._cache.set("crypto_daily", cache_key, _bars_records_from_df(df))
-        return df
-
     # ---------- AV core ----------
 
     def _av_call(self, function: str, params: dict[str, Any]) -> dict[str, Any] | None:
@@ -565,14 +524,6 @@ def get_market_data(cfg=None) -> MarketDataService:
 # --------------------------------------------------------------------------- #
 
 
-def _split_crypto(pair: str) -> tuple[str, str]:
-    """Split 'BTC/USD' into ('BTC', 'USD'). Returns ('','') if malformed."""
-    if "/" not in pair:
-        return "", ""
-    sym, market = pair.split("/", 1)
-    return sym.strip().upper(), market.strip().upper()
-
-
 def _av_movers_clean(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
     for r in rows or []:
@@ -636,36 +587,3 @@ def _parse_av_intraday(data: dict[str, Any]) -> pd.DataFrame | None:
         return None
     return df
 
-
-def _parse_av_crypto_daily(data: dict[str, Any], market: str) -> pd.DataFrame | None:
-    """DIGITAL_CURRENCY_DAILY uses '1a. open (<MARKET>)' style keys."""
-    series = data.get("Time Series (Digital Currency Daily)") or {}
-    if not series:
-        return None
-    rows: list[tuple[str, dict]] = sorted(series.items())
-
-    def _f(d: dict, k: str) -> float:
-        v = d.get(k)
-        if v is None:
-            for kk in (f"1a. open ({market})", f"2a. high ({market})",
-                       f"3a. low ({market})", f"4a. close ({market})", "5. volume"):
-                if kk == k:
-                    return 0.0
-            return 0.0
-        try:
-            return float(v)
-        except (TypeError, ValueError):
-            return 0.0
-
-    try:
-        df = pd.DataFrame({
-            "open": [_f(r[1], f"1a. open ({market})") or _f(r[1], "1. open") for r in rows],
-            "high": [_f(r[1], f"2a. high ({market})") or _f(r[1], "2. high") for r in rows],
-            "low": [_f(r[1], f"3a. low ({market})") or _f(r[1], "3. low") for r in rows],
-            "close": [_f(r[1], f"4a. close ({market})") or _f(r[1], "4. close") for r in rows],
-            "volume": [int(_f(r[1], "5. volume")) for r in rows],
-        }, index=pd.to_datetime([r[0] for r in rows]))
-    except (TypeError, ValueError) as e:
-        log.warning("[market_data] AV crypto-daily parse failed: %s", e)
-        return None
-    return df

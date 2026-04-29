@@ -21,7 +21,7 @@ log = logging.getLogger(__name__)
 @dataclass
 class AIVerdict:
     symbol: str
-    final_action: str            # "buy" | "sell_short" | "pass"
+    final_action: str            # "buy" | "pass"
     ai_confidence: float         # 0..1
     agent_grades: dict[str, str] = field(default_factory=dict)
     thesis: str = ""
@@ -67,7 +67,7 @@ class AIPipeline:
 
         tech_ctx = {
             "symbol": symbol,
-            "direction_hypothesis": "long" if numeric_decision.combined_score > 0 else "short",
+            "direction_hypothesis": "long" if numeric_decision.combined_score > 0 else "none",
             "technical_numbers": technical,
             "macro_backdrop": {
                 "regime": macro_ctx.get("regime"),
@@ -137,7 +137,7 @@ class AIPipeline:
 
         # Extract final verdict from arbiter
         final_action = (arbiter_out or {}).get("final_action", "pass")
-        if final_action not in ("buy", "sell_short", "pass"):
+        if final_action not in ("buy", "pass"):
             final_action = "pass"
         ai_confidence = float((arbiter_out or {}).get("confidence", 0.0) or 0.0)
         agent_grades = (arbiter_out or {}).get("agent_grades", {}) or {}
@@ -200,7 +200,7 @@ class AIPipeline:
         critical Opus rule because the verifier can only ENFORCE existing
         Opus decisions, not originate them. Returns:
           { "verifier_thesis": str,
-            "corrective_trades": [{symbol, side, delta_usd, ...}, ...],
+            "corrective_trades": [{symbol, side, delta_qty, ...}, ...],
             "skipped": [{symbol, reason}, ...] }
         """
         return await self.ai.call_agent("portfolio-verifier", context)
@@ -218,13 +218,11 @@ class AIPipeline:
         self,
         portfolio_ctx: dict[str, Any],
         proposed_trades: list[dict[str, Any]],
-        kill_state: dict[str, Any],
     ) -> dict[str, Any]:
         """Ask risk-manager agent to review the proposed book."""
         ctx = {
             "portfolio": portfolio_ctx,
             "proposed_trades": proposed_trades,
-            "kill_switch_state": kill_state,
         }
         return await self.ai.call_agent(
             "risk-manager", ctx, task_type="trade_critical",
@@ -235,7 +233,7 @@ class AIPipeline:
         context: dict[str, Any],
     ) -> dict[str, Any]:
         """Ask Opus 4.7 whether to close / reduce / hold a specific open position.
-        ALL exits (including stall, technical-flip, bad-news, preclose, crypto)
+        ALL exits (including stall, technical-flip, bad-news, and preclose)
         must route through this. Returns:
           { "action": "exit" | "reduce" | "hold",
             "confidence": 0..1, "reasoning": str,
@@ -469,6 +467,7 @@ def validate_selector_response(
     pool_meta: dict[str, dict[str, Any]],
     cfg: Config,
     allow_floor_breach: bool,
+    equity: float | None = None,
 ) -> tuple[bool, list[str]]:
     """Validate the portfolio-selector response against the strict 3-6 contract.
 
@@ -523,6 +522,73 @@ def validate_selector_response(
         if not (0 < wf <= max_pp):
             problems.append(f"weight {s}={wf:.4f} out of (0, {max_pp}]")
 
+    # AI-direct order params: qty / entry_price / stop_loss / take_profit are
+    # AUTHORITATIVE — Python submits them to the broker verbatim. Validate
+    # every selected position has them and that they are internally consistent.
+    equity_for_check = 0.0
+    try:
+        equity_for_check = float(equity or 0)
+    except (TypeError, ValueError):
+        equity_for_check = 0.0
+    if equity_for_check <= 0:
+        try:
+            equity_for_check = float(cfg.get("account", "equity_hint", default=0) or 0)
+        except (TypeError, ValueError):
+            equity_for_check = 0.0
+    max_risk_pct = float(cfg.get("risk", "max_risk_per_trade_pct", default=0.005))
+    for s in selected:
+        info = per_sym.get(s) if isinstance(per_sym, dict) else None
+        if not isinstance(info, dict):
+            continue  # missing-per-symbol problem already recorded above
+        for f in ("qty", "entry_price", "stop_loss", "take_profit", "delta_qty"):
+            if f not in info:
+                problems.append(f"per_symbol[{s}].{f} missing (AI-direct sizing required)")
+        try:
+            qty = float(info.get("qty", 0) or 0)
+            entry = float(info.get("entry_price", 0) or 0)
+            stop = float(info.get("stop_loss", 0) or 0)
+            target = float(info.get("take_profit", 0) or 0)
+            delta_qty = float(info.get("delta_qty", 0) or 0)
+        except (TypeError, ValueError):
+            problems.append(f"per_symbol[{s}] qty/entry/stop/target not numeric")
+            continue
+        if qty <= 0:
+            problems.append(f"per_symbol[{s}].qty must be > 0 for selected positions, got {qty}")
+        if entry <= 0:
+            problems.append(f"per_symbol[{s}].entry_price must be > 0, got {entry}")
+        if stop <= 0 or stop >= entry:
+            problems.append(f"per_symbol[{s}].stop_loss ({stop}) must be > 0 and < entry_price ({entry})")
+        if target <= 0 or target <= entry:
+            problems.append(f"per_symbol[{s}].take_profit ({target}) must be > entry_price ({entry})")
+        meta = pool_meta.get(s, {}) if isinstance(pool_meta, dict) else {}
+        try:
+            current_qty = float(meta.get("current_qty", 0) or 0)
+        except (TypeError, ValueError):
+            current_qty = 0.0
+        expected_delta = qty - current_qty
+        if abs(delta_qty - expected_delta) > 0.01:
+            problems.append(
+                f"per_symbol[{s}].delta_qty {delta_qty} inconsistent with "
+                f"qty {qty} minus current_qty {current_qty}"
+            )
+        # Risk-per-trade hard cap (use a contextual equity if provided)
+        if entry > 0 and stop > 0 and stop < entry:
+            ctx_equity = 0.0
+            ctx = info.get("_equity_for_validation")
+            try:
+                ctx_equity = float(ctx) if ctx is not None else equity_for_check
+            except (TypeError, ValueError):
+                ctx_equity = equity_for_check
+            if ctx_equity > 0:
+                risk_usd = qty * (entry - stop)
+                cap_usd = ctx_equity * max_risk_pct
+                # 1% slack over the configured cap before rejecting.
+                if risk_usd > cap_usd * 1.01:
+                    problems.append(
+                        f"per_symbol[{s}] risk ${risk_usd:.0f} exceeds "
+                        f"max_risk_per_trade ${cap_usd:.0f}"
+                    )
+
     try:
         spy_t = float(result.get("spy_target_pct", 0) or 0)
         cash_t = float(result.get("cash_target_pct", 0) or 0)
@@ -563,6 +629,31 @@ def validate_selector_response(
             action = str(info.get("action", "")).upper()
             if tp != 0.0 or action != "EXIT":
                 problems.append(f"held {s} not selected but per_symbol.action={action!r} target_pct={tp}")
+            # EXIT must have qty=0 and a non-positive delta_qty (to flatten the position).
+            try:
+                qty_exit = float(info.get("qty", 0) or 0)
+            except (TypeError, ValueError):
+                qty_exit = -1.0
+            if qty_exit != 0:
+                problems.append(f"held {s} EXIT requires qty=0, got {qty_exit}")
+            if "delta_qty" in info:
+                try:
+                    dq = float(info.get("delta_qty", 0) or 0)
+                except (TypeError, ValueError):
+                    dq = 1.0
+                if dq > 0:
+                    problems.append(f"held {s} EXIT delta_qty must be <= 0, got {dq}")
+                try:
+                    current_qty = float((pool_meta.get(s, {}) or {}).get("current_qty", 0) or 0)
+                except (TypeError, ValueError):
+                    current_qty = 0.0
+                if current_qty > 0 and abs(dq + current_qty) > 0.01:
+                    problems.append(
+                        f"held {s} EXIT delta_qty must equal -current_qty "
+                        f"({-current_qty}), got {dq}"
+                    )
+            else:
+                problems.append(f"held {s} EXIT missing delta_qty")
 
     missing_per_sym = [s for s in pool_symbols if s not in per_sym]
     if missing_per_sym:
@@ -699,6 +790,7 @@ def run_portfolio_selector(
         if isinstance(result, dict) and not result.get("_error"):
             ok, problems = validate_selector_response(
                 result, held_symbols, pool_symbols, pool_meta, config, allow_floor_breach,
+                equity=float(context.get("equity", 0) or 0),
             )
             if ok:
                 if attempt > 1:
@@ -826,8 +918,9 @@ def run_entry_arbiter_single(
     config: Config,
     context: dict[str, Any],
 ) -> dict[str, Any] | None:
-    """Synchronous Opus 4.7 single-symbol entry decision (used by crypto and
-    any other path where we have one candidate and need a go/no-go).
+    """Synchronous Opus 4.7 single-symbol entry decision.
+
+    Used by paths where we have one candidate and need a go/no-go.
     Returns None on failure; caller must treat None as 'do not trade'.
     """
     ai = AIResearcher(config)
@@ -887,7 +980,7 @@ def run_ai_on_candidates(
     min_score = config.get("ai", "min_numeric_combined_for_ai", default=0.30)
     filtered = [
         c for c in candidates
-        if abs(c.combined_score) >= min_score and c.action in ("buy", "sell_short", "hold")
+        if abs(c.combined_score) >= min_score and c.action in ("buy", "hold")
     ]
     filtered.sort(key=lambda c: abs(c.combined_score), reverse=True)
     filtered = filtered[:max_n]

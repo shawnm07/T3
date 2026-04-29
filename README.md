@@ -11,30 +11,20 @@ with ATR stops, paper mode against Alpaca.
 | Mode | paper (Alpaca) |
 | Benchmark | SPY |
 | Risk profile | balanced (max 20% drawdown, max 6 positions) |
-| Assets | US long + short + crypto (BTC/ETH/SOL) |
-| Cadence | swing — research 2-4× weekdays, crypto every 4h |
-| Kill switch | weekly dd ≥ 5% pauses new entries; trades > $10K need approval |
+| Assets | US long equities |
+| Cadence | swing — research 2-4× weekdays |
 
 ## Quick commands
 
 All commands assume working dir = this folder.
 
 ```
-py dashboard.py                               # status: positions, P&L, kill switch, pending approvals
+py dashboard.py                               # status: positions, P&L, recent trades
 py scripts/scan_and_trade.py --dry-run        # what would we trade right now?
 py scripts/scan_and_trade.py --force          # run it (force = ignore market-hours check)
 py scripts/premarket_brief.py                 # macro brief + cancel stale orders
 py scripts/eod_report.py                      # today's P&L vs SPY
 py scripts/weekly_review.py                   # weekly P&L vs SPY
-py scripts/crypto_check.py --dry-run          # crypto scan (24/7)
-
-py scripts/approve.py                         # list pending large-trade approvals
-py scripts/approve.py --id <ID> yes           # approve + execute
-py scripts/approve.py --id <ID> no            # reject
-
-py scripts/halt.py pause "reason"             # emergency stop new entries
-py scripts/halt.py resume                     # re-enable
-py scripts/halt.py                            # show current halt status
 ```
 
 ## Autonomous schedule (Windows Task Scheduler)
@@ -55,7 +45,6 @@ Registers these at **local time** (adjust if not US/Eastern — see top of
 | TradingBot_Scan_1530 | Mon-Fri 15:30 | `scan_and_trade.py` |
 | TradingBot_EOD | Mon-Fri 16:15 | `eod_report.py` |
 | TradingBot_WeeklyReview | Fri 17:00 | `weekly_review.py` |
-| TradingBot_Crypto | every 4h, 24/7 | `crypto_check.py` |
 
 Scripts call `clock.is_open` and no-op when market is closed, so the scan tasks
 are safe to miss a few minutes either side.
@@ -70,25 +59,22 @@ a cloud VM.
 
 Each scan runs this pipeline:
 
-1. **Kill switch check** — daily dd, weekly dd, trade count, manual halt.
-2. **Macro regime** (`src/macro.py`) — SPY trend, VIXY, S&P-500 breadth →
+1. **Macro regime** (`src/macro.py`) — SPY trend, VIXY, S&P-500 breadth →
    `risk_on` / `neutral` / `risk_off` with score in [-1, 1].
-3. **Technical screen** (`src/technicals.py`) — compute trend + momentum +
+2. **Technical screen** (`src/technicals.py`) — compute trend + momentum +
    volatility for the entire S&P 500 + custom watchlist, keep top-N by
    |score|.
-4. **Per-symbol deep dive** for those candidates:
+3. **Per-symbol deep dive** for those candidates:
    - Fundamentals via yfinance — PE/PEG, rev+eps growth, ROE, debt/equity
    - Sentiment — Alpaca news lexical scoring
-   - Risk alignment — penalize longs in risk_off, shorts in risk_on
-5. **Decision engine** (`src/decision.py`) — weighted consensus. Action = BUY
+   - Risk alignment — penalize long entries in risk_off
+4. **Decision engine** (`src/decision.py`) — weighted consensus. Action = BUY
    only if `|combined| ≥ min_confidence` (0.40) **and** ≥ 2 agents agree on
    direction **and** technical agrees.
-6. **Position sizing** (`src/risk.py`) — confidence-scaled up to 7% of equity,
+5. **Position sizing** (`src/risk.py`) — confidence-scaled by entry cap,
    ATR-based stop (2× ATR) and target (4× ATR), capped at 0.5% risk per
-   trade, sector cap 30%.
-7. **Approval gate** — any trade > $10K → `data/journal/pending_approvals.jsonl`
-   for manual approval.
-8. **Execution** — bracket order (entry + stop + target) via Alpaca.
+   trade, with sector and cash-reserve caps.
+6. **Execution** — bracket order (entry + stop + target) via Alpaca.
 
 Exits run first in the same scan: existing positions with a technical flip or
 deeply negative sentiment get closed.
@@ -102,7 +88,7 @@ invoke for deep research beyond the numeric pipeline:
 - **technical-analyst** — A–D graded chart read with structural S/R
 - **fundamental-analyst** — quality/valuation/growth synthesis
 - **sentiment-analyst** — news flow, analyst revisions, narrative shifts
-- **risk-manager** — portfolio-level veto / reduce / approve
+- **risk-manager** — portfolio-level accept / reduce / reject
 - **decision-arbiter** — integrates the other five into a final call
 
 Use these interactively (ask Claude to "run technical-analyst on NVDA", etc.)
@@ -114,8 +100,7 @@ Edit `config.yaml` to tune. Reloaded on every script run.
 
 Key knobs:
 - `risk.min_confidence` — higher = stricter, fewer trades (current: 0.40)
-- `risk.max_position_pct` — max single-position exposure (current: 7%)
-- `kill_switch.weekly_drawdown_pct` — auto-pause threshold
+- `risk.max_position_pct` — max single-position exposure
 - `signals.weights` — rebalance which signal dominates
 
 ## Files
@@ -130,10 +115,9 @@ trading-bot/
 │   ├── alpaca_client.py           # Wrapped Alpaca SDK
 │   ├── config.py                  # .env + config.yaml loader
 │   ├── decision.py                # Consensus decision engine
-│   ├── executor.py                # Order submission + approval gate
+│   ├── executor.py                # Order submission
 │   ├── fundamentals.py            # yfinance-based fundamentals
-│   ├── journal.py                 # Decision / trade / approval logs
-│   ├── kill_switch.py             # Circuit breakers
+│   ├── journal.py                 # Decision / trade logs
 │   ├── logging_setup.py
 │   ├── macro.py                   # Regime (SPY / VIXY / breadth)
 │   ├── orchestrator.py            # End-to-end pipeline
@@ -142,10 +126,7 @@ trading-bot/
 │   ├── technicals.py              # RSI / MACD / ATR / EMA signals
 │   └── universe.py                # S&P 500 + watchlist
 ├── scripts/
-│   ├── approve.py                 # Approve pending trades
-│   ├── crypto_check.py            # Crypto scan (24/7)
 │   ├── eod_report.py              # End-of-day P&L report
-│   ├── halt.py                    # Manual kill switch
 │   ├── premarket_brief.py         # 08:30 macro brief
 │   ├── remove_schedule.ps1        # Uninstall Windows tasks
 │   ├── scan_and_trade.py          # Intraday scan + execute
@@ -154,9 +135,9 @@ trading-bot/
 ├── .claude/agents/                # Deep-research subagents for Claude Code
 ├── data/
 │   ├── cache/                     # S&P 500 constituents
-│   ├── journal/                   # decisions.jsonl, trades.jsonl, approvals
+│   ├── journal/                   # decisions.jsonl, trades.jsonl
 │   ├── research/                  # Saved scan reports
-│   └── state/                     # Kill switch + trade counter
+│   └── state/                     # Runtime state
 └── logs/                          # Rotating per-script logs
 ```
 

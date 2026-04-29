@@ -74,13 +74,6 @@ Register-BotTask "EOD" (Join-Path $BotDir "scripts\eod_report.py") @($triggerEod
 $triggerWeek = New-ScheduledTaskTrigger -Weekly -WeeksInterval 1 -DaysOfWeek Friday -At "14:00"
 Register-BotTask "WeeklyReview" (Join-Path $BotDir "scripts\weekly_review.py") @($triggerWeek)
 
-# Crypto: every 4 hours, 24/7 (crypto trades nonstop)
-$cryptoStart = Get-Date "00:05"
-$triggerCrypto = New-ScheduledTaskTrigger -Once -At $cryptoStart `
-    -RepetitionInterval (New-TimeSpan -Hours 4) `
-    -RepetitionDuration (New-TimeSpan -Days 3650)
-Register-BotTask "Crypto" (Join-Path $BotDir "scripts\crypto_check.py") @($triggerCrypto)
-
 # Post-mortem Telegram bridge: every 30 min, 24/7. Polls GitHub for new
 # postmortem-YYYY-MM-DD branches created by the remote agent and sends a
 # Telegram summary. Also polls Telegram for 'accept/reject postmortem-...'

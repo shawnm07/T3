@@ -35,17 +35,6 @@ def main() -> int:
             return 0
 
         result = orch.run_preclose(dry_run=args.dry_run)
-        if result.get("halted"):
-            reasons = result["kill_switch"].get("reasons", [])
-            send_alert("HALT", "preclose_decision",
-                       f"Kill switch triggered: {', '.join(reasons)}")
-            notify_preclose(
-                equity=0.0, positions_count=0, market_bias=0.0,
-                hold_reports=[], exits=[], new_executions=[],
-                kill_switch=result.get("kill_switch"),
-                dry_run=args.dry_run,
-            )
-            return 2
 
         closes = len(result.get("exits", []))
         buys = len(result.get("new_executions", []))
@@ -56,14 +45,26 @@ def main() -> int:
         log.info("Preclose summary: held=%d closed=%d new_buys=%d market_bias=%+.2f",
                  held, closes, buys, market_bias)
 
+        # Defensive: if the orchestrator's preclose path failed early, equity
+        # may be missing. Pull a fresh snapshot ourselves rather than showing
+        # $0 in the Telegram message.
+        equity = float(result.get("equity", 0.0) or 0.0)
+        positions_count = int(result.get("positions_count", 0) or 0)
+        if equity <= 0.0:
+            try:
+                acct, pos = orch.client.get_snapshot()
+                equity = float(acct.equity)
+                positions_count = len([p for p in pos if "/" not in p.symbol])
+            except Exception as e:
+                log.warning("Preclose fallback snapshot failed: %s", e)
+
         notify_preclose(
-            equity=float(result.get("equity", 0.0)),
-            positions_count=int(result.get("positions_count", 0)),
+            equity=equity,
+            positions_count=positions_count,
             market_bias=market_bias,
             hold_reports=result.get("hold_reports", []),
             exits=result.get("exits", []),
             new_executions=result.get("new_executions", []),
-            kill_switch=result.get("kill_switch"),
             bearish_halt=bearish_halt,
             halt_threshold=halt_threshold,
             dry_run=args.dry_run,

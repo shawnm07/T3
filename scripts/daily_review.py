@@ -59,16 +59,14 @@ def collect_day_files(day: date) -> dict:
     prefix = day.strftime("%Y%m%d")
     iso = day.isoformat()
     scans = sorted(RESEARCH.glob(f"{prefix}T*_scan.json"))
-    crypto = sorted(RESEARCH.glob(f"{prefix}T*_crypto_scan.json"))
     preclose = sorted(RESEARCH.glob(f"{prefix}T*_preclose.json"))
     eod = RESEARCH / f"{iso}_eod.json"
     return {
         "scans": [load_json(p) for p in scans],
-        "crypto_scans": [load_json(p) for p in crypto],
         "preclosing": [load_json(p) for p in preclose],
         "eod": load_json(eod),
         "eod_path": str(eod),
-        "scan_count": len(scans) + len(crypto) + len(preclose),
+        "scan_count": len(scans) + len(preclose),
     }
 
 
@@ -106,7 +104,7 @@ Your job: deliver a deep, honest review of the last trading day and propose
 concrete strategy changes for the human to accept or reject.
 
 North star: beat SPY on percentage return, NOT by being overly aggressive.
-Balanced-risk swing cadence. Longs + shorts + crypto. -5% weekly drawdown halt.
+Balanced-risk swing cadence. Long equities only.
 
 Rules:
 - DO NOT propose edits you will make yourself. PROPOSE ONLY — user reviews and accepts.
@@ -124,7 +122,7 @@ REPORT_SCHEMA = """\
 - Bot day return: X.XX%
 - SPY day return: X.XX%
 - Delta vs benchmark: +/-X.XX%
-- Open positions: N (long X / short Y / crypto Z)
+- Open positions: N
 - Cash / cash-proxy: $X / $Y
 
 ## Today's Decisions — Graded
@@ -180,7 +178,7 @@ def build_user_message(today: date, yesterday: date,
 
     # Flatten today's executions, exits, and rebalance actions across all scans
     all_execs, all_exits, all_rebal = [], [], []
-    for scan in (today_data["scans"] or []) + (today_data["crypto_scans"] or []):
+    for scan in (today_data["scans"] or []):
         if isinstance(scan, dict):
             all_execs.extend(scan.get("executions") or [])
             all_exits.extend(scan.get("exits") or [])

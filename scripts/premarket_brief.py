@@ -26,14 +26,47 @@ def main() -> int:
         clock = client.get_clock()
         log.info("Clock: is_open=%s next_open=%s", clock.is_open, clock.next_open)
 
-        # Cancel leftover open orders from yesterday
+        # Cancel leftover open orders from yesterday, but preserve sell-side
+        # exit legs that guard live positions. Canceling one leg of an Alpaca
+        # bracket can cancel the paired stop, so take-profit limits are kept too.
         cancelled_count = 0
         try:
             open_orders = client.get_open_orders()
             if open_orders:
-                log.info("Canceling %d stale open orders", len(open_orders))
-                client.cancel_all_orders()
-                cancelled_count = len(open_orders)
+                try:
+                    held_symbols = {p.symbol for p in client.get_positions()}
+                except Exception as e:
+                    log.warning("Could not fetch positions before stale-order cleanup: %s", e)
+                    held_symbols = set()
+
+                def _order_value(order, name: str) -> str:
+                    raw = getattr(order, name, "") or ""
+                    return str(getattr(raw, "value", raw)).lower()
+
+                def _is_protective_exit(order) -> bool:
+                    order_type = _order_value(order, "type")
+                    side = _order_value(order, "side")
+                    symbol = str(getattr(order, "symbol", "") or "")
+                    is_exit_type = order_type in {"limit", "stop", "stop_limit", "trailing_stop"}
+                    is_sell = side == "sell" or side.endswith(".sell")
+                    guards_live_position = (not held_symbols) or symbol in held_symbols
+                    return is_exit_type and is_sell and guards_live_position
+
+                preserved = 0
+                for order in open_orders:
+                    if _is_protective_exit(order):
+                        preserved += 1
+                        continue
+                    try:
+                        client.cancel_order(str(order.id))
+                        cancelled_count += 1
+                    except Exception as e:
+                        log.warning("Cancel stale order %s failed: %s",
+                                    getattr(order, "id", "?"), e)
+                log.info(
+                    "Stale-order cleanup: canceled=%d preserved_exit_orders=%d",
+                    cancelled_count, preserved,
+                )
         except Exception as e:
             log.warning("Cancel stale orders failed: %s", e)
 

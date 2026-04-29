@@ -2,7 +2,7 @@
 
 Autonomous trading bot that tries to beat the S&P 500. Runs research multiple
 times a day, trades only on high-conviction multi-signal consensus, risk-sized
-with ATR stops, paper mode against Alpaca.
+with Python-enforced 1% protective stops, paper mode against Alpaca.
 
 ## Status snapshot
 
@@ -72,9 +72,10 @@ Each scan runs this pipeline:
    only if `|combined| ≥ min_confidence` (0.40) **and** ≥ 2 agents agree on
    direction **and** technical agrees.
 5. **Position sizing** (`src/risk.py`) — confidence-scaled by entry cap,
-   ATR-based stop (2× ATR) and target (4× ATR), capped at 0.5% risk per
-   trade, with sector and cash-reserve caps.
-6. **Execution** — bracket order (entry + stop + target) via Alpaca.
+   hard 1% stop risk, capped at 0.5% risk per trade, with sector and
+   cash-reserve caps.
+6. **Execution** — protected order via Alpaca: Python attaches the stop-loss;
+   AI does not need to supply stop/take-profit prices.
 
 Exits run first in the same scan: existing positions with a technical flip or
 deeply negative sentiment get closed.

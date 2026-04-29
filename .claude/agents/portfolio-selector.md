@@ -129,16 +129,15 @@ though they span different GICS sectors. When `system_state.sector_guard_retry
 
 You also receive: equity, cash, risk_profile (max_position_pct,
 max_sector_pct, min_positions, max_positions, cash_reserve_pct,
-cash_reserve_min_pct, max_risk_per_trade_pct, stop_loss_atr_mult,
+cash_reserve_min_pct, max_risk_per_trade_pct, hard_stop_loss_pct,
 take_profit_atr_mult), trading_rules, execution_constraints, system_state
 (bearish_halt_active, allow_floor_breach, dry_run,
 earnings_close_symbols), macro, spy_block, recent_decisions.
 
 Each candidate also carries `current_price` (latest mid/last) and `atr`
 (daily ATR in $). Held positions additionally carry `current_qty` (shares
-already owned). YOU use these to compute exact share quantities, stop
-prices, and take-profit prices. The Python executor submits your exact
-numbers VERBATIM to the broker — there is no Python-side sizing layer.
+already owned). YOU use these to compute exact share quantities. Python
+attaches the live 1% protective stop at execution time.
 
 # YOU set the order parameters
 
@@ -149,10 +148,10 @@ For every selected position you MUST output an exact, broker-ready order:
   precision).
 - `entry_price` — the price you expect the entry to fill near (use
   `current_price`; this is informational for the audit trail).
-- `stop_loss` — exact stop-loss price in dollars. Must be BELOW
-  `entry_price`.
-- `take_profit` — exact take-profit price in dollars. Must be ABOVE
-  `entry_price`.
+- `stop_loss` — optional. Python will attach the live protective stop, so
+  you do NOT need to create one.
+- `take_profit` — optional. Omit it unless a specific profit-taking level is
+  central to your thesis.
 - `delta_qty` — signed share delta vs the position currently held
   (positive = BUY shares, negative = SELL shares, 0 = HOLD). For new
   entries this equals `qty`. For EXITs this equals `-current_qty`.
@@ -160,15 +159,10 @@ For every selected position you MUST output an exact, broker-ready order:
 Sizing guidance you MUST respect when computing `qty`:
 - `qty * entry_price <= equity * risk_profile.max_position_pct`
   (default 50% of equity per name).
-- `qty * (entry_price - stop_loss) <= equity *
-  risk_profile.max_risk_per_trade_pct` (default 0.5% of equity at risk
-  per trade). If your preferred weight would breach this, REDUCE qty
-  until risk fits — do not widen the stop.
-- For new entries, prefer `entry - stop ≈ atr * stop_loss_atr_mult` and
-  `take_profit - entry ≈ atr * take_profit_atr_mult` (defaults 2.0×ATR
-  stop, 4.0×ATR target — ~2:1 reward:risk). You may deviate when chart
-  structure (support/resistance) justifies a tighter or wider stop, but
-  state why in `one_sentence_reason`.
+- Python enforces a hard 1% stop-market protective order on every BUY/ADD.
+  Size using `qty * entry_price * hard_stop_loss_pct` as the trade risk.
+  If your preferred weight would breach max risk, REDUCE qty; do not assume
+  a wider stop will be accepted.
 - Total intended deployed capital `sum(qty[s] * entry_price[s]) +
   spy_target_pct*equity + cash_target_pct*equity` should sit inside
   `[0.99*equity, 1.01*equity]`.
@@ -178,11 +172,11 @@ For EXIT actions: `qty=0`, `delta_qty=-current_qty`, `stop_loss=null`,
 longer apply).
 
 For HOLD actions on currently-held names with no change: `qty=current_qty`,
-`delta_qty=0`. Still emit `stop_loss` and `take_profit` so the executor
-can refresh the bracket if it has drifted.
+`delta_qty=0`. Stop/take-profit fields may be null.
 
 For REDUCE / INCREASE: emit the new total `qty`, the signed `delta_qty`,
-and refreshed `stop_loss` / `take_profit` for the resulting position size.
+and optionally a take-profit if it is part of the thesis. Python will create
+the protective stop.
 
 # Action vocabulary
 
@@ -221,7 +215,7 @@ Exactly one sentence per symbol. Action-focused. Examples:
   "target_weights": { "SYM": <float>, ... },
   "per_symbol": {
     "SYM": { "target_pct", "qty", "delta_qty",
-             "entry_price", "stop_loss", "take_profit",
+             "entry_price", "stop_loss": null, "take_profit": null,
              "action", "confidence",
              "opportunity_score", "one_sentence_reason",
              "exhaustion_penalty": <bool>,
@@ -260,11 +254,10 @@ Exactly one sentence per symbol. Action-focused. Examples:
 - every per_symbol entry has all of: target_pct, action, opportunity_score,
   one_sentence_reason
 - every entry in selected_positions has all of: qty (>0), entry_price (>0),
-  stop_loss (>0 and < entry_price), take_profit (>0 and > entry_price),
-  delta_qty (numeric)
+  delta_qty (numeric). stop_loss and take_profit may be null.
 - `qty * entry_price` does NOT exceed `equity * max_position_pct` for any
   selected symbol
-- `qty * (entry_price - stop_loss)` does NOT exceed
+- `qty * entry_price * hard_stop_loss_pct` does NOT exceed
   `equity * max_risk_per_trade_pct` for any selected symbol
 - for held symbols not in selected_positions: qty=0, delta_qty=-current_qty,
   action="EXIT", stop_loss/take_profit may be null

@@ -253,6 +253,13 @@ _REQUIRED_SPY_FIELDS = (
 _VALID_ACTIONS = {"BUY", "SELL", "HOLD", "EXIT", "INCREASE", "REDUCE"}
 
 
+def _hard_stop_loss_pct(cfg: Config) -> float:
+    try:
+        return max(0.0, float(cfg.get("risk", "hard_stop_loss_pct", default=0.01)))
+    except (TypeError, ValueError):
+        return 0.01
+
+
 def validate_arbiter_response(
     result: dict[str, Any] | None,
     held_symbols: list[str] | None = None,
@@ -522,9 +529,9 @@ def validate_selector_response(
         if not (0 < wf <= max_pp):
             problems.append(f"weight {s}={wf:.4f} out of (0, {max_pp}]")
 
-    # AI-direct order params: qty / entry_price / stop_loss / take_profit are
-    # AUTHORITATIVE — Python submits them to the broker verbatim. Validate
-    # every selected position has them and that they are internally consistent.
+    # AI-direct order params: qty / entry_price / delta_qty are authoritative.
+    # Python owns the protective stop and attaches a hard 1% stop-market order
+    # at execution time, so stop_loss / take_profit are optional AI commentary.
     equity_for_check = 0.0
     try:
         equity_for_check = float(equity or 0)
@@ -536,30 +543,43 @@ def validate_selector_response(
         except (TypeError, ValueError):
             equity_for_check = 0.0
     max_risk_pct = float(cfg.get("risk", "max_risk_per_trade_pct", default=0.005))
+    hard_stop_pct = _hard_stop_loss_pct(cfg)
     for s in selected:
         info = per_sym.get(s) if isinstance(per_sym, dict) else None
         if not isinstance(info, dict):
             continue  # missing-per-symbol problem already recorded above
-        for f in ("qty", "entry_price", "stop_loss", "take_profit", "delta_qty"):
+        for f in ("qty", "entry_price", "delta_qty"):
             if f not in info:
                 problems.append(f"per_symbol[{s}].{f} missing (AI-direct sizing required)")
         try:
             qty = float(info.get("qty", 0) or 0)
             entry = float(info.get("entry_price", 0) or 0)
-            stop = float(info.get("stop_loss", 0) or 0)
-            target = float(info.get("take_profit", 0) or 0)
             delta_qty = float(info.get("delta_qty", 0) or 0)
         except (TypeError, ValueError):
-            problems.append(f"per_symbol[{s}] qty/entry/stop/target not numeric")
+            problems.append(f"per_symbol[{s}] qty/entry/delta_qty not numeric")
             continue
         if qty <= 0:
             problems.append(f"per_symbol[{s}].qty must be > 0 for selected positions, got {qty}")
         if entry <= 0:
             problems.append(f"per_symbol[{s}].entry_price must be > 0, got {entry}")
-        if stop <= 0 or stop >= entry:
-            problems.append(f"per_symbol[{s}].stop_loss ({stop}) must be > 0 and < entry_price ({entry})")
-        if target <= 0 or target <= entry:
-            problems.append(f"per_symbol[{s}].take_profit ({target}) must be > entry_price ({entry})")
+        raw_stop = info.get("stop_loss")
+        if raw_stop not in (None, ""):
+            try:
+                stop = float(raw_stop)
+            except (TypeError, ValueError):
+                problems.append(f"per_symbol[{s}].stop_loss not numeric")
+            else:
+                if stop <= 0 or stop >= entry:
+                    problems.append(f"per_symbol[{s}].stop_loss ({stop}) must be > 0 and < entry_price ({entry})")
+        raw_target = info.get("take_profit")
+        if raw_target not in (None, ""):
+            try:
+                target = float(raw_target)
+            except (TypeError, ValueError):
+                problems.append(f"per_symbol[{s}].take_profit not numeric")
+            else:
+                if target <= 0 or target <= entry:
+                    problems.append(f"per_symbol[{s}].take_profit ({target}) must be > entry_price ({entry})")
         meta = pool_meta.get(s, {}) if isinstance(pool_meta, dict) else {}
         try:
             current_qty = float(meta.get("current_qty", 0) or 0)
@@ -572,7 +592,7 @@ def validate_selector_response(
                 f"qty {qty} minus current_qty {current_qty}"
             )
         # Risk-per-trade hard cap (use a contextual equity if provided)
-        if entry > 0 and stop > 0 and stop < entry:
+        if entry > 0 and hard_stop_pct > 0:
             ctx_equity = 0.0
             ctx = info.get("_equity_for_validation")
             try:
@@ -580,6 +600,7 @@ def validate_selector_response(
             except (TypeError, ValueError):
                 ctx_equity = equity_for_check
             if ctx_equity > 0:
+                stop = entry * (1.0 - hard_stop_pct)
                 risk_usd = qty * (entry - stop)
                 cap_usd = ctx_equity * max_risk_pct
                 # 1% slack over the configured cap before rejecting.

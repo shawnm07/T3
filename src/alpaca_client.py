@@ -147,14 +147,21 @@ class AlpacaClient:
         take_profit: float | None = None,
         tif: str = "day",
         limit_price: float | None = None,
+        stop_loss_limit_price: float | None = None,
+        client_order_id: str | None = None,
     ):
         side_enum = OrderSide.BUY if side.lower() == "buy" else OrderSide.SELL
         tif_enum = {"day": TimeInForce.DAY, "gtc": TimeInForce.GTC, "ioc": TimeInForce.IOC}[tif.lower()]
         kwargs: dict = dict(symbol=symbol, qty=qty, side=side_enum, time_in_force=tif_enum)
+        if client_order_id:
+            kwargs["client_order_id"] = client_order_id
         if stop_loss or take_profit:
-            kwargs["order_class"] = OrderClass.BRACKET
+            kwargs["order_class"] = OrderClass.BRACKET if (stop_loss and take_profit) else OrderClass.OTO
             if stop_loss:
-                kwargs["stop_loss"] = StopLossRequest(stop_price=round(stop_loss, 2))
+                stop_kwargs: dict = {"stop_price": round(stop_loss, 2)}
+                if stop_loss_limit_price is not None:
+                    stop_kwargs["limit_price"] = round(stop_loss_limit_price, 2)
+                kwargs["stop_loss"] = StopLossRequest(**stop_kwargs)
             if take_profit:
                 kwargs["take_profit"] = TakeProfitRequest(limit_price=round(take_profit, 2))
         if limit_price is not None:
@@ -245,6 +252,9 @@ class AlpacaClient:
 
     def cancel_all_orders(self):
         return self.trading.cancel_orders()
+
+    def cancel_order(self, order_id: str):
+        return self.trading.cancel_order_by_id(order_id)
 
     def get_open_orders(self):
         return self.trading.get_orders(GetOrdersRequest(status="open"))

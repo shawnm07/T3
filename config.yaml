@@ -8,6 +8,9 @@ risk:
   max_leverage: 1.0
   stop_loss_atr_mult: 2.0
   take_profit_atr_mult: 4.0
+  # Hard execution stop applied by Python to every strategy BUY/ADD.
+  # AI may choose symbols and sizing, but cannot widen this stop.
+  hard_stop_loss_pct: 0.01
   min_confidence: 0.40
   max_positions: 6
   min_trade_usd: 500

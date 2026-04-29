@@ -1532,6 +1532,7 @@ class TradingOrchestrator:
             "high_conviction_threshold": float(self.risk.high_conviction_threshold),
             "stop_loss_atr_mult": float(self.cfg.get("risk", "stop_loss_atr_mult", default=2.0)),
             "take_profit_atr_mult": float(self.cfg.get("risk", "take_profit_atr_mult", default=4.0)),
+            "hard_stop_loss_pct": float(self.cfg.get("risk", "hard_stop_loss_pct", default=0.01)),
         }
 
         # --- Trading rules (text — guides AI judgment) ---
@@ -1692,13 +1693,14 @@ class TradingOrchestrator:
                         "skipped": "insufficient_confirmed_cash",
                         "funded_notional": round(funded_notional, 2),
                     }
-                if not action.ai_stop_loss or not action.ai_take_profit:
-                    return {**action_dict, "skipped": "missing_ai_bracket_params"}
+                entry_ref = getattr(action, "ai_entry_price", None)
+                if not entry_ref and abs(delta_qty) > 0:
+                    entry_ref = float(action.delta_notional) / abs(delta_qty)
                 exec_result = self.executor.execute_ai_bracket(
                     symbol=action.symbol,
                     qty=delta_qty,
-                    stop_loss=float(action.ai_stop_loss),
-                    take_profit=float(action.ai_take_profit),
+                    entry_price=float(entry_ref),
+                    take_profit=None,
                     reason=action.reason,
                     ai_audit=ai_audit,
                 )
@@ -2349,16 +2351,12 @@ class TradingOrchestrator:
                         rejected.append({"symbol": sym, "reason": "insufficient_confirmed_cash"})
                         continue
                     opus_info = per_symbol.get(sym, {}) or {}
-                    stop = opus_info.get("stop_loss")
-                    target = opus_info.get("take_profit")
-                    if not stop or not target:
-                        rejected.append({"symbol": sym, "reason": "missing Opus stop/take for verifier buy"})
-                        continue
+                    entry_ref = opus_info.get("entry_price") or current_price
                     exec_res = self.executor.execute_ai_bracket(
                         symbol=sym,
                         qty=delta_qty,
-                        stop_loss=float(stop),
-                        take_profit=float(target),
+                        entry_price=float(entry_ref),
+                        take_profit=None,
                         reason=f"verifier reconcile to Opus target {row['target_weight']*100:.1f}% "
                                f"(gap was ${row['gap_usd']:+.0f})",
                         ai_audit={"source": "portfolio_verifier", "proposal": prop, "row": row},
@@ -2909,8 +2907,7 @@ class TradingOrchestrator:
                 log.warning("[selector] rebalance %s did not fill", a.symbol)
 
         # New-entry loop: any selected symbol not in current positions is sized
-        # by portfolio-selector, then executed as a bracket order using the
-        # AI's exact qty / stop / target.
+        # by portfolio-selector, then executed with Python's hard protective stop.
         held_syms_set = {p.symbol for p in portfolio.get("holdings", [])}
         # Late-session new-entry block: the 15:30 ET scan was opening
         # overnight positions that the 15:55 ET preclose immediately closed.
@@ -3013,24 +3010,22 @@ class TradingOrchestrator:
                     "risk_sizer": audit,
                 })
                 continue
-            # AI-direct sizing: portfolio-selector emits exact qty / stop /
-            # take_profit per selected position. Python executes those values
-            # verbatim — no sizing recomputation. risk.validate_ai_sizing()
-            # acts only as a hard-cap safety check (long-only, max position %,
-            # max risk per trade). If the AI omits any of these fields, we
-            # fail-safe and skip the trade — there is no Python fallback.
+            # AI-direct sizing: portfolio-selector emits exact qty and entry.
+            # Python owns the protective stop and attaches the hard 1% stop at
+            # execution time. AI stop/take-profit fields are optional audit
+            # context only; missing values no longer block the trade.
             try:
                 ai_qty = float(info.get("qty") or 0)
                 ai_entry = float(info.get("entry_price") or tech.price or 0)
-                ai_stop = float(info.get("stop_loss") or 0)
-                ai_target = float(info.get("take_profit") or 0)
             except (TypeError, ValueError):
-                ai_qty = ai_entry = ai_stop = ai_target = 0.0
-            if ai_qty <= 0 or ai_entry <= 0 or ai_stop <= 0 or ai_target <= 0:
+                ai_qty = ai_entry = 0.0
+            ai_stop_raw = info.get("stop_loss")
+            ai_target_raw = info.get("take_profit")
+            if ai_qty <= 0 or ai_entry <= 0:
                 log.error(
                     "[selector] %s missing AI sizing params "
-                    "(qty=%s entry=%s stop=%s target=%s) — skipping",
-                    sym, ai_qty, ai_entry, ai_stop, ai_target,
+                    "(qty=%s entry=%s) — skipping",
+                    sym, ai_qty, ai_entry,
                 )
                 executions.append({
                     "symbol": sym, "side": "buy",
@@ -3039,7 +3034,7 @@ class TradingOrchestrator:
                     "is_new_entry": True,
                     "skipped": "missing_ai_sizing_params",
                     "ai_inputs": {"qty": ai_qty, "entry": ai_entry,
-                                  "stop": ai_stop, "target": ai_target},
+                                  "stop": ai_stop_raw, "target": ai_target_raw},
                 })
                 continue
             sizing_positions = (
@@ -3048,7 +3043,7 @@ class TradingOrchestrator:
             )
             ok, risk_audit = self.risk.validate_ai_sizing(
                 symbol=sym, qty=ai_qty, entry=ai_entry,
-                stop_loss=ai_stop, take_profit=ai_target,
+                stop_loss=ai_stop_raw, take_profit=ai_target_raw,
                 equity=equity, existing_positions=sizing_positions,
             )
             if not ok:
@@ -3067,7 +3062,7 @@ class TradingOrchestrator:
                 continue
             sizing = self.risk.build_sizing_from_ai(
                 symbol=sym, qty=ai_qty, entry=ai_entry,
-                stop_loss=ai_stop, take_profit=ai_target,
+                stop_loss=ai_stop_raw, take_profit=ai_target_raw,
                 confidence=confidence, reasoning=reason,
             )
             risk_sized_notional = round(float(sizing.notional), 2)
@@ -3080,8 +3075,8 @@ class TradingOrchestrator:
             }
             if dry_run:
                 log.info(
-                    "[DRY] Selector AI-direct entry %s qty=%s @ ~$%.2f stop=$%.2f tgt=$%.2f notional=$%.0f",
-                    sym, sizing.qty, ai_entry, ai_stop, ai_target, sizing.notional,
+                    "[DRY] Selector AI-direct entry %s qty=%s @ ~$%.2f hard_stop=$%.2f notional=$%.0f",
+                    sym, sizing.qty, ai_entry, sizing.stop_loss, sizing.notional,
                 )
                 executions.append({"dry_run": True, "symbol": sym, "side": "buy",
                                    "delta_notional": risk_sized_notional,
@@ -3135,7 +3130,7 @@ class TradingOrchestrator:
                     "risk_sizer": risk_sizer_payload,
                 },
                 reasoning=[
-                    f"ai-direct entry qty={sizing.qty} stop=${ai_stop:.2f} tgt=${ai_target:.2f}",
+                    f"ai-direct entry qty={sizing.qty} hard_stop=${sizing.stop_loss:.2f}",
                     f"selector target_pct={target_pct:.1%} notional=${risk_sized_notional:,.0f}",
                     reason,
                 ],
@@ -3143,8 +3138,8 @@ class TradingOrchestrator:
             try:
                 exec_result = self.executor.execute_ai_bracket(
                     symbol=sym, qty=sizing.qty,
-                    stop_loss=sizing.stop_loss,
-                    take_profit=sizing.take_profit,
+                    entry_price=sizing.entry,
+                    take_profit=None,
                     reason=reason,
                     decision=decision_obj,
                     ai_audit=risk_sizer_payload,
@@ -3153,8 +3148,7 @@ class TradingOrchestrator:
                                    "delta_notional": risk_sized_notional,
                                    "selector_target_pct": target_pct,
                                    "ai_qty": sizing.qty,
-                                   "ai_stop_loss": sizing.stop_loss,
-                                   "ai_take_profit": sizing.take_profit,
+                                   "hard_stop_loss": sizing.stop_loss,
                                    "reason": reason,
                                    "is_new_entry": True,
                                    "sizing": sizing.to_dict(),
@@ -3994,6 +3988,7 @@ class TradingOrchestrator:
                     "risk_constraints": {
                         "max_position_pct": float(self.risk.max_position_pct),
                         "cash_reserve_pct": float(self.risk.cash_reserve_pct),
+                        "hard_stop_loss_pct": float(self.cfg.get("risk", "hard_stop_loss_pct", default=0.01)),
                     },
                 }
                 verdict = run_entry_arbiter_single(self.cfg, arbiter_ctx)

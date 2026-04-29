@@ -1,4 +1,4 @@
-"""Risk management: long-equity position sizing and stop/target levels."""
+"""Risk management: long-equity position sizing and protective stop levels."""
 from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
@@ -18,7 +18,7 @@ class SizingDecision:
     notional: float
     entry: float
     stop_loss: float
-    take_profit: float
+    take_profit: float | None
     risk_usd: float
     confidence: float
     reasoning: str
@@ -32,7 +32,8 @@ class SizingDecision:
             "notional": round(self.notional, 2),
             "entry": round(self.entry, 2),
             "stop_loss": round(self.stop_loss, 2),
-            "take_profit": round(self.take_profit, 2),
+            "take_profit": (round(self.take_profit, 2)
+                            if self.take_profit is not None else None),
             "risk_usd": round(self.risk_usd, 2),
             "confidence": round(self.confidence, 3),
             "reasoning": self.reasoning,
@@ -51,6 +52,7 @@ class RiskManager:
         self.max_leverage = config.get("risk", "max_leverage", default=1.0)
         self.stop_atr_mult = config.get("risk", "stop_loss_atr_mult", default=2.0)
         self.tp_atr_mult = config.get("risk", "take_profit_atr_mult", default=4.0)
+        self.hard_stop_loss_pct = float(config.get("risk", "hard_stop_loss_pct", default=0.01))
         self.max_positions = config.get("risk", "max_positions", default=6)
         self.min_trade = config.get("risk", "min_trade_usd", default=500)
         self.cash_reserve_pct = config.get("risk", "cash_reserve_pct", default=0.20)
@@ -64,31 +66,48 @@ class RiskManager:
     def _is_cash_proxy(self, symbol: str) -> bool:
         return self.cash_proxy_enabled and symbol == self.cash_proxy_symbol
 
+    def hard_stop_loss_price(self, entry: float) -> float:
+        """Return the execution-layer hard stop price for a long entry."""
+        entry_f = float(entry or 0.0)
+        pct = max(0.0, float(self.hard_stop_loss_pct or 0.0))
+        if entry_f <= 0 or pct <= 0:
+            return 0.0
+        return round(entry_f * (1.0 - pct), 2)
+
     def validate_ai_sizing(
         self,
         symbol: str,
         qty: float,
         entry: float,
-        stop_loss: float,
-        take_profit: float,
-        equity: float,
-        existing_positions: list,
+        stop_loss: float | None = None,
+        take_profit: float | None = None,
+        equity: float = 0.0,
+        existing_positions: list | None = None,
     ) -> tuple[bool, dict[str, Any]]:
         """Hard-cap safety check on AI-supplied order parameters.
 
-        The AI is the sizing AUTHORITY — it sets qty, stop_loss, take_profit.
-        This function only enforces non-negotiable invariants that protect
+        The AI is the sizing authority for qty/entry. Python owns the hard
+        stop. This function only enforces non-negotiable invariants that protect
         the account from a malformed AI response: long-only, max_position_pct,
-        max_risk_per_trade_pct, max_positions, no duplicate. It does NOT
-        recompute or adjust the AI's numbers; it ACCEPTS or REJECTS them.
+        max_risk_per_trade_pct, max_positions, no duplicate. It does not
+        resize the AI's qty; it ACCEPTS or REJECTS the trade.
         Returns (ok, audit_dict). On reject, audit_dict carries the reason.
         """
+        try:
+            ai_stop_f = float(stop_loss or 0)
+        except (TypeError, ValueError):
+            ai_stop_f = 0.0
+        try:
+            ai_take_f = float(take_profit or 0)
+        except (TypeError, ValueError):
+            ai_take_f = 0.0
         audit: dict[str, Any] = {
             "symbol": symbol,
             "qty": float(qty or 0),
             "entry": float(entry or 0),
-            "stop_loss": float(stop_loss or 0),
-            "take_profit": float(take_profit or 0),
+            "ai_stop_loss": ai_stop_f,
+            "ai_take_profit": ai_take_f,
+            "hard_stop_loss_pct": float(self.hard_stop_loss_pct),
             "equity": float(equity or 0),
             "max_position_pct": float(self.max_position_pct),
             "max_risk_per_trade_pct": float(self.cfg.get("risk", "max_risk_per_trade_pct", default=0.005)),
@@ -100,16 +119,23 @@ class RiskManager:
             audit["reject_reason"] = "non_positive_qty_or_entry"
             self.last_sizing_audit = audit
             return False, audit
-        if stop_loss <= 0 or stop_loss >= entry:
+        hard_stop = self.hard_stop_loss_price(entry)
+        audit["stop_loss"] = hard_stop
+        if hard_stop <= 0 or hard_stop >= entry:
             audit["status"] = "rejected"
-            audit["reject_reason"] = "stop_not_below_entry"
+            audit["reject_reason"] = "invalid_hard_stop"
             self.last_sizing_audit = audit
             return False, audit
-        if take_profit <= entry:
-            audit["status"] = "rejected"
-            audit["reject_reason"] = "target_not_above_entry"
-            self.last_sizing_audit = audit
-            return False, audit
+        if take_profit not in (None, ""):
+            try:
+                take_profit_f = float(take_profit)
+            except (TypeError, ValueError):
+                take_profit_f = 0.0
+            if take_profit_f and take_profit_f <= entry:
+                audit["status"] = "rejected"
+                audit["reject_reason"] = "target_not_above_entry"
+                self.last_sizing_audit = audit
+                return False, audit
         # Duplicate / max-positions check (skip for cash proxy)
         if not self._is_cash_proxy(symbol):
             held_syms = {getattr(p, "symbol", "") for p in (existing_positions or [])}
@@ -138,7 +164,7 @@ class RiskManager:
             self.last_sizing_audit = audit
             return False, audit
         # Per-trade risk cap
-        risk_usd = qty * (entry - stop_loss)
+        risk_usd = qty * (entry - hard_stop)
         cap = float(equity) * float(audit["max_risk_per_trade_pct"])
         audit["risk_usd"] = round(risk_usd, 2)
         audit["max_risk_usd"] = round(cap, 2)
@@ -163,24 +189,34 @@ class RiskManager:
         symbol: str,
         qty: float,
         entry: float,
-        stop_loss: float,
-        take_profit: float,
-        confidence: float,
+        stop_loss: float | None = None,
+        take_profit: float | None = None,
+        confidence: float = 0.0,
         reasoning: str = "",
     ) -> SizingDecision:
         """Wrap AI-supplied order params in a SizingDecision for journaling."""
+        hard_stop = self.hard_stop_loss_price(entry)
+        try:
+            take_profit_f = float(take_profit) if take_profit not in (None, "") else None
+        except (TypeError, ValueError):
+            take_profit_f = None
         return SizingDecision(
             symbol=symbol,
             side="buy",
             qty=float(qty),
             notional=round(float(qty) * float(entry), 2),
             entry=float(entry),
-            stop_loss=float(stop_loss),
-            take_profit=float(take_profit),
-            risk_usd=round(float(qty) * (float(entry) - float(stop_loss)), 2),
+            stop_loss=hard_stop,
+            take_profit=take_profit_f,
+            risk_usd=round(float(qty) * (float(entry) - float(hard_stop)), 2),
             confidence=float(confidence),
             reasoning=reasoning or "ai-direct sizing",
-            limits={"source": "ai_direct"},
+            limits={
+                "source": "ai_direct",
+                "hard_stop_loss_pct": float(self.hard_stop_loss_pct),
+                "ai_stop_loss": stop_loss,
+                "ai_take_profit": take_profit,
+            },
         )
 
     def size_position(
@@ -287,8 +323,11 @@ class RiskManager:
         if is_high_conviction:
             reasons.append("high_conviction")
 
-        # Stop & target from ATR
-        stop = price - self.stop_atr_mult * atr
+        # Python owns the hard execution stop: every strategy entry/add gets a
+        # 1% protective stop by default. ATR remains useful for the optional
+        # profit target and as audit context, but it no longer controls max loss.
+        atr_stop = price - self.stop_atr_mult * atr
+        stop = self.hard_stop_loss_price(price)
         target = price + self.tp_atr_mult * atr
 
         risk_per_share = abs(price - stop)
@@ -297,6 +336,8 @@ class RiskManager:
         max_risk = equity * float(self.cfg.get("risk", "max_risk_per_trade_pct", default=0.005))
         audit.update({
             "stop_loss": round(float(stop), 4),
+            "atr_reference_stop_loss": round(float(atr_stop), 4),
+            "hard_stop_loss_pct": round(float(self.hard_stop_loss_pct), 4),
             "take_profit": round(float(target), 4),
             "risk_per_share": round(float(risk_per_share), 4),
             "risk_usd_before_risk_cap": round(float(risk_usd), 2),

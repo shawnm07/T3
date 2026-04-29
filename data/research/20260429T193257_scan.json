@@ -1,0 +1,222 @@
+{
+  "ts": "2026-04-29T19:32:57.728425+00:00",
+  "equity": 99223.00285633343,
+  "positions_count": 4,
+  "macro": {
+    "regime": "neutral",
+    "score": 0.235,
+    "spy_trend": 0.33,
+    "spy_vs_200ema": 0.069,
+    "vix_level": 28.03,
+    "vix_regime": "normal",
+    "breadth_pct_above_50": 0.673469387755102,
+    "notes": [
+      "spy_uptrend",
+      "vixy_ratio_0.95",
+      "breadth_67pct"
+    ]
+  },
+  "selector": {
+    "pool_size": 28,
+    "sources_breakdown": {
+      "held": 4,
+      "watchlist": 15,
+      "av_gainers": 15,
+      "av_losers": 15,
+      "av_most_active": 10,
+      "tv_breakout": 10,
+      "tv_squeeze": 5
+    },
+    "selected_positions": [
+      "MU",
+      "NVDA",
+      "DELL",
+      "V"
+    ],
+    "target_weights": {
+      "MU": 0.0471,
+      "NVDA": 0.0902,
+      "DELL": 0.0563,
+      "V": 0.1052
+    },
+    "spy_target_pct": 0.0,
+    "cash_target_pct": 0.7012,
+    "exhaustion_penalty_applied": [
+      "NOK",
+      "INTC",
+      "AKAN",
+      "KFRC",
+      "UNH",
+      "COCO"
+    ],
+    "new_candidates_selected": 1,
+    "allow_floor_breach": false
+  },
+  "exits": [],
+  "executions": [
+    {
+      "symbol": "DELL",
+      "side": "sell",
+      "delta_notional": 14270.22,
+      "current_notional": 19856.48,
+      "target_notional": 5586.26,
+      "tech_score": 0.756,
+      "unrealized_plpc": -0.0257,
+      "reason": "arbiter REDUCE -> 5.6% (from 20.0%): Reduce to risk-compliant size. strong AI infrastructure name with rising volume and consolidation near day high supports continuation.",
+      "one_sentence_reason": "Reduce to risk-compliant size. strong AI infrastructure name with rising volume and consolidation near day high supports continuation.",
+      "opportunity_score": 70.0,
+      "ai_action": "REDUCE",
+      "ai_confidence": 0.65,
+      "target_pct": 0.0563,
+      "target_qty": 27.0,
+      "ai_delta_qty": -69.0,
+      "ai_stop_loss": 188.75,
+      "ai_take_profit": 242.67,
+      "execution": {
+        "symbol": "DELL",
+        "status": "filled",
+        "order_id": "cad6ca5d-1cd5-4262-a563-163ace473f3b",
+        "message": "rebalance sell $14270 (arbiter REDUCE -> 5.6% (from 20.0%): Reduce to risk-compliant size. strong AI infrastructure name with rising volume and consolidation near day high supports continuation.) [filled]",
+        "filled_qty": 69.286366,
+        "filled_avg_price": 205.96,
+        "final_status": "filled",
+        "ok": true
+      }
+    },
+    {
+      "symbol": "MU",
+      "side": "sell",
+      "delta_notional": 23933.56,
+      "current_notional": 28606.97,
+      "target_notional": 4673.4,
+      "tech_score": 0.815,
+      "unrealized_plpc": -0.0125,
+      "reason": "arbiter REDUCE -> 4.7% (from 28.8%): Reduce to risk-compliant size. best-in-pool tech/sentiment scores with rising volume and consolidation pattern support continued upside.",
+      "one_sentence_reason": "Reduce to risk-compliant size. best-in-pool tech/sentiment scores with rising volume and consolidation pattern support continued upside.",
+      "opportunity_score": 82.0,
+      "ai_action": "REDUCE",
+      "ai_confidence": 0.72,
+      "target_pct": 0.0471,
+      "target_qty": 9.0,
+      "ai_delta_qty": -47.0,
+      "ai_stop_loss": 464.42,
+      "ai_take_profit": 627.91,
+      "execution": {
+        "symbol": "MU",
+        "status": "filled",
+        "order_id": "493f64c4-b874-4c67-9ac9-826689e1f05b",
+        "message": "rebalance sell $23934 (arbiter REDUCE -> 4.7% (from 28.8%): Reduce to risk-compliant size. best-in-pool tech/sentiment scores with rising volume and consolidation pattern support continued upside.) [filled]",
+        "filled_qty": 46.472932,
+        "filled_avg_price": 515.0,
+        "final_status": "filled",
+        "ok": true
+      }
+    },
+    {
+      "symbol": "NOK",
+      "side": "sell",
+      "delta_notional": 18558.16,
+      "current_notional": 18558.16,
+      "target_notional": 0.0,
+      "tech_score": 0.655,
+      "unrealized_plpc": 0.0611,
+      "reason": "arbiter EXIT -> 0.0% (from 18.7%): Up 6.21% intraday with falling volume and falling trend \u2014 exhaustion penalty applied, exit to free capital for better opportunities.",
+      "one_sentence_reason": "Up 6.21% intraday with falling volume and falling trend \u2014 exhaustion penalty applied, exit to free capital for better opportunities.",
+      "opportunity_score": 22.0,
+      "ai_action": "EXIT",
+      "ai_confidence": 0.9,
+      "target_pct": 0.0,
+      "target_qty": 0.0,
+      "ai_delta_qty": -1489.0,
+      "ai_stop_loss": null,
+      "ai_take_profit": null,
+      "full_exit_via_close_position": true,
+      "execution": {
+        "symbol": "NOK",
+        "status": "rejected",
+        "order_id": null,
+        "message": "{\"available\":\"1030.821428571\",\"code\":40310000,\"existing_qty\":\"1488.821428571\",\"held_for_orders\":\"458\",\"message\":\"insufficient qty available for order (requested: 1488.821428571, available: 1030.821428571)\",\"symbol\":\"NOK\"}",
+        "filled_qty": 0.0,
+        "filled_avg_price": null,
+        "final_status": "error",
+        "ok": false
+      }
+    },
+    {
+      "symbol": "V",
+      "side": "sell",
+      "delta_notional": 14953.08,
+      "current_notional": 25391.34,
+      "target_notional": 10438.26,
+      "tech_score": 0.376,
+      "unrealized_plpc": 0.0017,
+      "reason": "arbiter REDUCE -> 10.5% (from 25.6%): Reduce to risk-compliant size. retains role as financials diversifier with rising volume and 1.51% from day high suggesting modest remaining upside.",
+      "one_sentence_reason": "Reduce to risk-compliant size. retains role as financials diversifier with rising volume and 1.51% from day high suggesting modest remaining upside.",
+      "opportunity_score": 65.0,
+      "ai_action": "REDUCE",
+      "ai_confidence": 0.6,
+      "target_pct": 0.1052,
+      "target_qty": 31.0,
+      "ai_delta_qty": -45.0,
+      "ai_stop_loss": 321.29,
+      "ai_take_profit": 367.86,
+      "execution": {
+        "symbol": "V",
+        "status": "filled",
+        "order_id": "c6958e2c-7ffb-4c33-8624-0a9765753b0b",
+        "message": "rebalance sell $14953 (arbiter REDUCE -> 10.5% (from 25.6%): Reduce to risk-compliant size. retains role as financials diversifier with rising volume and 1.51% from day high suggesting modest remaining upside.) [filled]",
+        "filled_qty": 44.55493,
+        "filled_avg_price": 335.61,
+        "final_status": "filled",
+        "ok": true
+      }
+    },
+    {
+      "symbol": "NVDA",
+      "side": "buy",
+      "requested_delta_notional": 8949.91,
+      "selector_target_pct": 0.0902,
+      "reason": "Fresh anti-stagnation entry with strong sentiment and solid technicals.",
+      "is_new_entry": true,
+      "skipped": "late_session_no_new_entries",
+      "minutes_to_close": 27.2
+    }
+  ],
+  "cash_proxy": {
+    "symbol": "SPY",
+    "action": "hold",
+    "current_value": 0.0,
+    "target_value": 0.0,
+    "delta_usd": 0.0,
+    "ai_target_pct": 0.0
+  },
+  "verifier": {
+    "verifier_thesis": "Only one position is materially off-target: NVDA has a zero position against a 9.02% target weight, representing an $8,962.52 gap \u2014 well above the $496.81 tolerance. The bot apparently failed to execute the NVDA buy. DELL, MU, and V are all within tolerance (gaps of $7.82, -$184.06, and $21.02 respectively, all below the $496.81 threshold) and should be left alone. Cash is high (~60.3% of equity) but the arbiter's cash target is 70.12%, so after buying NVDA the cash will move closer to that target. The corrective action is a single buy of NVDA to close the gap.",
+    "tolerance_usd": 496.81,
+    "dust_closed": [
+      {
+        "symbol": "NOK",
+        "action": "force_close_failed",
+        "qty_before": 1488.821428571,
+        "error": "{\"available\":\"1030.821428571\",\"code\":40310000,\"existing_qty\":\"1488.821428571\",\"held_for_orders\":\"458\",\"message\":\"insufficient qty available for order (requested: 1488.821428571, available: 1030.821428571)\",\"symbol\":\"NOK\"}"
+      }
+    ],
+    "corrective_trades": [],
+    "rejected_proposals": [
+      {
+        "symbol": "NVDA",
+        "reason": "insufficient_confirmed_cash"
+      }
+    ],
+    "raw_proposals": [
+      {
+        "symbol": "NVDA",
+        "side": "buy",
+        "delta_usd": 8962.52,
+        "current_weight": 0.0,
+        "target_weight": 0.0902,
+        "rationale": "NVDA has no position but the arbiter targets 9.02% of equity (~$8,962.52). The gap far exceeds the $496.81 tolerance. Buy to establish the position as directed."
+      }
+    ]
+  }
+}

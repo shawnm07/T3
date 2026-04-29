@@ -1,0 +1,70 @@
+{
+  "date": "2026-04-29",
+  "equity": 93998.99936710448,
+  "cash": 4980.21,
+  "daily_return": -0.054,
+  "daily_vs_spy": -0.0539,
+  "period_return": 0,
+  "period_vs_spy": -0.0367,
+  "spy_daily": -0.0001,
+  "spy_30d": 0.0367,
+  "positions_count": 5,
+  "trades_today": 10,
+  "positions": [
+    {
+      "symbol": "DELL",
+      "side": "PositionSide.LONG",
+      "qty": 27.137076279,
+      "avg_entry": 211.3652,
+      "current_price": 205.855,
+      "pnl_pct": -0.0261,
+      "pnl_dollars": -149.53,
+      "market_value": 5586.3,
+      "price_source": "alpaca_stock_fallback"
+    },
+    {
+      "symbol": "MU",
+      "side": "PositionSide.LONG",
+      "qty": 9.537341256,
+      "avg_entry": 517.2321,
+      "current_price": 102.89,
+      "pnl_pct": -0.8011,
+      "pnl_dollars": -3951.72,
+      "market_value": 981.3,
+      "price_source": "alpaca_stock_fallback"
+    },
+    {
+      "symbol": "NOK",
+      "side": "PositionSide.LONG",
+      "qty": 1488.821428571,
+      "avg_entry": 11.7471,
+      "current_price": 12.535,
+      "pnl_pct": 0.0671,
+      "pnl_dollars": 1173.04,
+      "market_value": 18662.38,
+      "price_source": "alpaca_stock_fallback"
+    },
+    {
+      "symbol": "SPY",
+      "side": "PositionSide.LONG",
+      "qty": 77.330844196,
+      "avg_entry": 711.0579,
+      "current_price": 689.6,
+      "pnl_pct": -0.0302,
+      "pnl_dollars": -1659.36,
+      "market_value": 53327.35,
+      "price_source": "alpaca_stock_fallback"
+    },
+    {
+      "symbol": "V",
+      "side": "PositionSide.LONG",
+      "qty": 31.07980607,
+      "avg_entry": 335.1451,
+      "current_price": 336.6,
+      "pnl_pct": 0.0043,
+      "pnl_dollars": 45.22,
+      "market_value": 10461.46,
+      "price_source": "alpaca_stock_fallback"
+    }
+  ]
+}

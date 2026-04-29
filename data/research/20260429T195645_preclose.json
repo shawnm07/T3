@@ -1,0 +1,423 @@
+{
+  "ts": "2026-04-29T19:56:45.041846+00:00",
+  "equity": 99604.1145827536,
+  "positions_count": 4,
+  "market_bias": 0.082,
+  "weekend_session": false,
+  "session_gap_calendar_days": 1,
+  "hold_reports": [
+    {
+      "symbol": "DELL",
+      "overnight": {
+        "symbol": "DELL",
+        "score": 0.236,
+        "close_strength": 0.275,
+        "late_drift": -0.023,
+        "tech_bias": 0.755,
+        "sent_bias": 0.0,
+        "market_bias": 0.082,
+        "price": 206.23,
+        "notes": []
+      },
+      "directional_score": 0.236,
+      "decision": "hold",
+      "weekend_session": false
+    },
+    {
+      "symbol": "MU",
+      "overnight": {
+        "symbol": "MU",
+        "score": 0.096,
+        "close_strength": -0.455,
+        "late_drift": 0.093,
+        "tech_bias": 0.817,
+        "sent_bias": 0.25,
+        "market_bias": 0.082,
+        "price": 514.85,
+        "notes": []
+      },
+      "directional_score": 0.096,
+      "decision": "hold",
+      "weekend_session": false
+    },
+    {
+      "symbol": "NOK",
+      "overnight": {
+        "symbol": "NOK",
+        "score": 0.307,
+        "close_strength": 0.778,
+        "late_drift": -0.188,
+        "tech_bias": 0.656,
+        "sent_bias": -0.125,
+        "market_bias": 0.082,
+        "price": 12.46,
+        "notes": [
+          "closing_near_high"
+        ]
+      },
+      "directional_score": 0.307,
+      "decision": "hold",
+      "weekend_session": false
+    },
+    {
+      "symbol": "V",
+      "overnight": {
+        "symbol": "V",
+        "score": 0.318,
+        "close_strength": 0.374,
+        "late_drift": -0.113,
+        "tech_bias": 0.379,
+        "sent_bias": 1.0,
+        "market_bias": 0.082,
+        "price": 335.78,
+        "notes": []
+      },
+      "directional_score": 0.318,
+      "decision": "hold",
+      "weekend_session": false
+    }
+  ],
+  "exits": [],
+  "candidate_reports": [
+    {
+      "symbol": "MRVL",
+      "tech_score": 0.854,
+      "rsi": 73.0,
+      "overnight": {
+        "symbol": "MRVL",
+        "score": 0.421,
+        "close_strength": 0.473,
+        "late_drift": 0.402,
+        "tech_bias": 0.854,
+        "sent_bias": 0.0,
+        "market_bias": 0.082,
+        "price": 156.08,
+        "notes": []
+      }
+    },
+    {
+      "symbol": "SNDK",
+      "tech_score": 0.841,
+      "rsi": 68.3,
+      "overnight": {
+        "symbol": "SNDK",
+        "score": 0.18,
+        "close_strength": -0.148,
+        "late_drift": -0.107,
+        "tech_bias": 0.841,
+        "sent_bias": 0.5,
+        "market_bias": 0.082,
+        "price": 1071.14,
+        "notes": []
+      },
+      "skipped": "ov 0.18 < threshold 0.35"
+    },
+    {
+      "symbol": "WDC",
+      "tech_score": 0.84,
+      "rsi": 73.8,
+      "overnight": {
+        "symbol": "WDC",
+        "score": -0.166,
+        "close_strength": -0.852,
+        "late_drift": -0.423,
+        "tech_bias": 0.84,
+        "sent_bias": 0.125,
+        "market_bias": 0.082,
+        "price": 414.61,
+        "notes": [
+          "closing_near_low"
+        ]
+      },
+      "skipped": "ov -0.17 < threshold 0.35"
+    },
+    {
+      "symbol": "AMKR",
+      "tech_score": 0.83,
+      "rsi": 66.4,
+      "overnight": {
+        "symbol": "AMKR",
+        "score": 0.287,
+        "close_strength": 0.096,
+        "late_drift": -0.038,
+        "tech_bias": 0.83,
+        "sent_bias": 0.625,
+        "market_bias": 0.082,
+        "price": 71.01,
+        "notes": []
+      },
+      "skipped": "ov 0.29 < threshold 0.35"
+    },
+    {
+      "symbol": "MPWR",
+      "tech_score": 0.829,
+      "rsi": 66.3,
+      "overnight": {
+        "symbol": "MPWR",
+        "score": 0.164,
+        "close_strength": -0.182,
+        "late_drift": 0.178,
+        "tech_bias": 0.829,
+        "sent_bias": 0.0,
+        "market_bias": 0.082,
+        "price": 1526.58,
+        "notes": []
+      },
+      "skipped": "ov 0.16 < threshold 0.35"
+    },
+    {
+      "symbol": "SNX",
+      "tech_score": 0.829,
+      "rsi": 77.1,
+      "overnight": {
+        "symbol": "SNX",
+        "score": 0.264,
+        "close_strength": 0.13,
+        "late_drift": 0.204,
+        "tech_bias": 0.829,
+        "sent_bias": 0.0,
+        "market_bias": 0.082,
+        "price": 223.59,
+        "notes": []
+      },
+      "skipped": "ov 0.26 < threshold 0.35"
+    },
+    {
+      "symbol": "FLEX",
+      "tech_score": 0.826,
+      "rsi": 71.4,
+      "overnight": {
+        "symbol": "FLEX",
+        "score": 0.534,
+        "close_strength": 0.852,
+        "late_drift": 0.422,
+        "tech_bias": 0.826,
+        "sent_bias": 0.0,
+        "market_bias": 0.082,
+        "price": 90.15,
+        "notes": [
+          "closing_near_high"
+        ]
+      }
+    },
+    {
+      "symbol": "GFS",
+      "tech_score": 0.819,
+      "rsi": 75.8,
+      "overnight": {
+        "symbol": "GFS",
+        "score": 0.366,
+        "close_strength": 0.606,
+        "late_drift": 0.049,
+        "tech_bias": 0.819,
+        "sent_bias": 0.0,
+        "market_bias": 0.082,
+        "price": 62.95,
+        "notes": [
+          "closing_near_high"
+        ]
+      }
+    },
+    {
+      "symbol": "AVT",
+      "tech_score": 0.817,
+      "rsi": 79.3,
+      "overnight": {
+        "symbol": "AVT",
+        "score": 0.148,
+        "close_strength": -0.493,
+        "late_drift": 0.347,
+        "tech_bias": 0.817,
+        "sent_bias": 0.25,
+        "market_bias": 0.082,
+        "price": 80.28,
+        "notes": []
+      },
+      "skipped": "rsi 79.3 > 78.0"
+    },
+    {
+      "symbol": "ARW",
+      "tech_score": 0.807,
+      "rsi": 74.5,
+      "overnight": {
+        "symbol": "ARW",
+        "score": -0.146,
+        "close_strength": -0.866,
+        "late_drift": -0.222,
+        "tech_bias": 0.807,
+        "sent_bias": 0.0,
+        "market_bias": 0.082,
+        "price": 185.13,
+        "notes": [
+          "closing_near_low"
+        ]
+      },
+      "skipped": "ov -0.15 < threshold 0.35"
+    },
+    {
+      "symbol": "TXN",
+      "tech_score": 0.806,
+      "rsi": 73.8,
+      "overnight": {
+        "symbol": "TXN",
+        "score": 0.287,
+        "close_strength": 0.089,
+        "late_drift": 0.29,
+        "tech_bias": 0.806,
+        "sent_bias": 0.125,
+        "market_bias": 0.082,
+        "price": 269.83,
+        "notes": []
+      },
+      "skipped": "ov 0.29 < threshold 0.35"
+    },
+    {
+      "symbol": "RVMD",
+      "tech_score": 0.797,
+      "rsi": 62.2,
+      "overnight": {
+        "symbol": "RVMD",
+        "score": -0.037,
+        "close_strength": -0.674,
+        "late_drift": -0.01,
+        "tech_bias": 0.797,
+        "sent_bias": 0.0,
+        "market_bias": 0.082,
+        "price": 140.97,
+        "notes": [
+          "closing_near_low"
+        ]
+      },
+      "skipped": "ov -0.04 < threshold 0.35"
+    },
+    {
+      "symbol": "ALAB",
+      "tech_score": 0.796,
+      "rsi": 65.8,
+      "overnight": {
+        "symbol": "ALAB",
+        "score": 0.529,
+        "close_strength": 0.945,
+        "late_drift": 0.314,
+        "tech_bias": 0.796,
+        "sent_bias": 0.0,
+        "market_bias": 0.082,
+        "price": 195.72,
+        "notes": [
+          "closing_near_high"
+        ]
+      }
+    },
+    {
+      "symbol": "ONTO",
+      "tech_score": 0.791,
+      "rsi": 61.2,
+      "overnight": {
+        "symbol": "ONTO",
+        "score": 0.2,
+        "close_strength": -0.183,
+        "late_drift": 0.355,
+        "tech_bias": 0.791,
+        "sent_bias": 0.0,
+        "market_bias": 0.082,
+        "price": 282.61,
+        "notes": []
+      },
+      "skipped": "ov 0.20 < threshold 0.35"
+    },
+    {
+      "symbol": "INGM",
+      "tech_score": 0.786,
+      "rsi": 73.6,
+      "overnight": {
+        "symbol": "INGM",
+        "score": 0.34,
+        "close_strength": 0.397,
+        "late_drift": 0.221,
+        "tech_bias": 0.786,
+        "sent_bias": 0.0,
+        "market_bias": 0.082,
+        "price": 30.27,
+        "notes": []
+      },
+      "skipped": "ov 0.34 < threshold 0.35"
+    },
+    {
+      "symbol": "ALGM",
+      "tech_score": 0.782,
+      "rsi": 68.3,
+      "overnight": {
+        "symbol": "ALGM",
+        "score": 0.494,
+        "close_strength": 0.787,
+        "late_drift": 0.372,
+        "tech_bias": 0.782,
+        "sent_bias": 0.0,
+        "market_bias": 0.082,
+        "price": 44.06,
+        "notes": [
+          "closing_near_high"
+        ]
+      }
+    },
+    {
+      "symbol": "JBL",
+      "tech_score": 0.775,
+      "rsi": 69.0,
+      "overnight": {
+        "symbol": "JBL",
+        "score": 0.39,
+        "close_strength": 0.462,
+        "late_drift": 0.354,
+        "tech_bias": 0.775,
+        "sent_bias": 0.0,
+        "market_bias": 0.082,
+        "price": 332.96,
+        "notes": []
+      }
+    },
+    {
+      "symbol": "MCHP",
+      "tech_score": 0.773,
+      "rsi": 72.7,
+      "overnight": {
+        "symbol": "MCHP",
+        "score": 0.506,
+        "close_strength": 0.884,
+        "late_drift": 0.31,
+        "tech_bias": 0.773,
+        "sent_bias": 0.0,
+        "market_bias": 0.082,
+        "price": 90.45,
+        "notes": [
+          "closing_near_high"
+        ]
+      }
+    }
+  ],
+  "new_executions": [],
+  "cash_proxy": {
+    "action": "buy_proxy",
+    "symbol": "SPY",
+    "notional": 54986.71
+  },
+  "thresholds": {
+    "hold": 0.0,
+    "buy": 0.35,
+    "max_new": 3,
+    "size_mult": 0.5,
+    "weekend_session": false
+  },
+  "tally": {
+    "held": 4,
+    "scored": 4,
+    "hold": 4,
+    "close": 0,
+    "no_data": 0,
+    "earnings_close": 0,
+    "earnings_trim_50": 0,
+    "earnings_hold": 0,
+    "ai_vetoed_held": 0,
+    "veto_cap_trim": 0
+  }
+}

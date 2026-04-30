@@ -306,14 +306,16 @@ class TradingOrchestrator:
         return max(0.0, float(delta))
 
     def _is_late_session_no_new_entries(self) -> tuple[bool, float | None]:
-        """True if we are inside the late-session no-new-entries window.
+        """Legacy helper for optional late-session entry blocking.
 
+        Current config sets this cutoff to 0 because intraday scans may open
+        continuation-confirmed entries; preclose owns explicit overnight buys.
         Returns (is_late, minutes_to_close). If the broker clock is
         unavailable, defaults to False so the bot still trades — better to
         let the existing gates catch it than to halt all new entries blindly.
         """
         cutoff = float(self.cfg.get(
-            "scheduling", "late_session_no_new_entries_minutes", default=30,
+            "scheduling", "late_session_no_new_entries_minutes", default=0,
         ))
         if cutoff <= 0:
             return (False, None)
@@ -619,15 +621,22 @@ class TradingOrchestrator:
         symbols = [p.symbol for p in holdings]
         if not symbols:
             return {"positions": positions, "holdings": [], "tech_map": {},
-                    "sent_map": {}, "numeric": {}, "earnings_map": {}, "news": []}
+                    "sent_map": {}, "numeric": {}, "earnings_map": {}, "news": [],
+                    "intraday_bars": None}
         try:
             bars = self.client.get_stock_bars(symbols, lookback_days=252)
         except Exception as e:
             log.warning("Portfolio signals bars fetch failed: %s", e)
             return {"positions": positions, "holdings": holdings, "tech_map": {},
-                    "sent_map": {}, "numeric": {}, "earnings_map": {}, "news": []}
+                    "sent_map": {}, "numeric": {}, "earnings_map": {}, "news": [],
+                    "intraday_bars": None}
         tech_map = technicals_for_bars_df(bars)
         news = self.client.get_news(symbols=symbols, limit=80, days_back=3)
+        intraday_bars = None
+        try:
+            intraday_bars = self._fetch_intraday(symbols, minutes=5)
+        except Exception as e:
+            log.info("Portfolio signals intraday fetch failed: %s", e)
         sent_map: dict[str, Any] = {}
         numeric: dict[str, TradeDecision] = {}
         earnings_map: dict[str, EarningsInfo] = {}
@@ -670,7 +679,7 @@ class TradingOrchestrator:
             )
         return {"positions": positions, "holdings": holdings, "tech_map": tech_map,
                 "sent_map": sent_map, "numeric": numeric, "news": news,
-                "earnings_map": earnings_map}
+                "earnings_map": earnings_map, "intraday_bars": intraday_bars}
 
     def _enrich_selector_candidates(
         self,
@@ -870,6 +879,7 @@ class TradingOrchestrator:
         sent_map = portfolio.get("sent_map", {})
         earnings_map = portfolio.get("earnings_map", {})
         numeric = portfolio.get("numeric", {})
+        intraday_bars = portfolio.get("intraday_bars")
         if not holdings or not tech_map:
             return closes
 
@@ -883,6 +893,18 @@ class TradingOrchestrator:
 
         stall_thr = float(self.cfg.get("risk", "exit_stall_threshold", default=0.10))
         min_exit_conf = float(self.cfg.get("exit_arbiter", "min_confidence", default=0.55))
+        daily_bars = None
+        held_syms = [p.symbol for p in holdings if "/" not in p.symbol]
+        if intraday_bars is None and held_syms:
+            try:
+                intraday_bars = self._fetch_intraday(held_syms, minutes=5)
+            except Exception as e:
+                log.info("evaluate_exits: intraday fetch failed: %s", e)
+        if held_syms:
+            try:
+                daily_bars = self.client.get_stock_bars(held_syms, lookback_days=30)
+            except Exception:
+                daily_bars = None
 
         if scan_type == "FIRST":
             log.info(
@@ -913,6 +935,8 @@ class TradingOrchestrator:
             flipped = tech.score < -0.3
             bad_news = sent_score < -0.5
             stalled = tech.score < stall_thr
+            intraday_chart = self._intraday_chart_for(intraday_bars, p.symbol, daily_bars)
+            momentum_exit = self._momentum_exit_signal(intraday_chart)
 
             einfo = earnings_map.get(p.symbol) if self.earnings_enabled else None
             in_earnings_window = bool(einfo and within_window(einfo, self.earnings_trim_days))
@@ -965,7 +989,7 @@ class TradingOrchestrator:
                 continue
 
             # If no candidate exit signal, don't burn an Opus call.
-            if not (flipped or bad_news or stalled):
+            if not (flipped or bad_news or stalled or momentum_exit.get("triggered")):
                 continue
 
             num_dec = numeric.get(p.symbol)
@@ -978,6 +1002,7 @@ class TradingOrchestrator:
                 "current_price": float(tech.price) if tech.price is not None else None,
                 "atr": float(tech.atr) if tech.atr is not None else None,
                 "technical": tech.to_dict(),
+                "intraday_chart": intraday_chart,
                 "sentiment": sent.to_dict() if sent else None,
                 "macro": macro.to_dict(),
                 "numeric_decision": (num_dec.to_dict() if num_dec else None),
@@ -985,6 +1010,8 @@ class TradingOrchestrator:
                     "technical_flipped": flipped,
                     "bad_news": bad_news,
                     "momentum_stalled": stalled,
+                    "intraday_momentum_lost": bool(momentum_exit.get("triggered")),
+                    "intraday_momentum_reasons": momentum_exit.get("reasons", []),
                     "stall_threshold": stall_thr,
                 },
                 "risk_constraints": {
@@ -1234,13 +1261,18 @@ class TradingOrchestrator:
             return None
 
     @staticmethod
-    def _intraday_chart_for(intraday_df, symbol: str) -> dict[str, Any] | None:
+    def _intraday_chart_for(
+        intraday_df,
+        symbol: str,
+        daily_df=None,
+    ) -> dict[str, Any] | None:
         """Build the full intraday chart structure expected by the portfolio
         arbiter. Returns a dict containing:
 
           current_price, open, day_high, day_low, vwap,
           distance_from_high_pct, distance_from_low_pct, intraday_change_pct,
-          recent_trend (rising|falling|flat), volume_trend (rising|falling|flat),
+          gap_from_prior_close_pct, price_vs_vwap_pct, 5-minute EMA state,
+          recent_slope_pct, volume_trend (rising|fading|flat),
           classification (near_high|near_low|breaking_out|fading|consolidating|recovering)
 
         Returns None when bars are unavailable.
@@ -1266,6 +1298,7 @@ class TradingOrchestrator:
                 pass
             if slc.empty:
                 return None
+            slc = slc.sort_index()
 
             opens = slc["open"]
             highs = slc["high"] if "high" in slc.columns else slc["close"]
@@ -1277,6 +1310,7 @@ class TradingOrchestrator:
             cur = float(closes.iloc[-1])
             day_high = float(highs.max())
             day_low = float(lows.min())
+            session_volume = float(volumes.sum()) if volumes is not None else 0.0
 
             # VWAP across the session bars (typical price * volume / volume)
             vwap_val: float | None = None
@@ -1290,6 +1324,50 @@ class TradingOrchestrator:
             dist_from_high = (cur - day_high) / day_high if day_high > 0 else None
             dist_from_low = (cur - day_low) / day_low if day_low > 0 else None
             intraday_chg = (cur - opn) / opn if opn > 0 else None
+            price_vs_vwap = (cur - vwap_val) / vwap_val if vwap_val and vwap_val > 0 else None
+
+            # Daily context: previous close for gap-vs-continuation and rough
+            # relative volume. If daily bars include today's row, use the prior
+            # row; otherwise use the latest available close.
+            prior_close: float | None = None
+            twenty_day_volume_ratio: float | None = None
+            try:
+                if daily_df is not None:
+                    if "symbol" in daily_df.index.names:
+                        daily_slc = daily_df.xs(symbol, level="symbol")
+                    else:
+                        daily_slc = daily_df
+                    daily_slc = daily_slc.sort_index()
+                    if not daily_slc.empty:
+                        last_daily_ts = daily_slc.index[-1]
+                        last_daily_date = (
+                            last_daily_ts.date()
+                            if hasattr(last_daily_ts, "date") else None
+                        )
+                        intraday_date = (
+                            slc.index[-1].date()
+                            if hasattr(slc.index[-1], "date") else None
+                        )
+                        prior_idx = -2 if (
+                            intraday_date is not None
+                            and last_daily_date == intraday_date
+                            and len(daily_slc) >= 2
+                        ) else -1
+                        prior_close = float(daily_slc["close"].iloc[prior_idx])
+                        if "volume" in daily_slc.columns and len(daily_slc) >= 5:
+                            hist_vol = daily_slc["volume"].iloc[-21:-1]
+                            if hist_vol.empty:
+                                hist_vol = daily_slc["volume"].iloc[:-1]
+                            avg_vol = float(hist_vol.tail(20).mean()) if not hist_vol.empty else 0.0
+                            if avg_vol > 0 and session_volume > 0:
+                                twenty_day_volume_ratio = session_volume / avg_vol
+            except Exception:
+                prior_close = None
+                twenty_day_volume_ratio = None
+            gap_from_prior = (
+                (opn - prior_close) / prior_close
+                if prior_close and prior_close > 0 else None
+            )
 
             # Recent trend: slope of the last ~6 bars' close
             def _slope(series) -> float:
@@ -1314,6 +1392,7 @@ class TradingOrchestrator:
 
             # Volume trend: recent 6-bar mean vs prior 6-bar mean
             volume_trend = "flat"
+            volume_ratio_recent_to_prior: float | None = None
             try:
                 if volumes is not None and len(volumes) >= 4:
                     half = max(3, min(6, len(volumes) // 2))
@@ -1321,12 +1400,38 @@ class TradingOrchestrator:
                     prior_v = float(volumes.iloc[-2 * half : -half].mean()) if len(volumes) >= 2 * half else float(volumes.iloc[:-half].mean() if len(volumes) > half else recent_v)
                     if prior_v > 0:
                         ratio = recent_v / prior_v
+                        volume_ratio_recent_to_prior = ratio
                         if ratio >= 1.10:
                             volume_trend = "rising"
                         elif ratio <= 0.90:
-                            volume_trend = "falling"
+                            volume_trend = "fading"
             except Exception:
                 volume_trend = "flat"
+
+            # 5-minute EMA state from the same intraday bars.
+            ema5 = None
+            ema20 = None
+            ema_state = "unknown"
+            price_vs_ema20 = None
+            ema20_slope = None
+            try:
+                ema5_series = closes.ewm(span=5, adjust=False).mean()
+                ema20_series = closes.ewm(span=20, adjust=False).mean()
+                ema5 = float(ema5_series.iloc[-1])
+                ema20 = float(ema20_series.iloc[-1])
+                price_vs_ema20 = (cur - ema20) / ema20 if ema20 > 0 else None
+                if len(ema20_series) >= 6 and float(ema20_series.iloc[-6]) != 0:
+                    ema20_slope = (ema20 / float(ema20_series.iloc[-6])) - 1.0
+                if cur >= ema20 and ema5 >= ema20:
+                    ema_state = "bullish"
+                elif cur < ema20 and ema5 < ema20:
+                    ema_state = "bearish"
+                elif cur >= ema20:
+                    ema_state = "price_above_ema20"
+                else:
+                    ema_state = "price_below_ema20"
+            except Exception:
+                ema_state = "unknown"
 
             # Classification
             near_high = dist_from_high is not None and dist_from_high >= -0.005
@@ -1344,21 +1449,234 @@ class TradingOrchestrator:
             else:
                 classification = "consolidating"
 
+            gap_only_risk = False
+            if gap_from_prior is not None and intraday_chg is not None:
+                gap_only_risk = (
+                    gap_from_prior >= 0.01
+                    and abs(intraday_chg) <= 0.003
+                    and recent_trend in ("flat", "falling")
+                    and volume_trend != "rising"
+                )
+
             return {
                 "current_price": round(cur, 4),
                 "open": round(opn, 4),
                 "day_high": round(day_high, 4),
                 "day_low": round(day_low, 4),
                 "vwap": round(vwap_val, 4) if vwap_val is not None else None,
+                "prior_close": round(prior_close, 4) if prior_close is not None else None,
+                "gap_from_prior_close_pct": round(gap_from_prior, 4) if gap_from_prior is not None else None,
+                "price_vs_vwap_pct": round(price_vs_vwap, 4) if price_vs_vwap is not None else None,
                 "distance_from_high_pct": round(dist_from_high, 4) if dist_from_high is not None else None,
                 "distance_from_low_pct": round(dist_from_low, 4) if dist_from_low is not None else None,
                 "intraday_change_pct": round(intraday_chg, 4) if intraday_chg is not None else None,
                 "recent_trend": recent_trend,
+                "recent_slope_pct": round(slope, 4),
                 "volume_trend": volume_trend,
+                "volume_ratio_recent_to_prior": (
+                    round(volume_ratio_recent_to_prior, 3)
+                    if volume_ratio_recent_to_prior is not None else None
+                ),
+                "twenty_day_volume_ratio": (
+                    round(twenty_day_volume_ratio, 3)
+                    if twenty_day_volume_ratio is not None else None
+                ),
+                "ema5": round(ema5, 4) if ema5 is not None else None,
+                "ema20": round(ema20, 4) if ema20 is not None else None,
+                "ema_state": ema_state,
+                "price_vs_ema20_pct": round(price_vs_ema20, 4) if price_vs_ema20 is not None else None,
+                "ema20_slope_pct": round(ema20_slope, 4) if ema20_slope is not None else None,
                 "classification": classification,
+                "gap_only_risk": bool(gap_only_risk),
+                "session_volume": int(session_volume),
+                "session_bar_count": int(len(slc)),
             }
         except Exception:
             return None
+
+    def _momentum_profile(self, chart: dict[str, Any] | None) -> dict[str, Any]:
+        """Score live continuation vs gap-only/stale tape risk.
+
+        This is not a standalone trade decision. It is structured context for
+        the selector plus an execution gate for brand-new entries.
+        """
+        if not chart:
+            return {
+                "score": 0,
+                "grade": "missing_intraday",
+                "passes_new_entry_gate": False,
+                "gap_only_risk": False,
+                "reasons": ["missing_intraday_chart"],
+            }
+
+        score = 50.0
+        reasons: list[str] = []
+
+        price_vs_vwap = chart.get("price_vs_vwap_pct")
+        if price_vs_vwap is not None:
+            if float(price_vs_vwap) >= 0.001:
+                score += 12
+                reasons.append("above_vwap")
+            elif float(price_vs_vwap) <= -0.001:
+                score -= 18
+                reasons.append("below_vwap")
+
+        ema_state = str(chart.get("ema_state") or "")
+        if ema_state == "bullish":
+            score += 14
+            reasons.append("ema5_above_ema20")
+        elif ema_state in ("bearish", "price_below_ema20"):
+            score -= 16
+            reasons.append("below_5min_ema20")
+
+        recent_trend = str(chart.get("recent_trend") or "")
+        if recent_trend == "rising":
+            score += 15
+            reasons.append("recent_trend_rising")
+        elif recent_trend == "falling":
+            score -= 20
+            reasons.append("recent_trend_falling")
+        else:
+            score -= 5
+            reasons.append("recent_trend_flat")
+
+        volume_trend = str(chart.get("volume_trend") or "")
+        if volume_trend == "rising":
+            score += 12
+            reasons.append("volume_rising")
+        elif volume_trend == "fading":
+            score -= 12
+            reasons.append("volume_fading")
+
+        classification = str(chart.get("classification") or "")
+        if classification == "breaking_out":
+            score += 12
+            reasons.append("breaking_out")
+        elif classification == "fading":
+            score -= 15
+            reasons.append("fading_from_intraday_high")
+
+        dist_high = chart.get("distance_from_high_pct")
+        if dist_high is not None:
+            dh = float(dist_high)
+            if dh >= -0.006 and recent_trend == "rising":
+                score += 6
+                reasons.append("pressing_day_high")
+            elif dh <= -0.02:
+                score -= 8
+                reasons.append("well_off_day_high")
+
+        if chart.get("gap_only_risk"):
+            score -= 28
+            reasons.append("gap_only_no_continuation")
+
+        intraday_change = chart.get("intraday_change_pct")
+        if intraday_change is not None and float(intraday_change) > 0.05:
+            if recent_trend != "rising" or volume_trend != "rising":
+                score -= 15
+                reasons.append("large_move_without_fresh_push")
+
+        score = max(0.0, min(100.0, score))
+        min_score = float(self.cfg.get(
+            "selector", "continuation_gate", "min_score", default=55,
+        ))
+        allow_missing = bool(self.cfg.get(
+            "selector", "continuation_gate", "allow_missing_intraday", default=False,
+        ))
+        passes = bool(
+            score >= min_score
+            and not chart.get("gap_only_risk")
+            and (chart is not None or allow_missing)
+        )
+        if score >= 75:
+            grade = "strong_continuation"
+        elif score >= min_score:
+            grade = "acceptable_continuation"
+        elif chart.get("gap_only_risk"):
+            grade = "gap_only"
+        elif recent_trend == "falling" or classification == "fading":
+            grade = "fading"
+        else:
+            grade = "weak_or_flat"
+
+        return {
+            "score": round(score, 1),
+            "grade": grade,
+            "passes_new_entry_gate": passes,
+            "gap_only_risk": bool(chart.get("gap_only_risk")),
+            "min_score": min_score,
+            "reasons": reasons,
+        }
+
+    def _new_entry_momentum_gate(
+        self,
+        sym: str,
+        pool_meta: dict[str, dict[str, Any]],
+    ) -> dict[str, Any] | None:
+        """Return a block dict when a fresh selector entry lacks live momentum."""
+        if not bool(self.cfg.get("selector", "continuation_gate", "enabled", default=True)):
+            return None
+        profile = (pool_meta.get(sym) or {}).get("momentum_profile") or {}
+        if profile.get("passes_new_entry_gate"):
+            return None
+        return {
+            "symbol": sym,
+            "reason": "failed_continuation_gate",
+            "momentum_profile": profile,
+        }
+
+    def _momentum_exit_signal(self, chart: dict[str, Any] | None) -> dict[str, Any]:
+        """Describe whether a held position's intraday momentum has ended."""
+        if not chart:
+            return {"triggered": False, "reasons": ["missing_intraday_chart"]}
+        reasons: list[str] = []
+        price_vs_vwap = chart.get("price_vs_vwap_pct")
+        price_vs_ema20 = chart.get("price_vs_ema20_pct")
+        recent_trend = str(chart.get("recent_trend") or "")
+        volume_trend = str(chart.get("volume_trend") or "")
+        classification = str(chart.get("classification") or "")
+        dist_high = chart.get("distance_from_high_pct")
+
+        if price_vs_vwap is not None and float(price_vs_vwap) < -0.001:
+            reasons.append("lost_vwap")
+        if price_vs_ema20 is not None and float(price_vs_ema20) < -0.001:
+            reasons.append("lost_5min_ema20")
+        if recent_trend == "falling" and volume_trend in ("fading", "flat"):
+            reasons.append("trend_falling_without_volume_support")
+        if classification == "fading":
+            reasons.append("classified_fading")
+        if dist_high is not None and float(dist_high) <= -0.015 and recent_trend != "rising":
+            reasons.append("pulled_back_from_day_high")
+
+        hard_loss = "lost_vwap" in reasons and "lost_5min_ema20" in reasons
+        exhaustion = (
+            "trend_falling_without_volume_support" in reasons
+            or "classified_fading" in reasons
+        )
+        return {
+            "triggered": bool(hard_loss or exhaustion),
+            "reasons": reasons,
+            "chart": chart,
+        }
+
+    def _scan_time_context(self) -> dict[str, Any]:
+        mtc = self._minutes_to_close()
+        if mtc is None:
+            phase = "unknown"
+        elif mtc > 240:
+            phase = "early"
+        elif mtc > 90:
+            phase = "midday"
+        elif mtc > 20:
+            phase = "late_intraday"
+        else:
+            phase = "preclose"
+        return {
+            "minutes_to_close": round(mtc, 1) if mtc is not None else None,
+            "phase": phase,
+            "intraday_new_entries_allowed": True,
+            "preclose_overnight_task_handles_overnight_buys": True,
+        }
 
     def _build_arbiter_context(
         self,
@@ -1407,10 +1725,10 @@ class TradingOrchestrator:
         except Exception as e:
             log.info("Arbiter context: intraday fetch failed (%s) — proceeding without it", e)
 
-        # --- Daily SPY bars for 5-day perf ---
-        spy_daily = None
+        # --- Daily bars for prior-close gaps, 5-day perf, and volume context ---
+        daily_bars = None
         try:
-            spy_daily = self.client.get_stock_bars(["SPY"], lookback_days=20)
+            daily_bars = self.client.get_stock_bars(intraday_syms, lookback_days=30)
         except Exception:
             pass
 
@@ -1426,8 +1744,8 @@ class TradingOrchestrator:
                     except Exception:
                         spy_qty = 0.0
                     break
-        spy_chart = self._intraday_chart_for(intraday_bars, "SPY")
-        spy_5d_chg = self._five_day_change_pct(spy_daily, "SPY")
+        spy_chart = self._intraday_chart_for(intraday_bars, "SPY", daily_bars)
+        spy_5d_chg = self._five_day_change_pct(daily_bars, "SPY")
         spy_current_price = (spy_chart or {}).get("current_price")
         if spy_current_price is None:
             try:
@@ -1477,7 +1795,8 @@ class TradingOrchestrator:
             unreal_plpc = float(getattr(p, "unrealized_plpc", 0) or 0)
             sector = sectors.get(sym, "unknown")
             sector_exposure_usd[sector] = sector_exposure_usd.get(sector, 0.0) + mv
-            chart = self._intraday_chart_for(intraday_bars, sym)
+            chart = self._intraday_chart_for(intraday_bars, sym, daily_bars)
+            momentum_profile = self._momentum_profile(chart)
             pos_ctx.append({
                 "symbol": sym,
                 "side": "long",
@@ -1498,6 +1817,7 @@ class TradingOrchestrator:
                 "numeric_combined_score": round(float(num.combined_score), 3) if num else None,
                 "numeric_action": num.action if num else None,
                 "intraday_chart": chart,
+                "momentum_profile": momentum_profile,
                 "earnings_days_until": (einfo.days_until if einfo else None),
                 "earnings_next_date": (einfo.next_date if einfo else None),
             })
@@ -1589,6 +1909,7 @@ class TradingOrchestrator:
             "trading_rules": trading_rules,
             "execution_constraints": execution_constraints,
             "system_state": system_state,
+            "time_context": self._scan_time_context(),
             "macro": macro.to_dict(),
             "spy_block": spy_block,
             "positions": pos_ctx,
@@ -1700,7 +2021,8 @@ class TradingOrchestrator:
                     symbol=action.symbol,
                     qty=delta_qty,
                     entry_price=float(entry_ref),
-                    take_profit=None,
+                    stop_loss=action.ai_stop_loss,
+                    take_profit=action.ai_take_profit,
                     reason=action.reason,
                     ai_audit=ai_audit,
                 )
@@ -2356,10 +2678,12 @@ class TradingOrchestrator:
                         symbol=sym,
                         qty=delta_qty,
                         entry_price=float(entry_ref),
-                        take_profit=None,
+                        stop_loss=opus_info.get("stop_loss"),
+                        take_profit=opus_info.get("take_profit"),
                         reason=f"verifier reconcile to Opus target {row['target_weight']*100:.1f}% "
                                f"(gap was ${row['gap_usd']:+.0f})",
-                        ai_audit={"source": "portfolio_verifier", "proposal": prop, "row": row},
+                        ai_audit={"source": "portfolio_verifier", "proposal": prop,
+                                  "row": row, "per_symbol": opus_info},
                     )
                 else:
                     exec_res = self.executor.execute_ai_qty_delta(
@@ -2495,6 +2819,84 @@ class TradingOrchestrator:
         )
         return candidates, breakdown
 
+    def _stage_new_entry_targets(
+        self,
+        result: dict[str, Any],
+        held_symbols: set[str],
+        equity: float,
+    ) -> tuple[dict[str, float], dict[str, dict[str, Any]], float, list[dict[str, Any]]]:
+        """Apply the configured starter fraction to brand-new selector entries.
+
+        The selector can still rank and size against the desired final book, but
+        the first fill starts at ~70% of that target. The remaining target is
+        treated as cash for this scan so the verifier does not immediately buy
+        the other 30% back in the same cycle.
+        """
+        target_weights = {
+            str(s): float(w or 0.0)
+            for s, w in (result.get("target_weights") or {}).items()
+        }
+        per_symbol = {
+            str(s): dict(info or {})
+            for s, info in (result.get("per_symbol") or {}).items()
+        }
+        cash_target_pct = float(result.get("cash_target_pct", 0) or 0)
+        fraction = float(self.cfg.get(
+            "selector", "new_entry_initial_fraction", default=0.70,
+        ) or 0.70)
+        fraction = max(0.05, min(1.0, fraction))
+        if fraction >= 0.999:
+            return target_weights, per_symbol, cash_target_pct, []
+
+        adjustments: list[dict[str, Any]] = []
+        selected = set(str(s) for s in (result.get("selected_positions") or []))
+        for sym in sorted(selected - held_symbols):
+            if "/" in sym:
+                continue
+            original_w = float(target_weights.get(sym, 0.0) or 0.0)
+            if original_w <= 0:
+                continue
+            staged_w = round(original_w * fraction, 4)
+            if staged_w <= 0:
+                continue
+            freed_w = max(0.0, original_w - staged_w)
+            info = dict(per_symbol.get(sym) or {})
+            try:
+                entry = float(info.get("entry_price", 0) or 0)
+                original_qty = float(info.get("qty", 0) or 0)
+            except (TypeError, ValueError):
+                entry = 0.0
+                original_qty = 0.0
+            staged_qty = original_qty
+            if entry > 0:
+                staged_qty = min(original_qty, (staged_w * equity) / entry)
+                staged_qty = round(max(0.0, staged_qty), 4)
+            info["target_pct"] = staged_w
+            info["qty"] = staged_qty
+            info["delta_qty"] = staged_qty
+            info["_staged_entry"] = True
+            info["_original_target_pct"] = round(original_w, 4)
+            info["_staged_fraction"] = fraction
+            reason = str(info.get("one_sentence_reason") or "")
+            if reason and "starter" not in reason.lower():
+                info["one_sentence_reason"] = (
+                    f"{reason} Starter entry is staged at {fraction:.0%} of target pending continuation."
+                )
+            target_weights[sym] = staged_w
+            per_symbol[sym] = info
+            cash_target_pct = round(cash_target_pct + freed_w, 4)
+            adjustments.append({
+                "symbol": sym,
+                "original_target_pct": round(original_w, 4),
+                "staged_target_pct": staged_w,
+                "staged_fraction": fraction,
+                "cash_target_added_pct": round(freed_w, 4),
+                "original_qty": original_qty,
+                "staged_qty": staged_qty,
+            })
+
+        return target_weights, per_symbol, cash_target_pct, adjustments
+
     def _build_selector_context(
         self,
         candidates: list[Candidate],
@@ -2546,10 +2948,14 @@ class TradingOrchestrator:
             "You are the SOLE authority on which 3-6 positions the bot holds.",
             "Optimize for REMAINING upside between NOW and the NEXT SCAN.",
             "currently_held flag carries ZERO weight. P&L is sunk and irrelevant.",
+            "Fresh BUYs require live continuation; gap-only, flat-after-open names should PASS.",
+            "Use momentum_profile, VWAP, 5-minute EMA state, recent slope, and volume trend.",
             "Apply exhaustion penalty to symbols near day high with fading volume.",
             "Force rotation: held symbols not in selected_positions MUST EXIT.",
             "When any new candidate is within 5 score points of your weakest "
             "selected, you MUST include at least one new candidate.",
+            f"New entries should start near {float(self.cfg.get('selector', 'new_entry_initial_fraction', default=0.70) or 0.70):.0%} "
+            "of the desired final target and scale on later scans if continuation persists.",
             "Score-weighted sizing: weight ∝ opportunity_score, not equal-weight.",
             "Sector caps and per-position caps are HARD constraints.",
             (
@@ -2572,6 +2978,7 @@ class TradingOrchestrator:
         # Mark whether floor-breach (0-2 positions allowed) is active this scan.
         ss = base.setdefault("system_state", {})
         ss["allow_floor_breach"] = bool(allow_floor_breach)
+        ss["intraday_new_entries_allowed"] = True
 
         # Build unified candidate_pool. Held positions get full block (qty,
         # weight, pnl); new candidates get zeros for those fields plus discovery
@@ -2583,11 +2990,29 @@ class TradingOrchestrator:
         unified_pool: list[dict[str, Any]] = []
         sector_to_theme = sector_guard._build_sector_to_theme(self.cfg)
         symbol_overrides = sector_guard._symbol_overrides(self.cfg)
+        all_pool_symbols = sorted({
+            c.symbol for c in candidates
+            if c.symbol and "/" not in c.symbol and not self._is_cash_proxy(c.symbol)
+        } | {"SPY"})
+        selector_intraday = portfolio.get("intraday_bars")
+        selector_daily = None
+        try:
+            selector_intraday = self._fetch_intraday(all_pool_symbols, minutes=5)
+        except Exception as e:
+            log.info("[selector] full-pool intraday fetch failed: %s", e)
+        try:
+            selector_daily = self.client.get_stock_bars(all_pool_symbols, lookback_days=30)
+        except Exception as e:
+            log.info("[selector] full-pool daily context fetch failed: %s", e)
 
         for cand in candidates:
             sym = cand.symbol
             currently_held = bool(cand.is_held)
             block: dict[str, Any] = held_blocks_by_sym.get(sym, {}).copy()
+            chart = self._intraday_chart_for(selector_intraday, sym, selector_daily)
+            momentum_profile = self._momentum_profile(chart)
+            five_day_change = self._five_day_change_pct(selector_daily, sym)
+            chart_price = (chart or {}).get("current_price")
             if not block:
                 # Build a minimal block for non-held candidates.
                 tech = tech_map.get(sym)
@@ -2599,7 +3024,7 @@ class TradingOrchestrator:
                     "side": "long",  # default — selector decides direction via action
                     "qty": 0.0,
                     "avg_entry_price": 0.0,
-                    "current_price": round(float(cand.price or 0), 4),
+                    "current_price": round(float(chart_price or cand.price or getattr(tech, "price", 0) or 0), 4),
                     "market_value_usd": 0.0,
                     "abs_market_value_usd": 0.0,
                     "current_weight_pct": 0.0,
@@ -2613,10 +3038,16 @@ class TradingOrchestrator:
                     "numeric_confidence": (round(float(num.confidence), 3) if num else None),
                     "numeric_combined_score": (round(float(num.combined_score), 3) if num else None),
                     "numeric_action": (num.action if num else None),
-                    "intraday_chart": None,
+                    "intraday_chart": chart,
+                    "momentum_profile": momentum_profile,
                     "earnings_days_until": (einfo.days_until if einfo else None),
                     "earnings_next_date": (einfo.next_date if einfo else None),
                 }
+            else:
+                block["intraday_chart"] = chart
+                block["momentum_profile"] = momentum_profile
+                if chart_price:
+                    block["current_price"] = round(float(chart_price), 4)
             block["currently_held"] = currently_held
             try:
                 current_qty = float(block.get("qty", 0) or 0) if currently_held else 0.0
@@ -2624,7 +3055,34 @@ class TradingOrchestrator:
                 current_qty = 0.0
             block["current_qty"] = current_qty
             block["discovery_sources"] = list(cand.sources)
-            block["intraday_change_pct"] = round(float(cand.change_pct or 0.0), 4)
+            block["intraday_change_pct"] = (
+                (chart or {}).get("intraday_change_pct")
+                if chart and (chart or {}).get("intraday_change_pct") is not None
+                else round(float(cand.change_pct or 0.0), 4)
+            )
+            block["gap_from_prior_close_pct"] = (
+                (chart or {}).get("gap_from_prior_close_pct") if chart else None
+            )
+            block["price_vs_vwap_pct"] = (
+                (chart or {}).get("price_vs_vwap_pct") if chart else None
+            )
+            block["ema_state"] = (chart or {}).get("ema_state") if chart else None
+            block["distance_from_high_pct"] = (
+                (chart or {}).get("distance_from_high_pct") if chart else None
+            )
+            block["distance_from_low_pct"] = (
+                (chart or {}).get("distance_from_low_pct") if chart else None
+            )
+            block["recent_trend"] = (chart or {}).get("recent_trend") if chart else None
+            block["recent_slope_pct"] = (chart or {}).get("recent_slope_pct") if chart else None
+            block["volume_trend"] = (chart or {}).get("volume_trend") if chart else None
+            block["classification"] = (chart or {}).get("classification") if chart else None
+            block["five_day_change_pct"] = (
+                round(five_day_change, 4) if five_day_change is not None else None
+            )
+            block["twenty_day_volume_ratio"] = (
+                (chart or {}).get("twenty_day_volume_ratio") if chart else None
+            )
             theme = sector_guard.theme_bucket_for(
                 cand.sector or "", sector_to_theme, sym, symbol_overrides
             )
@@ -2635,6 +3093,8 @@ class TradingOrchestrator:
                 "sector": cand.sector or "Other",
                 "theme_bucket": theme,
                 "current_qty": current_qty,
+                "momentum_profile": momentum_profile,
+                "intraday_chart": chart,
             }
 
         base["candidate_pool"] = unified_pool
@@ -2861,18 +3321,25 @@ class TradingOrchestrator:
         })
 
         # 7. Translate to rebalance plan + execute
-        target_weights = result.get("target_weights") or {}
-        per_symbol = result.get("per_symbol") or {}
+        original_target_weights = result.get("target_weights") or {}
         spy_target_pct = float(result.get("spy_target_pct", 0) or 0)
-        cash_target_pct = float(result.get("cash_target_pct", 0) or 0)
+        held_syms_set = {p.symbol for p in portfolio.get("holdings", [])}
+        target_weights, per_symbol, cash_target_pct, staging_adjustments = (
+            self._stage_new_entry_targets(result, held_syms_set, equity)
+        )
+        if staging_adjustments:
+            result["execution_target_weights"] = target_weights
+            result["execution_per_symbol"] = per_symbol
+            result["execution_cash_target_pct"] = cash_target_pct
+            result["new_entry_staging"] = staging_adjustments
+            log_decision({
+                "event": "selector_new_entry_staging",
+                "adjustments": staging_adjustments,
+            })
         selector_cash_floor_pct = max(
             cash_target_pct,
             float(self.risk.cash_reserve_pct),
         )
-        self._last_ai_target_weights = dict(target_weights)
-        self._last_ai_per_symbol = dict(per_symbol) if isinstance(per_symbol, dict) else {}
-        self._last_ai_spy_target_pct = spy_target_pct
-        self._last_ai_cash_target_pct = cash_target_pct
         # compute_rebalance_plan iterates over CURRENT positions only — it
         # produces trim/exit/grow actions for held names. New entries (selected
         # symbols not currently held) need a separate buy loop below.
@@ -2907,20 +3374,8 @@ class TradingOrchestrator:
                 log.warning("[selector] rebalance %s did not fill", a.symbol)
 
         # New-entry loop: any selected symbol not in current positions is sized
-        # by portfolio-selector, then executed with Python's hard protective stop.
-        held_syms_set = {p.symbol for p in portfolio.get("holdings", [])}
-        # Late-session new-entry block: the 15:30 ET scan was opening
-        # overnight positions that the 15:55 ET preclose immediately closed.
-        # Inside the configured window, only existing positions can be
-        # trimmed/exited; NEW entries are blocked. Preclose owns the
-        # overnight-buy decision instead.
-        late_block, mtc = self._is_late_session_no_new_entries()
-        if late_block:
-            log.warning(
-                "[selector] late-session window: minutes_to_close=%.1f — "
-                "blocking ALL new-entry selector picks",
-                mtc if mtc is not None else -1.0,
-            )
+        # by portfolio-selector, then executed with a stop no wider than 1%.
+        failed_new_entry_targets: list[dict[str, Any]] = []
         for sym in result.get("selected_positions", []) or []:
             if sym in held_syms_set or "/" in sym:
                 continue
@@ -2932,14 +3387,14 @@ class TradingOrchestrator:
             if selector_target_notional < float(self.cfg.get("risk", "min_trade_usd", default=500)):
                 log.info("[selector] new entry %s skipped (notional $%.0f below min)",
                          sym, selector_target_notional)
+                failed_new_entry_targets.append({"symbol": sym, "reason": "below_min_trade"})
                 continue
             reason = info.get("one_sentence_reason", "selector entry")
-            if late_block:
-                log.info(
-                    "[selector] new entry %s skipped: late-session window "
-                    "(minutes_to_close=%.1f, cutoff=%s)",
-                    sym, mtc if mtc is not None else -1.0,
-                    self.cfg.get("scheduling", "late_session_no_new_entries_minutes", default=30),
+            momentum_block = self._new_entry_momentum_gate(sym, pool_meta)
+            if momentum_block:
+                log.warning(
+                    "[selector] new entry %s blocked by continuation gate: %s",
+                    sym, momentum_block.get("momentum_profile", {}).get("grade"),
                 )
                 executions.append({
                     "symbol": sym, "side": "buy",
@@ -2947,9 +3402,10 @@ class TradingOrchestrator:
                     "selector_target_pct": target_pct,
                     "reason": reason,
                     "is_new_entry": True,
-                    "skipped": "late_session_no_new_entries",
-                    "minutes_to_close": round(mtc, 1) if mtc is not None else None,
+                    "skipped": "failed_continuation_gate",
+                    "momentum_gate": momentum_block,
                 })
+                failed_new_entry_targets.append({"symbol": sym, "reason": "failed_continuation_gate"})
                 continue
             confidence = self._selector_entry_confidence(info)
             earnings_block = self._selector_entry_earnings_block(
@@ -2971,6 +3427,7 @@ class TradingOrchestrator:
                     "skipped": "earnings_blackout",
                     "earnings": earnings_block,
                 })
+                failed_new_entry_targets.append({"symbol": sym, "reason": "earnings_blackout"})
                 continue
             # Theme cap pre-block: prevent the selector from minting a 4th
             # member of an already-maxed theme (would otherwise be repaired
@@ -2996,6 +3453,7 @@ class TradingOrchestrator:
                     "skipped": "theme_cap_pre_block",
                     "theme_violation": theme_block,
                 })
+                failed_new_entry_targets.append({"symbol": sym, "reason": "theme_cap_pre_block"})
                 continue
             tech = (portfolio.get("tech_map", {}) or {}).get(sym)
             if not tech or not tech.price or not tech.atr:
@@ -3009,11 +3467,11 @@ class TradingOrchestrator:
                     "skipped": "missing_risk_inputs",
                     "risk_sizer": audit,
                 })
+                failed_new_entry_targets.append({"symbol": sym, "reason": "missing_risk_inputs"})
                 continue
             # AI-direct sizing: portfolio-selector emits exact qty and entry.
-            # Python owns the protective stop and attaches the hard 1% stop at
-            # execution time. AI stop/take-profit fields are optional audit
-            # context only; missing values no longer block the trade.
+            # Python enforces a stop no wider than 1% below entry. If the AI
+            # supplies a tighter stop, the execution layer honors it.
             try:
                 ai_qty = float(info.get("qty") or 0)
                 ai_entry = float(info.get("entry_price") or tech.price or 0)
@@ -3036,6 +3494,7 @@ class TradingOrchestrator:
                     "ai_inputs": {"qty": ai_qty, "entry": ai_entry,
                                   "stop": ai_stop_raw, "target": ai_target_raw},
                 })
+                failed_new_entry_targets.append({"symbol": sym, "reason": "missing_ai_sizing_params"})
                 continue
             sizing_positions = (
                 self.client.get_positions() if not dry_run
@@ -3059,6 +3518,7 @@ class TradingOrchestrator:
                     "skipped": "ai_sizing_safety_rejected",
                     "risk_sizer": risk_audit,
                 })
+                failed_new_entry_targets.append({"symbol": sym, "reason": "ai_sizing_safety_rejected"})
                 continue
             sizing = self.risk.build_sizing_from_ai(
                 symbol=sym, qty=ai_qty, entry=ai_entry,
@@ -3075,7 +3535,7 @@ class TradingOrchestrator:
             }
             if dry_run:
                 log.info(
-                    "[DRY] Selector AI-direct entry %s qty=%s @ ~$%.2f hard_stop=$%.2f notional=$%.0f",
+                    "[DRY] Selector AI-direct entry %s qty=%s @ ~$%.2f protective_stop=$%.2f notional=$%.0f",
                     sym, sizing.qty, ai_entry, sizing.stop_loss, sizing.notional,
                 )
                 executions.append({"dry_run": True, "symbol": sym, "side": "buy",
@@ -3109,6 +3569,7 @@ class TradingOrchestrator:
                                    "funded_notional": round(funded_notional, 2),
                                    "sizing": sizing.to_dict(),
                                    "risk_sizer": risk_sizer_payload})
+                failed_new_entry_targets.append({"symbol": sym, "reason": "insufficient_confirmed_cash"})
                 continue
             decision_obj = TradeDecision(
                 symbol=sym,
@@ -3130,7 +3591,7 @@ class TradingOrchestrator:
                     "risk_sizer": risk_sizer_payload,
                 },
                 reasoning=[
-                    f"ai-direct entry qty={sizing.qty} hard_stop=${sizing.stop_loss:.2f}",
+                    f"ai-direct entry qty={sizing.qty} protective_stop=${sizing.stop_loss:.2f}",
                     f"selector target_pct={target_pct:.1%} notional=${risk_sized_notional:,.0f}",
                     reason,
                 ],
@@ -3139,7 +3600,8 @@ class TradingOrchestrator:
                 exec_result = self.executor.execute_ai_bracket(
                     symbol=sym, qty=sizing.qty,
                     entry_price=sizing.entry,
-                    take_profit=None,
+                    stop_loss=ai_stop_raw,
+                    take_profit=ai_target_raw,
                     reason=reason,
                     decision=decision_obj,
                     ai_audit=risk_sizer_payload,
@@ -3149,12 +3611,15 @@ class TradingOrchestrator:
                                    "selector_target_pct": target_pct,
                                    "ai_qty": sizing.qty,
                                    "hard_stop_loss": sizing.stop_loss,
+                                   "protective_stop_loss": sizing.stop_loss,
                                    "reason": reason,
                                    "is_new_entry": True,
                                    "sizing": sizing.to_dict(),
                                    "risk_sizer": risk_sizer_payload,
                                    "decision": decision_obj.to_dict(),
                                    "execution": exec_result.to_dict()})
+                if not exec_result.ok:
+                    failed_new_entry_targets.append({"symbol": sym, "reason": "execution_not_filled"})
             except Exception as e:
                 log.warning("[selector] AI-direct bracket order failed for %s: %s", sym, e)
                 executions.append({"symbol": sym, "side": "buy",
@@ -3165,6 +3630,34 @@ class TradingOrchestrator:
                                    "sizing": sizing.to_dict(),
                                    "risk_sizer": risk_sizer_payload,
                                    "_error": str(e)})
+                failed_new_entry_targets.append({"symbol": sym, "reason": "execution_exception"})
+
+        if failed_new_entry_targets:
+            for item in failed_new_entry_targets:
+                sym = item.get("symbol")
+                if not sym:
+                    continue
+                failed_w = float(target_weights.pop(sym, 0.0) or 0.0)
+                if failed_w > 0:
+                    cash_target_pct = round(cash_target_pct + failed_w, 4)
+                info = dict(per_symbol.get(sym) or {})
+                info["target_pct"] = 0.0
+                info["qty"] = 0
+                info["delta_qty"] = 0
+                info["action"] = "PASS"
+                info["_execution_target_removed"] = item.get("reason")
+                per_symbol[sym] = info
+            log_decision({
+                "event": "selector_failed_new_entry_targets_removed",
+                "removed": failed_new_entry_targets,
+                "execution_target_weights": target_weights,
+                "execution_cash_target_pct": cash_target_pct,
+            })
+
+        self._last_ai_target_weights = dict(target_weights)
+        self._last_ai_per_symbol = dict(per_symbol) if isinstance(per_symbol, dict) else {}
+        self._last_ai_spy_target_pct = spy_target_pct
+        self._last_ai_cash_target_pct = cash_target_pct
 
         # 8. Apply SPY target + verifier
         cash_proxy_action = None
@@ -3192,11 +3685,14 @@ class TradingOrchestrator:
                 "pool_size": len(candidates),
                 "sources_breakdown": breakdown,
                 "selected_positions": result.get("selected_positions", []),
-                "target_weights": target_weights,
+                "target_weights": original_target_weights,
+                "execution_target_weights": target_weights,
                 "spy_target_pct": spy_target_pct,
                 "cash_target_pct": result.get("cash_target_pct"),
+                "execution_cash_target_pct": cash_target_pct,
                 "exhaustion_penalty_applied": result.get("exhaustion_penalty_applied", []),
                 "new_candidates_selected": result.get("new_candidates_selected"),
+                "new_entry_staging": staging_adjustments,
                 "allow_floor_breach": allow_floor_breach,
             },
             "exits": exit_results,
@@ -3880,16 +4376,68 @@ class TradingOrchestrator:
         if enable_new_buys:
             universe = build_stock_universe(self.cfg)
             tech_top = self.technical_screen(universe, top_n=scan_candidates)
-            # Longs-only for overnight carry: bullish tech bias preferred.
-            long_biased = [t for t in tech_top if t.score > 0.1][:scan_candidates]
-            cand_syms = [t.symbol for t in long_biased]
-            # Skip symbols we already hold
             held_set = {p.symbol for p in positions}
-            cand_syms = [s for s in cand_syms if s not in held_set]
-            long_biased = [t for t in long_biased if t.symbol in cand_syms]
+            tech_by_sym: dict[str, TechnicalSignal] = {t.symbol: t for t in tech_top}
+            discovery_sources: dict[str, list[str]] = {}
+            discovery_breakdown: dict[str, int] = {}
+            try:
+                discovered, discovery_breakdown = discover_candidates(
+                    self.cfg,
+                    get_market_data(self.cfg),
+                    held_symbols=held_set,
+                )
+                for c in discovered:
+                    if c.symbol in held_set or "/" in c.symbol:
+                        continue
+                    discovery_sources[c.symbol] = list(c.sources)
+            except Exception as e:
+                log.warning("Preclose discovery failed: %s", e)
+                discovered = []
 
+            extra_syms = [
+                s for s in discovery_sources
+                if s not in tech_by_sym and s not in held_set
+            ]
+            if extra_syms:
+                try:
+                    bars_extra = self.client.get_stock_bars(extra_syms, lookback_days=252)
+                    tech_by_sym.update(technicals_for_bars_df(bars_extra))
+                except Exception as e:
+                    log.warning("Preclose extra technical enrichment failed: %s", e)
+
+            candidate_syms: list[str] = []
+            seen_preclose: set[str] = set()
+            for sym in [t.symbol for t in tech_top] + list(discovery_sources.keys()):
+                if sym in held_set or sym in seen_preclose or "/" in sym:
+                    continue
+                if sym not in tech_by_sym:
+                    continue
+                seen_preclose.add(sym)
+                candidate_syms.append(sym)
+
+            def _preclose_rank(sym: str) -> float:
+                tech = tech_by_sym[sym]
+                source_bonus = 0.08 if "av_news" in discovery_sources.get(sym, []) else 0.0
+                watch_bonus = 0.04 if (
+                    "watchlist" in discovery_sources.get(sym, [])
+                    or "peer_group" in discovery_sources.get(sym, [])
+                ) else 0.0
+                return float(tech.score) + source_bonus + watch_bonus
+
+            candidate_syms.sort(key=_preclose_rank, reverse=True)
+            pool_cap = int(self.cfg.get("overnight", "discovery_pool_size", default=45) or 45)
+            cand_syms = candidate_syms[:max(scan_candidates, pool_cap)]
+            long_biased = [
+                tech_by_sym[s] for s in cand_syms
+                if tech_by_sym[s].score > 0.05
+            ]
             intraday_cand = self._fetch_intraday(cand_syms, minutes=5) if cand_syms else None
             news_cand = self.client.get_news(symbols=cand_syms, limit=80, days_back=2) if cand_syms else []
+            daily_cand = None
+            try:
+                daily_cand = self.client.get_stock_bars(cand_syms, lookback_days=30) if cand_syms else None
+            except Exception:
+                daily_cand = None
 
             # When the market tape is leaning down, require higher conviction
             # than the default buy_threshold.
@@ -3898,18 +4446,30 @@ class TradingOrchestrator:
             )
 
             scored: list[tuple[TechnicalSignal, OvernightSignal]] = []
+            preclose_ctx_by_sym: dict[str, dict[str, Any]] = {}
             for t in long_biased:
                 intraday = self._slice_symbol(intraday_cand, t.symbol)
                 sent = score_news_for_symbol(t.symbol, news_cand)
                 ov = score_overnight(t.symbol, intraday, t.score, sent.score if sent else 0.0, market_bias)
                 if not ov:
                     continue
+                chart = self._intraday_chart_for(intraday_cand, t.symbol, daily_cand)
+                momentum_profile = self._momentum_profile(chart)
+                earnings_info = (
+                    fetch_earnings(t.symbol, ttl_hours=self.earnings_ttl_hours)
+                    if self.earnings_enabled else None
+                )
                 report_entry = {
                     "symbol": t.symbol,
                     "tech_score": round(t.score, 3),
                     "rsi": round(float(t.rsi), 1) if t.rsi is not None else None,
                     "overnight": ov.to_dict(),
+                    "intraday_chart": chart,
+                    "momentum_profile": momentum_profile,
+                    "earnings": earnings_info.to_dict() if earnings_info else None,
+                    "discovery_sources": discovery_sources.get(t.symbol, []),
                 }
+                preclose_ctx_by_sym[t.symbol] = report_entry
                 # RSI ceiling on new overnight longs: skip extended / overbought
                 # names that leave no room to run into the gap.
                 if t.rsi is not None and t.rsi > max_rsi_new_buy:
@@ -3929,8 +4489,12 @@ class TradingOrchestrator:
 
             scored.sort(key=lambda x: x[1].score, reverse=True)
             picks = scored[:max_new]
-            log.info("Preclose new-buy picks: %d (from %d scored, threshold=%.2f, market_bias=%+.2f)",
-                     len(picks), len(cand_reports), effective_buy_threshold, market_bias)
+            log.info(
+                "Preclose new-buy picks: %d (from %d scored, threshold=%.2f, "
+                "market_bias=%+.2f, discovery=%s)",
+                len(picks), len(cand_reports), effective_buy_threshold,
+                market_bias, discovery_breakdown,
+            )
 
             # Refresh positions after closes
             if not dry_run and exit_results:
@@ -3960,6 +4524,7 @@ class TradingOrchestrator:
                 atr = tech.atr
                 if not price or not atr:
                     continue
+                preclose_ctx = preclose_ctx_by_sym.get(tech.symbol, {})
 
                 # Opus 4.7 entry arbiter must approve every overnight buy.
                 num_dec = self.engine.decide(
@@ -3974,10 +4539,23 @@ class TradingOrchestrator:
                 arbiter_ctx = {
                     "symbol": tech.symbol,
                     "context": "PRECLOSE new-buy overnight candidate",
+                    "time_horizon": {
+                        "minutes_to_close": self._scan_time_context().get("minutes_to_close"),
+                        "must_evaluate": [
+                            "remaining upside before today's close",
+                            "overnight gap upside",
+                            "next-session continuation upside",
+                        ],
+                        "higher_threshold_applied": effective_buy_threshold,
+                    },
                     "current_price": price,
                     "position_status": "not_owned",
                     "technical_analyst": tech.to_dict(),
                     "overnight_signal": ov.to_dict(),
+                    "intraday_chart": preclose_ctx.get("intraday_chart"),
+                    "momentum_profile": preclose_ctx.get("momentum_profile"),
+                    "earnings": preclose_ctx.get("earnings"),
+                    "discovery_sources": preclose_ctx.get("discovery_sources", []),
                     "market_bias_spy_lateday": round(market_bias, 3),
                     "fundamental_analyst": {"note": "not computed for preclose speed"},
                     "sentiment_analyst": {"note": "embedded in overnight signal"},

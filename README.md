@@ -2,7 +2,8 @@
 
 Autonomous trading bot that tries to beat the S&P 500. Runs research multiple
 times a day, trades only on high-conviction multi-signal consensus, risk-sized
-with Python-enforced 1% protective stops, paper mode against Alpaca.
+with Python-enforced protective stops no wider than 1%, paper mode against
+Alpaca.
 
 ## Status snapshot
 
@@ -33,18 +34,20 @@ py scripts/weekly_review.py                   # weekly P&L vs SPY
 2. `cd C:\Users\shawn\OneDrive\Documents\Tim\trading-bot`
 3. `.\scripts\setup_schedule.ps1`
 
-Registers these at **local time** (adjust if not US/Eastern — see top of
-`setup_schedule.ps1`):
+Registers these at **Phoenix local time** for the current EDT market-hours
+offset; see the top of `setup_schedule.ps1` when the East Coast switches to EST:
 
 | Task | When | Script |
 | --- | --- | --- |
-| TradingBot_PreMarket | Mon-Fri 08:30 | `premarket_brief.py` |
-| TradingBot_Scan_1000 | Mon-Fri 10:00 | `scan_and_trade.py` |
-| TradingBot_Scan_1200 | Mon-Fri 12:00 | `scan_and_trade.py` |
-| TradingBot_Scan_1400 | Mon-Fri 14:00 | `scan_and_trade.py` |
-| TradingBot_Scan_1530 | Mon-Fri 15:30 | `scan_and_trade.py` |
-| TradingBot_EOD | Mon-Fri 16:15 | `eod_report.py` |
-| TradingBot_WeeklyReview | Fri 17:00 | `weekly_review.py` |
+| TradingBot_PreMarket | Mon-Fri 05:30 Phoenix | `premarket_brief.py` |
+| TradingBot_Scan_0700 | Mon-Fri 07:00 Phoenix | `scan_and_trade.py` |
+| TradingBot_Scan_0900 | Mon-Fri 09:00 Phoenix | `scan_and_trade.py` |
+| TradingBot_Scan_1000 | Mon-Fri 10:00 Phoenix | `scan_and_trade.py` |
+| TradingBot_Scan_1100 | Mon-Fri 11:00 Phoenix | `scan_and_trade.py` |
+| TradingBot_Scan_1200 | Mon-Fri 12:00 Phoenix | `scan_and_trade.py` |
+| TradingBot_PreClose | Mon-Fri 12:55 Phoenix | `preclose_decision.py` |
+| TradingBot_EOD | Mon-Fri 13:15 Phoenix | `eod_report.py` |
+| TradingBot_WeeklyReview | Fri 14:00 Phoenix | `weekly_review.py` |
 
 Scripts call `clock.is_open` and no-op when market is closed, so the scan tasks
 are safe to miss a few minutes either side.
@@ -72,10 +75,11 @@ Each scan runs this pipeline:
    only if `|combined| ≥ min_confidence` (0.40) **and** ≥ 2 agents agree on
    direction **and** technical agrees.
 5. **Position sizing** (`src/risk.py`) — confidence-scaled by entry cap,
-   hard 1% stop risk, capped at 0.5% risk per trade, with sector and
+   protective-stop risk capped at 0.5% risk per trade, with sector and
    cash-reserve caps.
-6. **Execution** — protected order via Alpaca: Python attaches the stop-loss;
-   AI does not need to supply stop/take-profit prices.
+6. **Execution** — protected order via Alpaca: AI owns the trade decision and
+   exact sizing; Python's 1% maximum stop-loss distance is a fixed guardrail,
+   not a contradiction. AI may supply a tighter stop or take-profit.
 
 Exits run first in the same scan: existing positions with a technical flip or
 deeply negative sentiment get closed.

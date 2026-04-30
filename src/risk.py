@@ -74,6 +74,24 @@ class RiskManager:
             return 0.0
         return round(entry_f * (1.0 - pct), 2)
 
+    def protective_stop_loss_price(self, entry: float, stop_loss: float | None = None) -> float:
+        """Return the stop to submit: hard 1% floor, unless AI supplies tighter."""
+        entry_f = float(entry or 0.0)
+        hard_stop = self.hard_stop_loss_price(entry_f)
+        if hard_stop <= 0 or hard_stop >= entry_f:
+            raise ValueError("invalid_hard_stop")
+        if stop_loss in (None, ""):
+            return hard_stop
+        try:
+            ai_stop = round(float(stop_loss), 2)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("stop_loss_not_numeric") from exc
+        if ai_stop <= 0 or ai_stop >= entry_f:
+            raise ValueError("stop_loss_must_be_between_zero_and_entry")
+        if ai_stop < hard_stop:
+            raise ValueError(f"stop_loss_wider_than_hard_stop_floor_{hard_stop}")
+        return ai_stop
+
     def validate_ai_sizing(
         self,
         symbol: str,
@@ -86,11 +104,12 @@ class RiskManager:
     ) -> tuple[bool, dict[str, Any]]:
         """Hard-cap safety check on AI-supplied order parameters.
 
-        The AI is the sizing authority for qty/entry. Python owns the hard
-        stop. This function only enforces non-negotiable invariants that protect
-        the account from a malformed AI response: long-only, max_position_pct,
-        max_risk_per_trade_pct, max_positions, no duplicate. It does not
-        resize the AI's qty; it ACCEPTS or REJECTS the trade.
+        The AI is the sizing authority for qty/entry and may supply a tighter
+        stop. Python enforces the hard 1% maximum loss distance. This function
+        only enforces non-negotiable invariants that protect the account from a
+        malformed AI response: long-only, max_position_pct,
+        max_risk_per_trade_pct, max_positions, no duplicate. It does not resize
+        the AI's qty; it ACCEPTS or REJECTS the trade.
         Returns (ok, audit_dict). On reject, audit_dict carries the reason.
         """
         try:
@@ -120,18 +139,25 @@ class RiskManager:
             self.last_sizing_audit = audit
             return False, audit
         hard_stop = self.hard_stop_loss_price(entry)
-        audit["stop_loss"] = hard_stop
-        if hard_stop <= 0 or hard_stop >= entry:
+        audit["hard_stop_loss_floor"] = hard_stop
+        try:
+            protective_stop = self.protective_stop_loss_price(entry, stop_loss)
+        except ValueError as exc:
             audit["status"] = "rejected"
-            audit["reject_reason"] = "invalid_hard_stop"
+            audit["reject_reason"] = str(exc)
             self.last_sizing_audit = audit
             return False, audit
+        audit["stop_loss"] = protective_stop
+        audit["stop_loss_source"] = "ai_tighter_stop" if protective_stop > hard_stop else "hard_stop"
         if take_profit not in (None, ""):
             try:
                 take_profit_f = float(take_profit)
             except (TypeError, ValueError):
-                take_profit_f = 0.0
-            if take_profit_f and take_profit_f <= entry:
+                audit["status"] = "rejected"
+                audit["reject_reason"] = "take_profit_not_numeric"
+                self.last_sizing_audit = audit
+                return False, audit
+            if take_profit_f <= entry:
                 audit["status"] = "rejected"
                 audit["reject_reason"] = "target_not_above_entry"
                 self.last_sizing_audit = audit
@@ -164,7 +190,7 @@ class RiskManager:
             self.last_sizing_audit = audit
             return False, audit
         # Per-trade risk cap
-        risk_usd = qty * (entry - hard_stop)
+        risk_usd = qty * (entry - protective_stop)
         cap = float(equity) * float(audit["max_risk_per_trade_pct"])
         audit["risk_usd"] = round(risk_usd, 2)
         audit["max_risk_usd"] = round(cap, 2)
@@ -195,25 +221,33 @@ class RiskManager:
         reasoning: str = "",
     ) -> SizingDecision:
         """Wrap AI-supplied order params in a SizingDecision for journaling."""
-        hard_stop = self.hard_stop_loss_price(entry)
-        try:
-            take_profit_f = float(take_profit) if take_profit not in (None, "") else None
-        except (TypeError, ValueError):
+        protective_stop = self.protective_stop_loss_price(entry, stop_loss)
+        if take_profit in (None, ""):
             take_profit_f = None
+        else:
+            try:
+                take_profit_f = float(take_profit)
+            except (TypeError, ValueError) as exc:
+                raise ValueError("take_profit_not_numeric") from exc
+            if take_profit_f <= float(entry):
+                raise ValueError("target_not_above_entry")
+        hard_stop = self.hard_stop_loss_price(entry)
         return SizingDecision(
             symbol=symbol,
             side="buy",
             qty=float(qty),
             notional=round(float(qty) * float(entry), 2),
             entry=float(entry),
-            stop_loss=hard_stop,
+            stop_loss=protective_stop,
             take_profit=take_profit_f,
-            risk_usd=round(float(qty) * (float(entry) - float(hard_stop)), 2),
+            risk_usd=round(float(qty) * (float(entry) - float(protective_stop)), 2),
             confidence=float(confidence),
             reasoning=reasoning or "ai-direct sizing",
             limits={
                 "source": "ai_direct",
                 "hard_stop_loss_pct": float(self.hard_stop_loss_pct),
+                "hard_stop_loss_floor": hard_stop,
+                "stop_loss_source": "ai_tighter_stop" if protective_stop > hard_stop else "hard_stop",
                 "ai_stop_loss": stop_loss,
                 "ai_take_profit": take_profit,
             },

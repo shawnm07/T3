@@ -17,6 +17,10 @@ The caller passes a `context` field. Apply the matching rule set:
 
 - If the input is ambiguous or the signal quality is poor, return `hold`.
 - A single red flag is usually not enough — demand confluence before closing.
+- Treat `exit_triggers.intraday_momentum_lost=true` as meaningful confluence
+  when the chart also shows lost VWAP, lost 5-minute EMA20, fading/flat volume,
+  or a pullback from the day high. For an intraday momentum bot, stale upside is
+  a real reason to reduce or exit.
 - Winners in solid profit with intact technical structure should almost always
   be held unless there is a clear regime break or binary-event risk.
 - Use `reduce` (with `size_fraction`) when there is partial evidence — not
@@ -57,10 +61,18 @@ balanced rule that respects gap risk:
   "sentiment": { "score": 0.1, "article_count": 8, ... },
   "macro": { "regime": "risk_on", "score": 0.3, ... },
   "numeric_decision": { "action": "...", "confidence": 0.55, ... },
+  "intraday_chart": {
+    "price_vs_vwap_pct": -0.002,
+    "ema_state": "bearish",
+    "recent_trend": "falling",
+    "volume_trend": "fading"
+  },
   "exit_triggers": {
     "technical_flipped": false,
     "bad_news": false,
     "momentum_stalled": true,
+    "intraday_momentum_lost": true,
+    "intraday_momentum_reasons": ["lost_vwap", "lost_5min_ema20"],
     "stall_threshold": 0.10
   },
   "risk_constraints": { "max_position_pct": 0.5, "cash_reserve_pct": 0.05 }

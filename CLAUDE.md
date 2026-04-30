@@ -19,11 +19,11 @@ Exits run first, then entries:
    - Analysts in parallel (Haiku 4.5): `technical-analyst`, `fundamental-analyst`, `sentiment-analyst`
    - `decision-arbiter` (Opus 4.7): final BUY/PASS per candidate
 9. **Portfolio selector** — `portfolio-selector` (Opus 4.7): selects 3-6 positions from held + new pool with target weights + SPY/cash split; no incumbent bias; enforces diversification caps
-10. **Risk sizing** — `risk.py`: confidence-scaled notional (entry cap 15% of equity for new; rebalance grows to 50% max), Python-enforced 1% hard stop, 0.5% max risk/trade
+10. **Risk sizing** — `risk.py`: AI-direct qty/entry with a Python-enforced stop no wider than 1%; AI tighter stops are honored, 0.5% max risk/trade
 11. **Rebalance arbitration** — `portfolio-arbiter` (Opus 4.7): grow winners, trim weak (legacy; portfolio-selector is primary)
 12. **Earnings gate** — `earnings-gate` (Opus 4.7): within 2-day earnings window → close/trim_50/hold based on confidence floors (day 0-1: ≥0.90 hold; day 2: ≥0.75)
 13. **Sector guard** — `sector_guard.py`: max 3/GICS sector, max 3/theme, max 50% theme weight
-14. **Execution** — `executor.py`: protected Alpaca orders; Python attaches stop-loss, AI stop/take-profit is optional
+14. **Execution** — `executor.py`: protected Alpaca orders; AI owns the decision/sizing, while Python's 1% maximum stop-loss distance is a non-contradictory execution guardrail
 15. **Portfolio verifier** — `portfolio-verifier` (Sonnet 4.6, non-critical): post-execution reconcile vs Opus targets, proposes corrective trades
 16. **Exits** — `_handle_exits()`: technical flip or stall (score < 0.10) → `exit-arbiter` (Opus 4.7, min confidence 0.55 to close)
 17. **Notifications** — `telegram_notifier.py`
@@ -60,8 +60,8 @@ data/journal/              # decisions.jsonl, trades.jsonl
 ```
 
 ## Subagents (.claude/agents/) — for deep research on demand, NOT in autonomous loop
-- `decision-arbiter` — final BUY/PASS per candidate
-- `portfolio-selector` — portfolio composition authority
+- `decision-arbiter` — final BUY/PASS per candidate, inside the fixed 1% maximum stop-loss guardrail
+- `portfolio-selector` — portfolio composition authority, inside the fixed 1% maximum stop-loss guardrail
 - `exit-arbiter` — close/reduce authority
 - `earnings-gate` — pre-earnings position management
 - `portfolio-arbiter` — rebalance (legacy)
@@ -73,7 +73,7 @@ data/journal/              # decisions.jsonl, trades.jsonl
 - `risk.max_positions: 6`
 - `risk.initial_entry_cap_pct: 0.15` — new entry size cap
 - `risk.max_position_pct: 0.50` — rebalance can grow to this
-- `risk.hard_stop_loss_pct: 0.01` — Python-enforced protective stop for every strategy BUY/ADD
+- `risk.hard_stop_loss_pct: 0.01` — Python-enforced maximum stop distance for every strategy BUY/ADD; AI tighter stops are accepted
 - `risk.stop_loss_atr_mult: 2.0`, `take_profit_atr_mult: 4.0` — ATR reference/target knobs
 - `risk.max_risk_per_trade_pct: 0.005` — 0.5% equity max risk/trade
 - `risk.cash_reserve_pct: 0.05` — 5% idle cash floor

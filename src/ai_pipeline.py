@@ -128,6 +128,8 @@ class AIPipeline:
             "portfolio": portfolio_ctx,
         }
         # decision-arbiter is the FINAL trade-critical decision for entries.
+        # Python's 1% protective-stop ceiling is an execution invariant, not a
+        # contradiction of that authority.
         # Model is forced to Opus 4.7 inside call_agent (trade-critical gate).
         arbiter_out = await self.ai.call_agent(
             "decision-arbiter", arbiter_ctx, task_type="trade_critical",
@@ -530,8 +532,8 @@ def validate_selector_response(
             problems.append(f"weight {s}={wf:.4f} out of (0, {max_pp}]")
 
     # AI-direct order params: qty / entry_price / delta_qty are authoritative.
-    # Python owns the protective stop and attaches a hard 1% stop-market order
-    # at execution time, so stop_loss / take_profit are optional AI commentary.
+    # Python enforces a protective stop no wider than 1% below entry. A tighter
+    # AI stop is honored; a wider supplied stop is rejected.
     equity_for_check = 0.0
     try:
         equity_for_check = float(equity or 0)
@@ -562,6 +564,8 @@ def validate_selector_response(
             problems.append(f"per_symbol[{s}].qty must be > 0 for selected positions, got {qty}")
         if entry <= 0:
             problems.append(f"per_symbol[{s}].entry_price must be > 0, got {entry}")
+        hard_stop_floor = round(entry * (1.0 - hard_stop_pct), 2) if entry > 0 and hard_stop_pct > 0 else 0.0
+        stop_for_risk = hard_stop_floor
         raw_stop = info.get("stop_loss")
         if raw_stop not in (None, ""):
             try:
@@ -571,6 +575,13 @@ def validate_selector_response(
             else:
                 if stop <= 0 or stop >= entry:
                     problems.append(f"per_symbol[{s}].stop_loss ({stop}) must be > 0 and < entry_price ({entry})")
+                elif hard_stop_floor > 0 and round(stop, 2) < hard_stop_floor:
+                    problems.append(
+                        f"per_symbol[{s}].stop_loss ({stop}) is wider than "
+                        f"hard_stop_loss_pct floor ({hard_stop_floor})"
+                    )
+                elif hard_stop_floor > 0:
+                    stop_for_risk = max(round(stop, 2), hard_stop_floor)
         raw_target = info.get("take_profit")
         if raw_target not in (None, ""):
             try:
@@ -600,8 +611,7 @@ def validate_selector_response(
             except (TypeError, ValueError):
                 ctx_equity = equity_for_check
             if ctx_equity > 0:
-                stop = entry * (1.0 - hard_stop_pct)
-                risk_usd = qty * (entry - stop)
+                risk_usd = qty * (entry - stop_for_risk)
                 cap_usd = ctx_equity * max_risk_pct
                 # 1% slack over the configured cap before rejecting.
                 if risk_usd > cap_usd * 1.01:
@@ -632,6 +642,31 @@ def validate_selector_response(
     if not isinstance(per_sym, dict):
         problems.append("per_symbol not a dict")
         per_sym = {}
+    else:
+        missing_per_sym_initial = [s for s in pool_symbols if s not in per_sym]
+        repairable_per_sym = [
+            s for s in missing_per_sym_initial
+            if s not in selected and not pool_meta.get(s, {}).get("currently_held", False)
+        ]
+        if missing_per_sym_initial and len(repairable_per_sym) == len(missing_per_sym_initial):
+            for s in repairable_per_sym:
+                per_sym[s] = {
+                    "target_pct": 0.0,
+                    "qty": 0,
+                    "delta_qty": 0,
+                    "entry_price": 0,
+                    "stop_loss": None,
+                    "take_profit": None,
+                    "action": "PASS",
+                    "confidence": 0.0,
+                    "opportunity_score": 0,
+                    "one_sentence_reason": "Auto-filled PASS because the selector omitted this non-selected candidate.",
+                    "exhaustion_penalty": False,
+                    "remaining_upside_score": 0,
+                }
+            result["per_symbol"] = per_sym
+            result.setdefault("_auto_repaired", {})
+            result["_auto_repaired"]["per_symbol_pass_fill"] = repairable_per_sym
 
     for s in held_symbols:
         if s not in selected:
@@ -700,6 +735,33 @@ def validate_selector_response(
         ranked_syms = {r.get("symbol") for r in rankings if isinstance(r, dict)}
         missing_rank = pool_set - ranked_syms
         extra_rank = ranked_syms - pool_set
+        repairable_rank = [
+            s for s in sorted(missing_rank)
+            if s not in selected
+        ]
+        if missing_rank and len(repairable_rank) == len(missing_rank):
+            max_rank = 0
+            for r in rankings:
+                if isinstance(r, dict):
+                    try:
+                        max_rank = max(max_rank, int(r.get("rank", 0) or 0))
+                    except (TypeError, ValueError):
+                        pass
+            for i, s in enumerate(repairable_rank, start=1):
+                rankings.append({
+                    "symbol": s,
+                    "rank": max_rank + i,
+                    "opportunity_score": 0,
+                    "currently_held": bool(pool_meta.get(s, {}).get("currently_held", False)),
+                    "exhausted": False,
+                    "remaining_upside_score": 0,
+                    "one_sentence_reason": "Auto-filled low-ranked PASS because the selector omitted this non-selected candidate.",
+                })
+            result["candidate_rankings"] = rankings
+            result.setdefault("_auto_repaired", {})
+            result["_auto_repaired"]["candidate_rankings_pass_fill"] = repairable_rank
+            ranked_syms = {r.get("symbol") for r in rankings if isinstance(r, dict)}
+            missing_rank = pool_set - ranked_syms
         if missing_rank:
             problems.append(f"candidate_rankings missing {len(missing_rank)} symbols: {sorted(missing_rank)[:5]}")
         if extra_rank:

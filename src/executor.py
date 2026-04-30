@@ -58,13 +58,47 @@ class TradeExecutor:
             return None
         return round(entry * (1.0 - pct), 2)
 
-    def _take_profit_or_none(self, take_profit: float | None, entry_price: float | None) -> float | None:
+    def _protective_stop_loss_price(
+        self,
+        entry_price: float | None,
+        stop_loss: float | None = None,
+    ) -> tuple[float, str]:
         try:
-            target = float(take_profit) if take_profit not in (None, "") else 0.0
             entry = float(entry_price or 0)
         except (TypeError, ValueError):
+            entry = 0.0
+        hard_stop = self._hard_stop_loss_price(entry)
+        if hard_stop is None or hard_stop <= 0 or hard_stop >= entry:
+            raise ValueError(f"cannot compute hard stop from entry_price={entry_price}")
+        if stop_loss in (None, ""):
+            return hard_stop, "hard_stop"
+        try:
+            ai_stop = round(float(stop_loss), 2)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("stop_loss not numeric") from exc
+        if ai_stop <= 0 or ai_stop >= entry:
+            raise ValueError(
+                f"stop_loss {ai_stop} must be > 0 and < entry_price {entry}"
+            )
+        if ai_stop < hard_stop:
+            raise ValueError(
+                f"stop_loss {ai_stop} is wider than hard stop floor {hard_stop}"
+            )
+        return ai_stop, ("ai_tighter_stop" if ai_stop > hard_stop else "hard_stop")
+
+    def _take_profit_or_none(self, take_profit: float | None, entry_price: float | None) -> float | None:
+        if take_profit in (None, ""):
             return None
-        return target if target > entry > 0 else None
+        try:
+            target = float(take_profit)
+            entry = float(entry_price or 0)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("take_profit not numeric") from exc
+        if entry <= 0:
+            raise ValueError(f"cannot validate take_profit from entry_price={entry_price}")
+        if target <= entry:
+            raise ValueError(f"take_profit {target} must be > entry_price {entry}")
+        return target
 
     @staticmethod
     def _client_order_id(symbol: str) -> str:
@@ -105,17 +139,33 @@ class TradeExecutor:
             log.warning("Could not cancel unfilled protective parent order %s: %s",
                         order_id, e)
 
+    def _cancel_symbol_orders_before_sell(self, symbol: str, reason: str) -> int:
+        """Cancel open protective child orders before sells/trims/exits."""
+        if not bool(self.cfg.get("execution", "cancel_open_orders_before_sell", default=True)):
+            return 0
+        try:
+            cancelled = self.client.cancel_open_orders_for_symbol(symbol)
+            if cancelled:
+                log.info("[%s] cancelled %d open order(s) before sell (%s)",
+                         symbol, cancelled, reason)
+            return int(cancelled or 0)
+        except AttributeError:
+            return 0
+        except Exception as e:
+            log.warning("[%s] cancel open orders before sell failed: %s", symbol, e)
+            return 0
+
     def execute(self, decision: TradeDecision, sizing: SizingDecision) -> ExecutionResult:
         try:
-            hard_stop = self._hard_stop_loss_price(sizing.entry)
-            if hard_stop is None:
-                raise ValueError(f"cannot compute hard stop from entry={sizing.entry}")
+            stop_to_submit, stop_source = self._protective_stop_loss_price(
+                sizing.entry, sizing.stop_loss,
+            )
             take_profit = self._take_profit_or_none(sizing.take_profit, sizing.entry)
             order = self.client.submit_bracket(
                 symbol=sizing.symbol,
                 qty=sizing.qty,
                 side="buy",
-                stop_loss=hard_stop,
+                stop_loss=stop_to_submit,
                 take_profit=take_profit,
                 tif="gtc",
                 client_order_id=self._client_order_id(sizing.symbol),
@@ -132,7 +182,9 @@ class TradeExecutor:
                     "type": "stop_market",
                     "entry_reference": sizing.entry,
                     "stop_loss_pct": self.hard_stop_loss_pct,
-                    "stop_price": hard_stop,
+                    "hard_stop_loss_floor": self._hard_stop_loss_price(sizing.entry),
+                    "stop_price": stop_to_submit,
+                    "stop_loss_source": stop_source,
                     "original_stop_loss": sizing.stop_loss,
                     "take_profit_submitted": take_profit,
                 },
@@ -149,7 +201,7 @@ class TradeExecutor:
                 symbol=sizing.symbol,
                 status="filled" if ok else "unfilled",
                 order_id=order_id,
-                message=f"{sizing.side} {sizing.qty} @ ~${sizing.entry} stop ${hard_stop} [{final_status}]",
+                message=f"{sizing.side} {sizing.qty} @ ~${sizing.entry} stop ${stop_to_submit} [{final_status}]",
                 filled_qty=filled_qty, filled_avg_price=avg_price,
                 final_status=final_status, ok=ok,
             )
@@ -171,24 +223,21 @@ class TradeExecutor:
     ) -> ExecutionResult:
         """Submit a protected AI-sized buy.
 
-        The AI remains the sizing authority for share count, but Python owns
-        the loss control: every BUY/ADD gets a 1% stop-market OTO/bracket leg.
-        The old AI stop/take-profit fields are accepted for audit/backward
-        compatibility, but they are not required and the AI stop is never used
-        to widen the hard stop.
+        The AI remains the sizing authority for share count. Python enforces
+        loss control: every BUY/ADD gets a stop-market OTO/bracket leg no wider
+        than 1% below entry. AI stop/take-profit fields are optional; a tighter
+        AI stop is honored, while a wider stop is rejected.
         """
         try:
             if entry_price is None and ai_audit:
                 entry_price = ai_audit.get("entry_price") or ai_audit.get("ai_entry_price")
-            hard_stop = self._hard_stop_loss_price(entry_price)
-            if hard_stop is None:
-                raise ValueError(f"cannot compute hard stop from entry_price={entry_price}")
+            stop_to_submit, stop_source = self._protective_stop_loss_price(entry_price, stop_loss)
             take_profit_to_submit = self._take_profit_or_none(take_profit, entry_price)
             order = self.client.submit_bracket(
                 symbol=symbol,
                 qty=qty,
                 side="buy",
-                stop_loss=hard_stop,
+                stop_loss=stop_to_submit,
                 take_profit=take_profit_to_submit,
                 tif="gtc",
                 client_order_id=self._client_order_id(symbol),
@@ -200,13 +249,15 @@ class TradeExecutor:
                 "symbol": symbol,
                 "order_id": order_id,
                 "qty": qty,
-                "stop_loss": hard_stop,
+                "stop_loss": stop_to_submit,
                 "take_profit": take_profit_to_submit,
                 "protective_stop": {
                     "type": "stop_market",
                     "entry_reference": entry_price,
                     "stop_loss_pct": self.hard_stop_loss_pct,
-                    "stop_price": hard_stop,
+                    "hard_stop_loss_floor": self._hard_stop_loss_price(entry_price),
+                    "stop_price": stop_to_submit,
+                    "stop_loss_source": stop_source,
                     "ai_stop_loss": stop_loss,
                     "ai_take_profit": take_profit,
                 },
@@ -226,7 +277,7 @@ class TradeExecutor:
                 symbol=symbol,
                 status="filled" if ok else "unfilled",
                 order_id=order_id,
-                message=f"buy {qty} stop ${hard_stop} [{final_status}]",
+                message=f"buy {qty} stop ${stop_to_submit} [{final_status}]",
                 filled_qty=filled_qty, filled_avg_price=avg_price,
                 final_status=final_status, ok=ok,
             )
@@ -263,6 +314,7 @@ class TradeExecutor:
                     status="rejected",
                     message="positive qty delta requires protected buy path",
                 )
+            cancelled = self._cancel_symbol_orders_before_sell(symbol, reason)
             order = self.client.submit_qty(symbol, abs_qty, side=side, tif="day")
             order_id = str(order.id)
             filled_qty, avg_price, final_status, ok = self._verify_fill(order)
@@ -272,6 +324,7 @@ class TradeExecutor:
                 "side": side,
                 "delta_qty": float(delta_qty),
                 "reason": reason,
+                "cancelled_orders_before_sell": cancelled,
                 "order_id": order_id,
                 "ai_audit": ai_audit or {},
                 "final_status": final_status,
@@ -314,6 +367,7 @@ class TradeExecutor:
                     message="notional BUY path disabled; use protected share-qty execution",
                 )
             # Alpaca notional market orders require tif=DAY
+            cancelled = self._cancel_symbol_orders_before_sell(symbol, reason)
             order = self.client.submit_notional(symbol, abs_notional, side=side, tif="day")
             order_id = str(order.id)
             filled_qty, avg_price, final_status, ok = self._verify_fill(order)
@@ -323,6 +377,7 @@ class TradeExecutor:
                 "side": side,
                 "notional": round(abs_notional, 2),
                 "reason": reason,
+                "cancelled_orders_before_sell": cancelled,
                 "order_id": order_id,
                 "final_status": final_status,
                 "filled_qty": filled_qty,
@@ -356,6 +411,7 @@ class TradeExecutor:
         """
         pct = max(1.0, min(99.0, float(percentage)))
         try:
+            cancelled = self._cancel_symbol_orders_before_sell(symbol, reason)
             order = self.client.close_position(symbol, percentage=pct)
             order_id = str(getattr(order, "id", "")) or None
             filled_qty, avg_price, final_status, ok = (0.0, None, "no_order_id", False)
@@ -364,6 +420,7 @@ class TradeExecutor:
             log_trade({
                 "event": "position_trimmed", "symbol": symbol,
                 "percentage": pct, "reason": reason,
+                "cancelled_orders_before_sell": cancelled,
                 "order_id": order_id, "final_status": final_status,
                 "filled_qty": filled_qty, "ok": ok,
             })
@@ -385,6 +442,7 @@ class TradeExecutor:
 
     def close_position(self, symbol: str, reason: str = "") -> ExecutionResult:
         try:
+            cancelled = self._cancel_symbol_orders_before_sell(symbol, reason)
             order = self.client.close_position(symbol)
             order_id = str(getattr(order, "id", "")) or None
             filled_qty, avg_price, final_status, ok = (0.0, None, "no_order_id", False)
@@ -392,6 +450,7 @@ class TradeExecutor:
                 filled_qty, avg_price, final_status, ok = self._verify_fill(order)
             log_trade({
                 "event": "position_closed", "symbol": symbol, "reason": reason,
+                "cancelled_orders_before_sell": cancelled,
                 "order_id": order_id, "final_status": final_status,
                 "filled_qty": filled_qty, "ok": ok,
             })

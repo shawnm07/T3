@@ -92,6 +92,22 @@ def discover_candidates(
             _upsert(pool, sym, "watchlist", sectors)
             breakdown["watchlist"] += 1
 
+    # 2b. Peer-group expansion. This prevents a single familiar ticker from
+    # crowding out obvious substitutes in the same trade (AMD vs INTC, MU vs
+    # SNDK/WDC, data-center power names such as BE/VRT/GEV).
+    if cfg.get("discovery", "include_peer_groups", default=True):
+        peer_groups = cfg.get("universe", "peer_groups", default={}) or {}
+        active_symbols = set(pool.keys()) | held
+        for _group_name, members in peer_groups.items():
+            normalized = [str(s).upper() for s in (members or []) if str(s).strip()]
+            if not active_symbols.intersection(normalized):
+                continue
+            for sym in normalized:
+                if sym in excluded:
+                    continue
+                _upsert(pool, sym, "peer_group", sectors)
+                breakdown["peer_group"] += 1
+
     # 3. AV top movers
     movers_top_n = int(cfg.get("discovery", "movers_top_n", default=15) or 15)
     most_active_top_n = int(cfg.get("discovery", "most_active_top_n", default=10) or 10)

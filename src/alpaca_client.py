@@ -259,6 +259,26 @@ class AlpacaClient:
     def get_open_orders(self):
         return self.trading.get_orders(GetOrdersRequest(status="open"))
 
+    def cancel_open_orders_for_symbol(self, symbol: str) -> int:
+        """Cancel open parent/child orders for a symbol before a trim/exit."""
+        sym = str(symbol or "").upper()
+        if not sym:
+            return 0
+        cancelled = 0
+        for order in self.get_open_orders() or []:
+            order_sym = str(getattr(order, "symbol", "") or "").upper()
+            if order_sym != sym:
+                continue
+            order_id = str(getattr(order, "id", "") or "")
+            if not order_id:
+                continue
+            self.cancel_order(order_id)
+            cancelled += 1
+        if cancelled:
+            log.info("Cancelled %d open order(s) for %s", cancelled, sym)
+            self.invalidate_snapshot()
+        return cancelled
+
     def get_portfolio_history(self, period: str = "1M", timeframe: str = "1D"):
         from alpaca.trading.requests import GetPortfolioHistoryRequest
         req = GetPortfolioHistoryRequest(period=period, timeframe=timeframe)

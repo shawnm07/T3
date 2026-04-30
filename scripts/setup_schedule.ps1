@@ -51,12 +51,23 @@ function Register-BotTask {
 
 $weekdays = @("Monday","Tuesday","Wednesday","Thursday","Friday")
 
+# Remove scan tasks that are no longer part of the desired cadence so rerunning
+# this setup actually changes 12:30 -> 12:00 instead of leaving both.
+foreach ($obsolete in @("TradingBot_Scan_1230","TradingBot_Scan_1530")) {
+    if (Get-ScheduledTask -TaskName $obsolete -ErrorAction SilentlyContinue) {
+        Write-Host "Removing obsolete task: $obsolete"
+        Unregister-ScheduledTask -TaskName $obsolete -Confirm:$false
+    }
+}
+
 # Pre-market brief: Phoenix 05:30 (= 08:30 ET EDT), weekdays
 $triggerPre = New-ScheduledTaskTrigger -Weekly -WeeksInterval 1 -DaysOfWeek $weekdays -At "05:30"
 Register-BotTask "PreMarket" (Join-Path $BotDir "scripts\premarket_brief.py") @($triggerPre)
 
-# Intraday scans: Phoenix 07:00, 09:00, 11:00, 12:30 (= 10/12/14/15:30 ET EDT), weekdays
-foreach ($t in @("07:00","09:00","11:00","12:30")) {
+# Intraday scans: Phoenix 07:00, 09:00, 10:00, 11:00, 12:00
+# (= 10/12/13/14/15 ET EDT), weekdays. These scans may open new
+# continuation-confirmed positions; PreClose owns explicit overnight buys.
+foreach ($t in @("07:00","09:00","10:00","11:00","12:00")) {
     $trig = New-ScheduledTaskTrigger -Weekly -WeeksInterval 1 -DaysOfWeek $weekdays -At $t
     $tag = "Scan_" + ($t -replace ":", "")
     Register-BotTask $tag (Join-Path $BotDir "scripts\scan_and_trade.py") @($trig)

@@ -1,8 +1,9 @@
 """AI-driven portfolio rebalance.
 
 The Opus 4.7 portfolio arbiter is the SOLE authority on capital allocation.
-This module is a thin executor: it converts the arbiter's `target_weights` +
-`per_symbol` block into per-symbol delta actions. There is NO non-AI fallback,
+This module is a thin target-portfolio executor: it converts the arbiter's
+`target_weights` + `per_symbol` block into per-symbol delta actions for the
+union of current holdings and newly selected symbols. There is NO non-AI fallback,
 NO post-AI override (no winner protection, no risk-grade veto, no underwater
 dampener, no add/trim confidence floors). Every per-symbol entry is required
 to carry `one_sentence_reason` and `opportunity_score` from the arbiter.
@@ -39,6 +40,7 @@ class RebalanceAction:
     target_pct: float = 0.0
     target_qty: float | None = None
     current_qty: float = 0.0
+    is_new_entry: bool = False
     # AI-direct fields: when the selector emits an exact share delta + refreshed
     # bracket levels, the orchestrator submits that qty directly instead of
     # going through the notional-based partial_trade path.
@@ -64,6 +66,7 @@ class RebalanceAction:
             "target_qty": (round(float(self.target_qty), 4)
                            if self.target_qty is not None else None),
             "current_qty": round(float(self.current_qty), 4),
+            "is_new_entry": bool(self.is_new_entry),
             "ai_delta_qty": (round(float(self.ai_delta_qty), 4)
                              if self.ai_delta_qty is not None else None),
             "ai_entry_price": (round(float(self.ai_entry_price), 2)
@@ -129,11 +132,14 @@ def compute_rebalance_plan(
     ai_target_weights: dict[str, float] | None = None,  # REQUIRED — None → no actions
     ai_per_symbol: dict[str, dict] | None = None,        # REQUIRED — None → no actions
 ) -> list[RebalanceAction]:
-    """Translate the arbiter's targets into per-symbol delta actions.
+    """Translate the arbiter's final portfolio targets into delta actions.
 
     Hard rules:
       * AI is the sole authority. If `ai_target_weights` / `ai_per_symbol` are
         absent, return [] (no trades).
+      * The plan covers BOTH current holdings and newly selected symbols. This
+        keeps rotations unified: sells/freeing cash and buys/adding risk are
+        one target-portfolio movement, not separate systems.
       * Every action carries `one_sentence_reason` + `opportunity_score` from
         the arbiter — these come back through to the journal and Telegram.
       * No deterministic post-filter (winner protection, risk-grade veto,
@@ -144,7 +150,7 @@ def compute_rebalance_plan(
     """
     if not bool(config.get("rebalance", "enabled", default=True)):
         return []
-    if not ai_target_weights or not ai_per_symbol:
+    if ai_target_weights is None or not ai_per_symbol:
         log.warning(
             "compute_rebalance_plan: AI arbiter targets missing — returning "
             "no actions (no fallback)."
@@ -155,21 +161,30 @@ def compute_rebalance_plan(
     min_delta_pct = float(config.get("rebalance", "min_delta_pct", default=0.15))
     min_delta_usd = float(config.get("rebalance", "min_delta_usd", default=500))
 
+    pos_by_sym = {
+        p.symbol: p
+        for p in positions
+        if getattr(p, "symbol", None)
+    }
+    symbols = set(pos_by_sym.keys()) | set(str(s) for s in ai_target_weights.keys())
+
     actions: list[RebalanceAction] = []
-    for p in positions:
-        sym = p.symbol
+    for sym in sorted(symbols):
         if cash_proxy_symbol and sym == cash_proxy_symbol:
             continue
         if "/" in sym:
             continue
-        plpc = float(p.unrealized_plpc) if hasattr(p, "unrealized_plpc") else 0.0
-        current_notional = abs(float(p.market_value))
+        p = pos_by_sym.get(sym)
+        is_new_entry = p is None
+        plpc = float(p.unrealized_plpc) if p is not None and hasattr(p, "unrealized_plpc") else 0.0
+        current_notional = abs(float(getattr(p, "market_value", 0) or 0)) if p is not None else 0.0
         try:
-            current_qty = abs(float(getattr(p, "qty", 0) or 0))
+            current_qty = abs(float(getattr(p, "qty", 0) or 0)) if p is not None else 0.0
         except (TypeError, ValueError):
             current_qty = 0.0
         tech = tech_map.get(sym)
         tech_score = float(tech.score) if tech else 0.0
+        info = ai_per_symbol.get(sym) or {}
 
         target_weight = ai_target_weights.get(sym)
         if target_weight is None:
@@ -190,7 +205,6 @@ def compute_rebalance_plan(
                 continue
         target_weight = max(0.0, min(max_position_pct, float(target_weight)))
 
-        info = ai_per_symbol.get(sym) or {}
         ai_action_raw = str(info.get("action", "")).upper()
         one_sentence = str(info.get("one_sentence_reason") or "").strip()
         try:
@@ -228,10 +242,13 @@ def compute_rebalance_plan(
         except (TypeError, ValueError):
             ai_target_f = None
 
-        price_for_qty = (
-            ai_entry_f
-            or (current_notional / current_qty if current_qty > 0 else None)
-        )
+        tech_price = None
+        try:
+            tech_price = float(getattr(tech, "price", 0) or 0) if tech else None
+        except (TypeError, ValueError):
+            tech_price = None
+        position_price = (current_notional / current_qty if current_qty > 0 else None)
+        price_for_qty = ai_entry_f or position_price or tech_price
         target_notional = target_weight * equity
         if target_qty_f is not None and price_for_qty and price_for_qty > 0:
             target_notional = max(0.0, target_qty_f * price_for_qty)
@@ -255,6 +272,8 @@ def compute_rebalance_plan(
             abs_delta = current_notional
             delta = -current_notional
             target_notional = 0.0
+        elif is_exit and current_notional <= 0:
+            continue
 
         if delta < 0:  # TRIM / EXIT
             side = "sell"
@@ -300,6 +319,7 @@ def compute_rebalance_plan(
             target_pct=target_weight,
             target_qty=target_qty_f,
             current_qty=current_qty,
+            is_new_entry=is_new_entry,
             ai_delta_qty=ai_delta_qty_f,
             ai_entry_price=ai_entry_f,
             ai_stop_loss=ai_stop_f,

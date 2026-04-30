@@ -1946,6 +1946,112 @@ class TradingOrchestrator:
             return out
         return asyncio.run(_all())
 
+    def _validate_rebalance_buy_action(
+        self,
+        action: Any,
+        equity: float,
+    ) -> tuple[bool, dict[str, Any]]:
+        """Validate a unified-plan BUY/ADD before submitting a protected order."""
+        try:
+            qty = float(action.ai_delta_qty or 0)
+        except (TypeError, ValueError):
+            qty = 0.0
+        try:
+            entry = float(action.ai_entry_price or 0)
+        except (TypeError, ValueError):
+            entry = 0.0
+        if entry <= 0 and qty > 0:
+            try:
+                entry = float(action.delta_notional) / qty
+            except (TypeError, ValueError, ZeroDivisionError):
+                entry = 0.0
+        audit: dict[str, Any] = {
+            "source": "unified_rebalance_buy_safety",
+            "symbol": action.symbol,
+            "qty_delta": qty,
+            "entry_price": entry,
+            "is_new_entry": bool(getattr(action, "is_new_entry", False)),
+            "current_notional": float(action.current_notional or 0),
+            "target_notional": float(action.target_notional or 0),
+            "target_pct": float(action.target_pct or 0),
+            "hard_stop_loss_pct": float(self.risk.hard_stop_loss_pct),
+            "max_position_pct": float(self.risk.max_position_pct),
+            "max_risk_per_trade_pct": float(self.cfg.get("risk", "max_risk_per_trade_pct", default=0.005)),
+        }
+        if qty <= 0 or entry <= 0:
+            audit.update({"status": "rejected", "reject_reason": "non_positive_qty_or_entry"})
+            return False, audit
+        try:
+            protective_stop = self.risk.protective_stop_loss_price(entry, action.ai_stop_loss)
+        except ValueError as exc:
+            audit.update({"status": "rejected", "reject_reason": str(exc)})
+            return False, audit
+        audit["stop_loss"] = protective_stop
+        audit["hard_stop_loss_floor"] = self.risk.hard_stop_loss_price(entry)
+        if action.ai_take_profit not in (None, ""):
+            try:
+                take_profit = float(action.ai_take_profit)
+            except (TypeError, ValueError):
+                audit.update({"status": "rejected", "reject_reason": "take_profit_not_numeric"})
+                return False, audit
+            if take_profit <= entry:
+                audit.update({"status": "rejected", "reject_reason": "target_not_above_entry"})
+                return False, audit
+
+        delta_notional = qty * entry
+        post_notional = float(action.current_notional or 0) + delta_notional
+        max_notional = float(equity) * float(self.risk.max_position_pct)
+        audit["delta_notional"] = round(delta_notional, 2)
+        audit["post_trade_notional"] = round(post_notional, 2)
+        audit["max_notional"] = round(max_notional, 2)
+        if delta_notional < float(self.risk.min_trade):
+            audit.update({
+                "status": "rejected",
+                "reject_reason": f"notional ${delta_notional:,.0f} below min_trade ${self.risk.min_trade}",
+            })
+            return False, audit
+        if post_notional > max_notional * 1.01:
+            audit.update({
+                "status": "rejected",
+                "reject_reason": (
+                    f"post-trade notional ${post_notional:,.0f} exceeds "
+                    f"max_position_pct ${max_notional:,.0f}"
+                ),
+            })
+            return False, audit
+
+        risk_usd = qty * (entry - protective_stop)
+        risk_cap = float(equity) * float(audit["max_risk_per_trade_pct"])
+        audit["risk_usd"] = round(risk_usd, 2)
+        audit["max_risk_usd"] = round(risk_cap, 2)
+        if risk_usd > risk_cap * 1.01:
+            audit.update({
+                "status": "rejected",
+                "reject_reason": f"risk ${risk_usd:,.0f} exceeds max_risk_per_trade ${risk_cap:,.0f}",
+            })
+            return False, audit
+
+        if bool(getattr(action, "is_new_entry", False)) and not self._is_cash_proxy(action.symbol):
+            try:
+                live_positions = self.client.get_positions()
+            except Exception:
+                live_positions = []
+            held_syms = {
+                p.symbol for p in live_positions
+                if not self._is_cash_proxy(p.symbol) and abs(float(getattr(p, "qty", 0) or 0)) > 0
+            }
+            audit["held_count_before_new_entry"] = len(held_syms)
+            audit["max_positions"] = int(self.risk.max_positions)
+            if action.symbol not in held_syms and len(held_syms) >= int(self.risk.max_positions):
+                audit.update({
+                    "status": "rejected",
+                    "reject_reason": f"max_positions_{int(self.risk.max_positions)}_reached",
+                })
+                return False, audit
+
+        audit["status"] = "approved"
+        return True, audit
+
     def _execute_ai_rebalance_action(
         self,
         action: Any,
@@ -2005,6 +2111,14 @@ class TradingOrchestrator:
                 return {**action_dict, "skipped": "ai_delta_qty_side_mismatch"}
 
             if action.side == "buy":
+                ok, buy_audit = self._validate_rebalance_buy_action(action, equity)
+                ai_audit["buy_safety"] = buy_audit
+                if not ok:
+                    return {
+                        **action_dict,
+                        "skipped": "buy_safety_rejected",
+                        "risk_sizer": buy_audit,
+                    }
                 funded_notional = self._funded_buy_notional(
                     action.symbol, action.delta_notional, equity, cash_floor_pct, label,
                 )
@@ -2546,12 +2660,17 @@ class TradingOrchestrator:
             p = pos_by_sym.get(sym)
             mv = abs(float(p.market_value)) if p else 0.0
             qty = float(p.qty) if p else 0.0
-            current_price = float(getattr(p, "current_price", 0) or 0) if p else 0.0
             cur_w = (mv / live_equity) if live_equity > 0 else 0.0
             target_usd = tw * live_equity
             gap_usd = target_usd - mv  # positive => under target (need buy)
             gap_pct = (gap_usd / live_equity) if live_equity > 0 else 0.0
             info = per_symbol.get(sym, {}) or {}
+            current_price = float(getattr(p, "current_price", 0) or 0) if p else 0.0
+            if current_price <= 0:
+                try:
+                    current_price = float(info.get("entry_price", 0) or 0)
+                except (TypeError, ValueError):
+                    current_price = 0.0
             diff_rows.append({
                 "symbol": sym,
                 "qty": round(qty, 6),
@@ -2896,6 +3015,236 @@ class TradingOrchestrator:
             })
 
         return target_weights, per_symbol, cash_target_pct, adjustments
+
+    def _apply_new_entry_execution_gates(
+        self,
+        result: dict[str, Any],
+        target_weights: dict[str, float],
+        per_symbol: dict[str, dict[str, Any]],
+        held_symbols: set[str],
+        pool_meta: dict[str, dict[str, Any]],
+        portfolio: dict[str, Any],
+        equity: float,
+    ) -> tuple[dict[str, float], dict[str, dict[str, Any]], float, list[dict[str, Any]]]:
+        """Remove fresh entries that fail hard pre-execution gates.
+
+        The selector remains the authority on the desired final book. These are
+        execution guardrails: no gap-only fresh buys, no earnings-blackout fresh
+        buys, no sub-minimum entries, and no missing broker-ready sizing. Failed
+        target weight is moved to cash so the verifier does not re-buy it in the
+        same scan.
+        """
+        cash_target_pct = float(result.get("execution_cash_target_pct",
+                                           result.get("cash_target_pct", 0)) or 0)
+        selected = set(str(s) for s in (result.get("selected_positions") or []))
+        blocked: list[dict[str, Any]] = []
+
+        def _block(sym: str, reason: str, **extra: Any) -> None:
+            nonlocal cash_target_pct
+            failed_w = float(target_weights.pop(sym, 0.0) or 0.0)
+            if failed_w > 0:
+                cash_target_pct = round(cash_target_pct + failed_w, 4)
+            info = dict(per_symbol.get(sym) or {})
+            info["target_pct"] = 0.0
+            info["qty"] = 0
+            info["delta_qty"] = 0
+            info["action"] = "PASS"
+            info["_execution_target_removed"] = reason
+            per_symbol[sym] = info
+            blocked.append({
+                "symbol": sym,
+                "reason": reason,
+                "removed_target_pct": round(failed_w, 4),
+                **extra,
+            })
+
+        for sym in sorted(selected - held_symbols):
+            if "/" in sym:
+                continue
+            info = per_symbol.get(sym) or {}
+            target_pct = float(target_weights.get(sym, 0.0) or 0.0)
+            if target_pct <= 0:
+                continue
+            target_notional = round(target_pct * equity, 2)
+            min_trade = float(self.cfg.get("risk", "min_trade_usd", default=500))
+            if target_notional < min_trade:
+                _block(sym, "below_min_trade",
+                       requested_delta_notional=target_notional,
+                       min_trade_usd=min_trade)
+                continue
+            momentum_block = self._new_entry_momentum_gate(sym, pool_meta)
+            if momentum_block:
+                _block(sym, "failed_continuation_gate",
+                       requested_delta_notional=target_notional,
+                       momentum_gate=momentum_block)
+                continue
+            confidence = self._selector_entry_confidence(info)
+            earnings_block = self._selector_entry_earnings_block(
+                sym, confidence, portfolio.get("earnings_map", {}) or {},
+            )
+            if earnings_block:
+                _block(sym, "earnings_blackout",
+                       requested_delta_notional=target_notional,
+                       earnings=earnings_block)
+                continue
+            try:
+                qty = float(info.get("qty") or 0)
+                entry = float(info.get("entry_price") or 0)
+                delta_qty = float(info.get("delta_qty") or 0)
+            except (TypeError, ValueError):
+                qty = entry = delta_qty = 0.0
+            if qty <= 0 or entry <= 0 or delta_qty <= 0:
+                _block(sym, "missing_ai_sizing_params",
+                       requested_delta_notional=target_notional,
+                       ai_inputs={
+                           "qty": info.get("qty"),
+                           "entry_price": info.get("entry_price"),
+                           "delta_qty": info.get("delta_qty"),
+                       })
+
+        if blocked:
+            result["execution_target_weights"] = target_weights
+            result["execution_per_symbol"] = per_symbol
+            result["execution_cash_target_pct"] = cash_target_pct
+        return target_weights, per_symbol, cash_target_pct, blocked
+
+    def _build_unified_portfolio_plan_audit(
+        self,
+        result: dict[str, Any],
+        target_weights: dict[str, float],
+        per_symbol: dict[str, dict[str, Any]],
+        pool_meta: dict[str, dict[str, Any]],
+        portfolio: dict[str, Any],
+        equity: float,
+        cash_usd: float,
+        spy_target_pct: float,
+        cash_target_pct: float,
+        blocked_new_entries: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        """Create one human-readable table for the final target portfolio.
+
+        This is the audit artifact the user asked for: current portfolio,
+        exits, entries, holds, target book, and every stock's reason in one
+        coherent object before the rebalance executor acts.
+        """
+        holdings = {
+            p.symbol: p
+            for p in portfolio.get("holdings", [])
+            if not self._is_cash_proxy(p.symbol)
+        }
+        all_symbols = sorted(set(pool_meta.keys()) | set(per_symbol.keys()) | set(holdings.keys()))
+        blocked_by_sym = {b.get("symbol"): b for b in blocked_new_entries}
+        rows: list[dict[str, Any]] = []
+        final_positions: list[dict[str, Any]] = []
+        movement: list[dict[str, Any]] = []
+
+        def _float(v: Any, default: float = 0.0) -> float:
+            try:
+                return float(v)
+            except (TypeError, ValueError):
+                return default
+
+        for sym in all_symbols:
+            info = per_symbol.get(sym) or {}
+            meta = pool_meta.get(sym) or {}
+            p = holdings.get(sym)
+            current_qty = _float(meta.get("current_qty"), 0.0)
+            if p is not None and current_qty <= 0:
+                current_qty = abs(_float(getattr(p, "qty", 0), 0.0))
+            current_notional = abs(_float(getattr(p, "market_value", 0), 0.0)) if p is not None else 0.0
+            current_price = _float(info.get("entry_price"), 0.0)
+            if current_price <= 0 and p is not None:
+                current_price = _float(getattr(p, "current_price", 0), 0.0)
+            if current_price <= 0:
+                chart = meta.get("intraday_chart") or {}
+                current_price = _float(chart.get("current_price"), 0.0)
+            target_pct = _float(target_weights.get(sym, info.get("target_pct", 0.0)), 0.0)
+            target_qty = _float(info.get("qty"), 0.0)
+            delta_qty = _float(info.get("delta_qty"), 0.0)
+            target_notional = target_pct * equity
+            if target_qty > 0 and current_price > 0:
+                target_notional = target_qty * current_price
+            delta_notional = target_notional - current_notional
+            action = str(info.get("action") or "").upper()
+            if sym in blocked_by_sym:
+                final_action = "BLOCKED_ENTRY"
+            elif current_qty <= 0 and target_pct > 0:
+                final_action = "ENTER"
+            elif current_qty > 0 and target_pct <= 0:
+                final_action = "EXIT"
+            elif current_qty > 0 and delta_qty > 0:
+                final_action = "INCREASE"
+            elif current_qty > 0 and delta_qty < 0:
+                final_action = "REDUCE"
+            elif current_qty > 0:
+                final_action = "HOLD"
+            else:
+                final_action = "PASS"
+
+            row = {
+                "symbol": sym,
+                "final_action": final_action,
+                "selector_action": action,
+                "currently_held": bool(meta.get("currently_held", p is not None)),
+                "current_qty": round(current_qty, 6),
+                "current_price": round(current_price, 4) if current_price > 0 else None,
+                "current_notional_usd": round(current_notional, 2),
+                "current_weight_pct": round(current_notional / equity, 4) if equity else 0.0,
+                "target_pct": round(target_pct, 4),
+                "target_qty": round(target_qty, 6),
+                "target_notional_usd": round(target_notional, 2),
+                "delta_qty": round(delta_qty, 6),
+                "delta_usd": round(delta_notional, 2),
+                "opportunity_score": _float(info.get("opportunity_score"), 0.0),
+                "remaining_upside_score": _float(info.get("remaining_upside_score"), 0.0),
+                "momentum_grade": (meta.get("momentum_profile") or {}).get("grade"),
+                "reason": info.get("one_sentence_reason"),
+            }
+            if sym in blocked_by_sym:
+                row["blocked_entry"] = blocked_by_sym[sym]
+            rows.append(row)
+            if target_pct > 0:
+                final_positions.append({
+                    "symbol": sym,
+                    "target_pct": round(target_pct, 4),
+                    "target_qty": round(target_qty, 6),
+                    "target_notional_usd": round(target_notional, 2),
+                    "opportunity_score": row["opportunity_score"],
+                    "reason": row["reason"],
+                })
+            if final_action in {"ENTER", "INCREASE", "REDUCE", "EXIT", "BLOCKED_ENTRY"}:
+                movement.append({
+                    "symbol": sym,
+                    "action": final_action,
+                    "delta_usd": row["delta_usd"],
+                    "delta_qty": row["delta_qty"],
+                    "reason": row["reason"],
+                })
+
+        final_positions.sort(key=lambda r: float(r.get("target_pct", 0) or 0), reverse=True)
+        return {
+            "portfolio_thesis": result.get("portfolio_thesis"),
+            "current_portfolio": {
+                "equity": round(equity, 2),
+                "cash_usd": round(cash_usd, 2),
+                "cash_pct": round(cash_usd / equity, 4) if equity else 0.0,
+                "positions": [
+                    r for r in rows
+                    if r["currently_held"] and r["current_qty"] > 0
+                ],
+            },
+            "final_portfolio": {
+                "positions": final_positions,
+                "spy_target_pct": round(float(spy_target_pct or 0), 4),
+                "cash_target_pct": round(float(cash_target_pct or 0), 4),
+                "cash_target_usd": round(float(cash_target_pct or 0) * equity, 2),
+            },
+            "all_symbol_decisions": rows,
+            "capital_movement_plan": movement,
+            "blocked_new_entries": blocked_new_entries,
+            "selected_positions": result.get("selected_positions", []),
+            "rotation_plan": result.get("rotation_plan") or {},
+        }
 
     def _build_selector_context(
         self,
@@ -3320,7 +3669,7 @@ class TradingOrchestrator:
             "rotation_reason_summary": reason_sum,
         })
 
-        # 7. Translate to rebalance plan + execute
+        # 7. Build one final target portfolio, then execute it as one rebalance.
         original_target_weights = result.get("target_weights") or {}
         spy_target_pct = float(result.get("spy_target_pct", 0) or 0)
         held_syms_set = {p.symbol for p in portfolio.get("holdings", [])}
@@ -3336,13 +3685,48 @@ class TradingOrchestrator:
                 "event": "selector_new_entry_staging",
                 "adjustments": staging_adjustments,
             })
+        target_weights, per_symbol, cash_target_pct, blocked_new_entries = (
+            self._apply_new_entry_execution_gates(
+                result=result,
+                target_weights=target_weights,
+                per_symbol=per_symbol,
+                held_symbols=held_syms_set,
+                pool_meta=pool_meta,
+                portfolio=portfolio,
+                equity=equity,
+            )
+        )
+        if blocked_new_entries:
+            log_decision({
+                "event": "selector_new_entry_targets_removed_pre_plan",
+                "removed": blocked_new_entries,
+                "execution_target_weights": target_weights,
+                "execution_cash_target_pct": cash_target_pct,
+            })
         selector_cash_floor_pct = max(
             cash_target_pct,
             float(self.risk.cash_reserve_pct),
         )
-        # compute_rebalance_plan iterates over CURRENT positions only — it
-        # produces trim/exit/grow actions for held names. New entries (selected
-        # symbols not currently held) need a separate buy loop below.
+        unified_portfolio_plan = self._build_unified_portfolio_plan_audit(
+            result=result,
+            target_weights=target_weights,
+            per_symbol=per_symbol,
+            pool_meta=pool_meta,
+            portfolio=portfolio,
+            equity=equity,
+            cash_usd=float(account.cash),
+            spy_target_pct=spy_target_pct,
+            cash_target_pct=cash_target_pct,
+            blocked_new_entries=blocked_new_entries,
+        )
+        log_decision({
+            "event": "unified_portfolio_target_plan",
+            "plan": unified_portfolio_plan,
+        })
+
+        # compute_rebalance_plan covers the union of current holdings and
+        # selected new entries, so trims, exits, adds, and fresh buys are one
+        # capital-allocation plan instead of competing execution paths.
         plan = compute_rebalance_plan(
             positions=portfolio.get("holdings", []),
             tech_map=portfolio.get("tech_map", {}) or {},
@@ -3355,6 +3739,13 @@ class TradingOrchestrator:
             ai_target_weights=target_weights,
             ai_per_symbol=per_symbol,
         )
+        log_decision({
+            "event": "unified_rebalance_plan",
+            "actions": [a.to_dict() for a in plan or []],
+            "cash_floor_pct": selector_cash_floor_pct,
+            "target_weights": target_weights,
+            "cash_target_pct": cash_target_pct,
+        })
         executions: list[dict[str, Any]] = []
         # Sells/exits first so freed cash can fund new buys.
         plan_sorted = sorted(plan or [],
@@ -3373,264 +3764,27 @@ class TradingOrchestrator:
             if exec_result and not exec_result.get("ok"):
                 log.warning("[selector] rebalance %s did not fill", a.symbol)
 
-        # New-entry loop: any selected symbol not in current positions is sized
-        # by portfolio-selector, then executed with a stop no wider than 1%.
         failed_new_entry_targets: list[dict[str, Any]] = []
-        for sym in result.get("selected_positions", []) or []:
-            if sym in held_syms_set or "/" in sym:
+        for action_result in executions:
+            sym = action_result.get("symbol")
+            if not sym or sym in held_syms_set:
                 continue
-            info = per_symbol.get(sym) or {}
-            target_pct = float(info.get("target_pct", 0) or 0)
-            if target_pct <= 0:
+            if not action_result.get("is_new_entry") or action_result.get("side") != "buy":
                 continue
-            selector_target_notional = round(target_pct * equity, 2)
-            if selector_target_notional < float(self.cfg.get("risk", "min_trade_usd", default=500)):
-                log.info("[selector] new entry %s skipped (notional $%.0f below min)",
-                         sym, selector_target_notional)
-                failed_new_entry_targets.append({"symbol": sym, "reason": "below_min_trade"})
-                continue
-            reason = info.get("one_sentence_reason", "selector entry")
-            momentum_block = self._new_entry_momentum_gate(sym, pool_meta)
-            if momentum_block:
-                log.warning(
-                    "[selector] new entry %s blocked by continuation gate: %s",
-                    sym, momentum_block.get("momentum_profile", {}).get("grade"),
-                )
-                executions.append({
-                    "symbol": sym, "side": "buy",
-                    "requested_delta_notional": selector_target_notional,
-                    "selector_target_pct": target_pct,
-                    "reason": reason,
-                    "is_new_entry": True,
-                    "skipped": "failed_continuation_gate",
-                    "momentum_gate": momentum_block,
+            exec_result = action_result.get("execution") or {}
+            failed_reason = None
+            if action_result.get("skipped"):
+                failed_reason = action_result.get("skipped")
+            elif action_result.get("_error"):
+                failed_reason = "execution_exception"
+            elif exec_result and not exec_result.get("ok"):
+                failed_reason = exec_result.get("status") or "execution_not_filled"
+            if failed_reason:
+                failed_new_entry_targets.append({
+                    "symbol": sym,
+                    "reason": failed_reason,
+                    "execution": action_result,
                 })
-                failed_new_entry_targets.append({"symbol": sym, "reason": "failed_continuation_gate"})
-                continue
-            confidence = self._selector_entry_confidence(info)
-            earnings_block = self._selector_entry_earnings_block(
-                sym, confidence, portfolio.get("earnings_map", {}) or {},
-            )
-            if earnings_block:
-                log.warning(
-                    "[selector] new entry %s blocked: earnings in %sd "
-                    "(reason=%s)",
-                    sym, earnings_block.get("days_until_earnings"),
-                    earnings_block.get("reason", "blackout"),
-                )
-                executions.append({
-                    "symbol": sym, "side": "buy",
-                    "requested_delta_notional": selector_target_notional,
-                    "selector_target_pct": target_pct,
-                    "reason": reason,
-                    "is_new_entry": True,
-                    "skipped": "earnings_blackout",
-                    "earnings": earnings_block,
-                })
-                failed_new_entry_targets.append({"symbol": sym, "reason": "earnings_blackout"})
-                continue
-            # Theme cap pre-block: prevent the selector from minting a 4th
-            # member of an already-maxed theme (would otherwise be repaired
-            # by sector_guard post-execution).
-            theme_block = self._theme_cap_pre_block(
-                sym=sym,
-                delta_notional=selector_target_notional,
-                positions=positions,
-                equity=equity,
-                pool_meta=pool_meta,
-            )
-            if theme_block:
-                log.warning(
-                    "[selector] new entry %s blocked: theme=%s reason=%s",
-                    sym, theme_block.get("theme"), theme_block.get("reason"),
-                )
-                executions.append({
-                    "symbol": sym, "side": "buy",
-                    "requested_delta_notional": selector_target_notional,
-                    "selector_target_pct": target_pct,
-                    "reason": reason,
-                    "is_new_entry": True,
-                    "skipped": "theme_cap_pre_block",
-                    "theme_violation": theme_block,
-                })
-                failed_new_entry_targets.append({"symbol": sym, "reason": "theme_cap_pre_block"})
-                continue
-            tech = (portfolio.get("tech_map", {}) or {}).get(sym)
-            if not tech or not tech.price or not tech.atr:
-                audit = {"status": "rejected", "reject_reason": "missing_price_or_atr"}
-                executions.append({
-                    "symbol": sym, "side": "buy",
-                    "requested_delta_notional": selector_target_notional,
-                    "selector_target_pct": target_pct,
-                    "reason": reason,
-                    "is_new_entry": True,
-                    "skipped": "missing_risk_inputs",
-                    "risk_sizer": audit,
-                })
-                failed_new_entry_targets.append({"symbol": sym, "reason": "missing_risk_inputs"})
-                continue
-            # AI-direct sizing: portfolio-selector emits exact qty and entry.
-            # Python enforces a stop no wider than 1% below entry. If the AI
-            # supplies a tighter stop, the execution layer honors it.
-            try:
-                ai_qty = float(info.get("qty") or 0)
-                ai_entry = float(info.get("entry_price") or tech.price or 0)
-            except (TypeError, ValueError):
-                ai_qty = ai_entry = 0.0
-            ai_stop_raw = info.get("stop_loss")
-            ai_target_raw = info.get("take_profit")
-            if ai_qty <= 0 or ai_entry <= 0:
-                log.error(
-                    "[selector] %s missing AI sizing params "
-                    "(qty=%s entry=%s) — skipping",
-                    sym, ai_qty, ai_entry,
-                )
-                executions.append({
-                    "symbol": sym, "side": "buy",
-                    "selector_target_pct": target_pct,
-                    "reason": reason,
-                    "is_new_entry": True,
-                    "skipped": "missing_ai_sizing_params",
-                    "ai_inputs": {"qty": ai_qty, "entry": ai_entry,
-                                  "stop": ai_stop_raw, "target": ai_target_raw},
-                })
-                failed_new_entry_targets.append({"symbol": sym, "reason": "missing_ai_sizing_params"})
-                continue
-            sizing_positions = (
-                self.client.get_positions() if not dry_run
-                else list(portfolio.get("holdings", []) or [])
-            )
-            ok, risk_audit = self.risk.validate_ai_sizing(
-                symbol=sym, qty=ai_qty, entry=ai_entry,
-                stop_loss=ai_stop_raw, take_profit=ai_target_raw,
-                equity=equity, existing_positions=sizing_positions,
-            )
-            if not ok:
-                log.warning(
-                    "[selector] %s AI sizing rejected by safety check: %s",
-                    sym, risk_audit.get("reject_reason", "unknown"),
-                )
-                executions.append({
-                    "symbol": sym, "side": "buy",
-                    "selector_target_pct": target_pct,
-                    "reason": reason,
-                    "is_new_entry": True,
-                    "skipped": "ai_sizing_safety_rejected",
-                    "risk_sizer": risk_audit,
-                })
-                failed_new_entry_targets.append({"symbol": sym, "reason": "ai_sizing_safety_rejected"})
-                continue
-            sizing = self.risk.build_sizing_from_ai(
-                symbol=sym, qty=ai_qty, entry=ai_entry,
-                stop_loss=ai_stop_raw, take_profit=ai_target_raw,
-                confidence=confidence, reasoning=reason,
-            )
-            risk_sized_notional = round(float(sizing.notional), 2)
-            risk_sizer_payload = {
-                **risk_audit,
-                "selector_target_pct": round(target_pct, 4),
-                "selector_target_notional": selector_target_notional,
-                "ai_direct_notional": risk_sized_notional,
-                "source": "ai_direct",
-            }
-            if dry_run:
-                log.info(
-                    "[DRY] Selector AI-direct entry %s qty=%s @ ~$%.2f protective_stop=$%.2f notional=$%.0f",
-                    sym, sizing.qty, ai_entry, sizing.stop_loss, sizing.notional,
-                )
-                executions.append({"dry_run": True, "symbol": sym, "side": "buy",
-                                   "delta_notional": risk_sized_notional,
-                                   "selector_target_pct": target_pct,
-                                   "reason": reason,
-                                   "is_new_entry": True,
-                                   "sizing": sizing.to_dict(),
-                                   "risk_sizer": risk_sizer_payload})
-                continue
-            funded_notional = self._funded_buy_notional(
-                sym, sizing.notional, equity, selector_cash_floor_pct,
-                "[selector] new-entry",
-            )
-            if funded_notional + 0.01 < sizing.notional:
-                # Insufficient confirmed cash for the AI's full qty. We do NOT
-                # silently scale qty down — the AI is the sole sizing
-                # authority. Reject the trade; the AI will see the new cash
-                # level next scan and resize accordingly.
-                log.warning(
-                    "[selector] %s AI qty=%s ($%.0f) exceeds confirmed funding "
-                    "($%.0f) — rejecting (no Python-side qty scaling)",
-                    sym, sizing.qty, sizing.notional, funded_notional,
-                )
-                executions.append({"symbol": sym, "side": "buy",
-                                   "delta_notional": risk_sized_notional,
-                                   "selector_target_pct": target_pct,
-                                   "reason": reason,
-                                   "is_new_entry": True,
-                                   "skipped": "insufficient_confirmed_cash",
-                                   "funded_notional": round(funded_notional, 2),
-                                   "sizing": sizing.to_dict(),
-                                   "risk_sizer": risk_sizer_payload})
-                failed_new_entry_targets.append({"symbol": sym, "reason": "insufficient_confirmed_cash"})
-                continue
-            decision_obj = TradeDecision(
-                symbol=sym,
-                action="buy",
-                confidence=confidence,
-                combined_score=float((portfolio.get("numeric", {}) or {}).get(sym).combined_score)
-                if (portfolio.get("numeric", {}) or {}).get(sym) else 0.0,
-                signal_scores={
-                    "technical": float(getattr(tech, "score", 0.0) or 0.0),
-                    "selector_opportunity": float(info.get("opportunity_score", 0) or 0) / 100.0,
-                },
-                signal_details={
-                    "technical": tech.to_dict(),
-                    "sentiment": ((portfolio.get("sent_map", {}) or {}).get(sym).to_dict()
-                                  if (portfolio.get("sent_map", {}) or {}).get(sym) else None),
-                    "earnings": ((portfolio.get("earnings_map", {}) or {}).get(sym).to_dict()
-                                 if (portfolio.get("earnings_map", {}) or {}).get(sym) else None),
-                    "selector": info,
-                    "risk_sizer": risk_sizer_payload,
-                },
-                reasoning=[
-                    f"ai-direct entry qty={sizing.qty} protective_stop=${sizing.stop_loss:.2f}",
-                    f"selector target_pct={target_pct:.1%} notional=${risk_sized_notional:,.0f}",
-                    reason,
-                ],
-            )
-            try:
-                exec_result = self.executor.execute_ai_bracket(
-                    symbol=sym, qty=sizing.qty,
-                    entry_price=sizing.entry,
-                    stop_loss=ai_stop_raw,
-                    take_profit=ai_target_raw,
-                    reason=reason,
-                    decision=decision_obj,
-                    ai_audit=risk_sizer_payload,
-                )
-                executions.append({"symbol": sym, "side": "buy",
-                                   "delta_notional": risk_sized_notional,
-                                   "selector_target_pct": target_pct,
-                                   "ai_qty": sizing.qty,
-                                   "hard_stop_loss": sizing.stop_loss,
-                                   "protective_stop_loss": sizing.stop_loss,
-                                   "reason": reason,
-                                   "is_new_entry": True,
-                                   "sizing": sizing.to_dict(),
-                                   "risk_sizer": risk_sizer_payload,
-                                   "decision": decision_obj.to_dict(),
-                                   "execution": exec_result.to_dict()})
-                if not exec_result.ok:
-                    failed_new_entry_targets.append({"symbol": sym, "reason": "execution_not_filled"})
-            except Exception as e:
-                log.warning("[selector] AI-direct bracket order failed for %s: %s", sym, e)
-                executions.append({"symbol": sym, "side": "buy",
-                                   "delta_notional": risk_sized_notional,
-                                   "selector_target_pct": target_pct,
-                                   "reason": reason,
-                                   "is_new_entry": True,
-                                   "sizing": sizing.to_dict(),
-                                   "risk_sizer": risk_sizer_payload,
-                                   "_error": str(e)})
-                failed_new_entry_targets.append({"symbol": sym, "reason": "execution_exception"})
 
         if failed_new_entry_targets:
             for item in failed_new_entry_targets:
@@ -3647,12 +3801,36 @@ class TradingOrchestrator:
                 info["action"] = "PASS"
                 info["_execution_target_removed"] = item.get("reason")
                 per_symbol[sym] = info
+            unified_portfolio_plan["post_execution_target_removals"] = failed_new_entry_targets
             log_decision({
                 "event": "selector_failed_new_entry_targets_removed",
                 "removed": failed_new_entry_targets,
                 "execution_target_weights": target_weights,
                 "execution_cash_target_pct": cash_target_pct,
             })
+            unified_portfolio_plan = self._build_unified_portfolio_plan_audit(
+                result=result,
+                target_weights=target_weights,
+                per_symbol=per_symbol,
+                pool_meta=pool_meta,
+                portfolio=portfolio,
+                equity=equity,
+                cash_usd=float(account.cash),
+                spy_target_pct=spy_target_pct,
+                cash_target_pct=cash_target_pct,
+                blocked_new_entries=[
+                    *blocked_new_entries,
+                    *[
+                        {
+                            "symbol": item.get("symbol"),
+                            "reason": item.get("reason"),
+                            "phase": "post_execution",
+                        }
+                        for item in failed_new_entry_targets
+                    ],
+                ],
+            )
+            unified_portfolio_plan["post_execution_target_removals"] = failed_new_entry_targets
 
         self._last_ai_target_weights = dict(target_weights)
         self._last_ai_per_symbol = dict(per_symbol) if isinstance(per_symbol, dict) else {}
@@ -3693,8 +3871,11 @@ class TradingOrchestrator:
                 "exhaustion_penalty_applied": result.get("exhaustion_penalty_applied", []),
                 "new_candidates_selected": result.get("new_candidates_selected"),
                 "new_entry_staging": staging_adjustments,
+                "blocked_new_entries": blocked_new_entries,
+                "post_execution_target_removals": failed_new_entry_targets,
                 "allow_floor_breach": allow_floor_breach,
             },
+            "unified_portfolio_plan": unified_portfolio_plan,
             "exits": exit_results,
             "executions": executions,
             "cash_proxy": cash_proxy_action,

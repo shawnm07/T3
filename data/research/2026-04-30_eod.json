@@ -1,0 +1,48 @@
+{
+  "date": "2026-04-30",
+  "equity": 95786.22524752488,
+  "cash": 4965.88,
+  "daily_return": -0.0267,
+  "daily_vs_spy": -0.0363,
+  "period_return": 0,
+  "period_vs_spy": -0.047,
+  "spy_daily": 0.0096,
+  "spy_30d": 0.047,
+  "positions_count": 3,
+  "trades_today": 23,
+  "positions": [
+    {
+      "symbol": "ALGM",
+      "side": "PositionSide.LONG",
+      "qty": 180.0,
+      "avg_entry": 48.4409,
+      "current_price": 44.07,
+      "pnl_pct": -0.0902,
+      "pnl_dollars": -786.77,
+      "market_value": 7932.6,
+      "price_source": "alpha_vantage"
+    },
+    {
+      "symbol": "DELL",
+      "side": "PositionSide.LONG",
+      "qty": 41.0,
+      "avg_entry": 208.5424,
+      "current_price": 208.58,
+      "pnl_pct": 0.0002,
+      "pnl_dollars": 1.54,
+      "market_value": 8551.78,
+      "price_source": "alpaca_stock_fallback"
+    },
+    {
+      "symbol": "SPY",
+      "side": "PositionSide.LONG",
+      "qty": 107.231316082,
+      "avg_entry": 718.8394,
+      "current_price": 693.23,
+      "pnl_pct": -0.0356,
+      "pnl_dollars": -2746.12,
+      "market_value": 74335.97,
+      "price_source": "alpaca_stock_fallback"
+    }
+  ]
+}

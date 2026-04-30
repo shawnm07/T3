@@ -16,8 +16,13 @@ from src.ai_pipeline import (
 from src.ai_research import AIResearcher
 from src.alpaca_client import AlpacaClient
 from src.config import Config
+from src.candidate_scoring import (
+    annotate_candidate_leadership,
+    missed_breakout_candidates,
+)
 from src.decision import DecisionEngine, TradeDecision
 from src.discovery import Candidate, discover_candidates
+from src.dynamic_watchlist import update_dynamic_watchlist
 from src.earnings import EarningsInfo, fetch_earnings, within_window
 from src.executor import TradeExecutor
 from src.fundamentals import compute_fundamentals
@@ -725,6 +730,7 @@ class TradingOrchestrator:
                 continue
             sent = sent_map.get(sym) or score_news_for_symbol(sym, news)
             sent_map[sym] = sent
+            fund = compute_fundamentals(sym)
             earnings = earnings_map.get(sym)
             if earnings is None and self.earnings_enabled:
                 try:
@@ -739,6 +745,8 @@ class TradingOrchestrator:
                 "sentiment": sent.to_dict(),
                 "macro": macro.to_dict(),
             }
+            if fund:
+                details["fundamental"] = fund.to_dict()
             if earnings:
                 details["earnings"] = earnings.to_dict()
             risk_score = 0.0
@@ -749,7 +757,7 @@ class TradingOrchestrator:
             numeric[sym] = self.engine.decide(
                 symbol=sym,
                 technical_score=tech.score,
-                fundamental_score=None,
+                fundamental_score=fund.score if fund else None,
                 sentiment_score=sent.score,
                 macro_score=macro.score,
                 risk_score=risk_score,
@@ -3197,7 +3205,14 @@ class TradingOrchestrator:
                 "delta_usd": round(delta_notional, 2),
                 "opportunity_score": _float(info.get("opportunity_score"), 0.0),
                 "remaining_upside_score": _float(info.get("remaining_upside_score"), 0.0),
+                "candidate_priority_score": _float(meta.get("candidate_priority_score"), 0.0),
                 "momentum_grade": (meta.get("momentum_profile") or {}).get("grade"),
+                "peer_group": meta.get("peer_group"),
+                "peer_rank": meta.get("peer_rank"),
+                "peer_leader": meta.get("peer_leader"),
+                "peer_pressure": meta.get("peer_pressure"),
+                "sector_rank": meta.get("sector_rank"),
+                "sector_leader": meta.get("sector_leader"),
                 "reason": info.get("one_sentence_reason"),
             }
             if sym in blocked_by_sym:
@@ -3404,6 +3419,12 @@ class TradingOrchestrator:
                 current_qty = 0.0
             block["current_qty"] = current_qty
             block["discovery_sources"] = list(cand.sources)
+            block["discovery_priority_score"] = round(
+                float(getattr(cand, "discovery_priority_score", 0.0) or 0.0), 2
+            )
+            block["discovery_priority_reasons"] = list(
+                getattr(cand, "discovery_priority_reasons", []) or []
+            )
             block["intraday_change_pct"] = (
                 (chart or {}).get("intraday_change_pct")
                 if chart and (chart or {}).get("intraday_change_pct") is not None
@@ -3445,6 +3466,47 @@ class TradingOrchestrator:
                 "momentum_profile": momentum_profile,
                 "intraday_chart": chart,
             }
+
+        annotate_candidate_leadership(
+            unified_pool,
+            self.cfg.get("universe", "peer_groups", default={}) or {},
+            peer_gap_threshold=float(
+                self.cfg.get("selector", "peer_outperformance_threshold", default=10) or 10
+            ),
+        )
+        for block in unified_pool:
+            sym = block.get("symbol")
+            if not sym or sym not in pool_meta:
+                continue
+            for key in (
+                "candidate_priority_score",
+                "candidate_priority_reasons",
+                "peer_group",
+                "peer_rank",
+                "peer_group_size",
+                "peer_leader",
+                "peer_leader_score",
+                "peer_relative_score",
+                "peer_percentile",
+                "peer_pressure",
+                "peer_comparison_summary",
+                "sector_rank",
+                "sector_group_size",
+                "sector_leader",
+                "sector_leader_score",
+                "sector_relative_score",
+                "sector_percentile",
+                "sector_comparison_summary",
+                "theme_rank",
+                "theme_group_size",
+                "theme_leader",
+                "theme_leader_score",
+                "theme_relative_score",
+                "theme_percentile",
+                "theme_comparison_summary",
+            ):
+                if key in block:
+                    pool_meta[sym][key] = block.get(key)
 
         base["candidate_pool"] = unified_pool
         base.pop("positions", None)
@@ -3517,6 +3579,20 @@ class TradingOrchestrator:
             "pool_size": len(candidates),
             "sources_breakdown": breakdown,
             "symbols": [c.symbol for c in candidates],
+            "discovery_priority": [
+                {
+                    "symbol": c.symbol,
+                    "score": round(float(getattr(c, "discovery_priority_score", 0) or 0), 2),
+                    "sources": list(c.sources),
+                    "reasons": list(getattr(c, "discovery_priority_reasons", []) or []),
+                    "held": bool(c.is_held),
+                }
+                for c in sorted(
+                    candidates,
+                    key=lambda x: float(getattr(x, "discovery_priority_score", 0) or 0),
+                    reverse=True,
+                )
+            ],
         })
 
         if not candidates:
@@ -3562,6 +3638,7 @@ class TradingOrchestrator:
             "context": ctx,
             "allow_floor_breach": allow_floor_breach,
         })
+        dynamic_watchlist_update: dict[str, Any] | None = None
 
         # 6. Run selector
         result = run_portfolio_selector(
@@ -3570,6 +3647,18 @@ class TradingOrchestrator:
         )
 
         if result is None:
+            try:
+                dynamic_watchlist_update = update_dynamic_watchlist(
+                    self.cfg,
+                    ctx.get("candidate_pool") or [],
+                )
+                log_decision({
+                    "event": "dynamic_watchlist_update",
+                    "update": dynamic_watchlist_update,
+                    "phase": "selector_failed",
+                })
+            except Exception as e:
+                log.warning("[dynamic_watchlist] update failed after selector failure: %s", e)
             consec = self._handle_selector_failure(reason="ai_failure_or_validation")
             log_decision({"event": "selector_skipped", "reason": "ai_failure",
                           "consecutive_failures": consec})
@@ -3582,6 +3671,7 @@ class TradingOrchestrator:
                 "executions": [],
                 "decisions": [],
                 "pool_size": len(candidates),
+                "dynamic_watchlist": dynamic_watchlist_update,
             }
 
         self._reset_selector_failures()
@@ -3668,6 +3758,35 @@ class TradingOrchestrator:
             "new_candidates_selected": result.get("new_candidates_selected"),
             "rotation_reason_summary": reason_sum,
         })
+
+        missed_breakouts = missed_breakout_candidates(
+            ctx.get("candidate_pool") or [],
+            result.get("selected_positions") or [],
+            result.get("per_symbol") or {},
+            threshold=float(
+                self.cfg.get("selector", "missed_breakout_threshold", default=72) or 72
+            ),
+        )
+        log_decision({
+            "event": "missed_breakout_detection",
+            "missed_breakouts": missed_breakouts,
+            "count": len(missed_breakouts),
+        })
+        try:
+            dynamic_watchlist_update = update_dynamic_watchlist(
+                self.cfg,
+                ctx.get("candidate_pool") or [],
+                selected_symbols=result.get("selected_positions") or [],
+                missed_breakouts=missed_breakouts,
+            )
+            log_decision({
+                "event": "dynamic_watchlist_update",
+                "update": dynamic_watchlist_update,
+                "phase": "selector_completed",
+            })
+        except Exception as e:
+            dynamic_watchlist_update = {"error": str(e)}
+            log.warning("[dynamic_watchlist] update failed: %s", e)
 
         # 7. Build one final target portfolio, then execute it as one rebalance.
         original_target_weights = result.get("target_weights") or {}
@@ -3874,6 +3993,8 @@ class TradingOrchestrator:
                 "blocked_new_entries": blocked_new_entries,
                 "post_execution_target_removals": failed_new_entry_targets,
                 "allow_floor_breach": allow_floor_breach,
+                "missed_breakouts": missed_breakouts,
+                "dynamic_watchlist": dynamic_watchlist_update,
             },
             "unified_portfolio_plan": unified_portfolio_plan,
             "exits": exit_results,
@@ -4296,6 +4417,35 @@ class TradingOrchestrator:
         enable_new_buys = bool(self.cfg.get("overnight", "enable_new_buys", default=True))
         max_rsi_new_buy = float(self.cfg.get("overnight", "max_rsi_for_new_buy", default=78))
         sequential_cash = bool(self.cfg.get("overnight", "sequential_cash_check", default=True))
+        catalyst_enabled = bool(
+            self.cfg.get("preclose_earnings_catalyst", "enabled", default=True)
+        )
+        catalyst_lookahead_days = int(
+            self.cfg.get("preclose_earnings_catalyst", "lookahead_days", default=1) or 1
+        )
+        catalyst_buy_threshold = float(
+            self.cfg.get("preclose_earnings_catalyst", "buy_threshold", default=0.60)
+            or 0.60
+        )
+        catalyst_min_sentiment = float(
+            self.cfg.get("preclose_earnings_catalyst", "min_sentiment", default=0.05)
+            or 0.05
+        )
+        catalyst_size_multiplier = float(
+            self.cfg.get("preclose_earnings_catalyst", "size_multiplier", default=0.35)
+            or 0.35
+        )
+        catalyst_allowed_sources = {
+            str(s)
+            for s in (
+                self.cfg.get(
+                    "preclose_earnings_catalyst",
+                    "allowed_sources",
+                    default=["av_news", "av_gainers", "tv_breakout"],
+                )
+                or []
+            )
+        }
 
         # Weekend / pre-holiday detection: when the gap to the next trading
         # session is ≥ 2 calendar days, swap in stricter weekend thresholds
@@ -4598,20 +4748,33 @@ class TradingOrchestrator:
 
             def _preclose_rank(sym: str) -> float:
                 tech = tech_by_sym[sym]
-                source_bonus = 0.08 if "av_news" in discovery_sources.get(sym, []) else 0.0
-                watch_bonus = 0.04 if (
-                    "watchlist" in discovery_sources.get(sym, [])
-                    or "peer_group" in discovery_sources.get(sym, [])
-                ) else 0.0
-                return float(tech.score) + source_bonus + watch_bonus
+                sources = set(discovery_sources.get(sym, []))
+                source_bonus = 0.0
+                if "av_news" in sources:
+                    source_bonus += 0.08
+                if "tv_breakout" in sources:
+                    source_bonus += 0.06
+                if "av_gainers" in sources:
+                    source_bonus += 0.06
+                # No seed/dynamic watchlist or peer-group bonus here. Those
+                # sources make the ticker eligible only; the rank must come
+                # from actual market/catalyst evidence.
+                return float(tech.score) + source_bonus
 
             candidate_syms.sort(key=_preclose_rank, reverse=True)
             pool_cap = int(self.cfg.get("overnight", "discovery_pool_size", default=45) or 45)
             cand_syms = candidate_syms[:max(scan_candidates, pool_cap)]
-            long_biased = [
-                tech_by_sym[s] for s in cand_syms
-                if tech_by_sym[s].score > 0.05
-            ]
+            long_biased = []
+            for s in cand_syms:
+                tech = tech_by_sym[s]
+                sources = set(discovery_sources.get(s, []))
+                active_catalyst_source = bool(sources.intersection(catalyst_allowed_sources))
+                # Normal preclose entries still need positive technical bias.
+                # Earnings-catalyst candidates may be flat before the event, so
+                # active discovery sources are allowed into scoring even when
+                # the daily technical score has not yet turned up.
+                if tech.score > 0.05 or active_catalyst_source:
+                    long_biased.append(tech)
             intraday_cand = self._fetch_intraday(cand_syms, minutes=5) if cand_syms else None
             news_cand = self.client.get_news(symbols=cand_syms, limit=80, days_back=2) if cand_syms else []
             daily_cand = None
@@ -4640,6 +4803,19 @@ class TradingOrchestrator:
                     fetch_earnings(t.symbol, ttl_hours=self.earnings_ttl_hours)
                     if self.earnings_enabled else None
                 )
+                days_until_earnings = earnings_info.days_until if earnings_info else None
+                sources = set(discovery_sources.get(t.symbol, []))
+                near_earnings = (
+                    days_until_earnings is not None
+                    and 0 <= days_until_earnings <= catalyst_lookahead_days
+                )
+                catalyst_source = bool(sources.intersection(catalyst_allowed_sources))
+                catalyst_sentiment = bool(sent and sent.score >= catalyst_min_sentiment)
+                earnings_catalyst_exception = bool(
+                    catalyst_enabled
+                    and near_earnings
+                    and (catalyst_source or catalyst_sentiment)
+                )
                 report_entry = {
                     "symbol": t.symbol,
                     "tech_score": round(t.score, 3),
@@ -4648,6 +4824,15 @@ class TradingOrchestrator:
                     "intraday_chart": chart,
                     "momentum_profile": momentum_profile,
                     "earnings": earnings_info.to_dict() if earnings_info else None,
+                    "earnings_catalyst_exception": {
+                        "enabled": earnings_catalyst_exception,
+                        "near_earnings": near_earnings,
+                        "days_until_earnings": days_until_earnings,
+                        "catalyst_source": catalyst_source,
+                        "catalyst_sentiment": catalyst_sentiment,
+                        "buy_threshold": catalyst_buy_threshold,
+                        "size_multiplier": catalyst_size_multiplier,
+                    },
                     "discovery_sources": discovery_sources.get(t.symbol, []),
                 }
                 preclose_ctx_by_sym[t.symbol] = report_entry
@@ -4659,9 +4844,25 @@ class TradingOrchestrator:
                     log.info("[%s] overnight skip: RSI %.1f > %.1f (overbought)",
                              t.symbol, t.rsi, max_rsi_new_buy)
                     continue
-                if ov.score < effective_buy_threshold:
+                if near_earnings and not earnings_catalyst_exception:
                     report_entry["skipped"] = (
-                        f"ov {ov.score:.2f} < threshold {effective_buy_threshold:.2f}"
+                        "near earnings without preclose catalyst exception"
+                    )
+                    cand_reports.append(report_entry)
+                    log.info(
+                        "[%s] overnight skip: earnings in %s day(s) without "
+                        "catalyst exception",
+                        t.symbol, days_until_earnings,
+                    )
+                    continue
+                symbol_buy_threshold = (
+                    max(effective_buy_threshold, catalyst_buy_threshold)
+                    if earnings_catalyst_exception
+                    else effective_buy_threshold
+                )
+                if ov.score < symbol_buy_threshold:
+                    report_entry["skipped"] = (
+                        f"ov {ov.score:.2f} < threshold {symbol_buy_threshold:.2f}"
                     )
                     cand_reports.append(report_entry)
                     continue
@@ -4672,9 +4873,9 @@ class TradingOrchestrator:
             picks = scored[:max_new]
             log.info(
                 "Preclose new-buy picks: %d (from %d scored, threshold=%.2f, "
-                "market_bias=%+.2f, discovery=%s)",
+                "earnings_catalyst_threshold=%.2f, market_bias=%+.2f, discovery=%s)",
                 len(picks), len(cand_reports), effective_buy_threshold,
-                market_bias, discovery_breakdown,
+                catalyst_buy_threshold, market_bias, discovery_breakdown,
             )
 
             # Refresh positions after closes
@@ -4736,6 +4937,9 @@ class TradingOrchestrator:
                     "intraday_chart": preclose_ctx.get("intraday_chart"),
                     "momentum_profile": preclose_ctx.get("momentum_profile"),
                     "earnings": preclose_ctx.get("earnings"),
+                    "preclose_earnings_catalyst_exception": preclose_ctx.get(
+                        "earnings_catalyst_exception"
+                    ),
                     "discovery_sources": preclose_ctx.get("discovery_sources", []),
                     "market_bias_spy_lateday": round(market_bias, 3),
                     "fundamental_analyst": {"note": "not computed for preclose speed"},
@@ -4772,10 +4976,16 @@ class TradingOrchestrator:
                     continue
 
                 # Size based on AI-approved confidence, not raw ov.score.
+                catalyst_ctx = preclose_ctx.get("earnings_catalyst_exception") or {}
+                effective_size_mult = (
+                    min(size_mult, catalyst_size_multiplier)
+                    if catalyst_ctx.get("enabled")
+                    else size_mult
+                )
                 sizing = self.risk.size_position(
                     symbol=tech.symbol, side="buy",
                     price=price, atr=atr,
-                    confidence=ai_conf * size_mult,
+                    confidence=ai_conf * effective_size_mult,
                     equity=equity,
                     existing_positions=positions,
                 )

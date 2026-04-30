@@ -19,6 +19,10 @@ Weight the inputs intelligently:
 - For PRECLOSE overnight candidates, explicitly weigh remaining minutes today,
   overnight gap potential, next-session continuation, earnings/news catalyst,
   and the higher preclose buy threshold.
+- If `preclose_earnings_catalyst_exception.enabled=true`, this is a special
+  higher-threshold exception for a near-earnings overnight candidate. Approve
+  only when the catalyst is explicit, the overnight/next-session upside is
+  compelling, and the reduced sizing still offers favorable risk/reward.
 - Risk-manager says "halt_all" = pass regardless of what the others say
 - All five saying GO at A/B grade = max size within caps
 

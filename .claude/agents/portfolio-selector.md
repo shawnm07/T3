@@ -105,7 +105,15 @@ that is stalling.
     (d) Sector diversification (sector not yet in selected set) — promote to
         STRONG preference whenever the selected set would otherwise breach
         the diversification cap in rule 11.
-13. **Mandatory diversification (HARD CAP — executor will VETO if violated).**
+13. **Peer-relative strength is mandatory.** If a candidate has a `peer_group`,
+    compare it against every visible peer in that group. Prefer the peer with
+    stronger `candidate_priority_score`, live continuation, peer rank, and
+    remaining upside. If you choose a lower-ranked peer over a stronger peer
+    (for example AMD over INTC, or MU over SNDK/WDC), your
+    `one_sentence_reason` MUST name the stronger peer and explicitly explain
+    why the chosen symbol still has better forward upside. Otherwise choose the
+    stronger peer.
+14. **Mandatory diversification (HARD CAP — executor will VETO if violated).**
     No more than 3 selected positions may share the same GICS `sector`. No
     more than 3 selected positions may share the same `theme_bucket` (provided
     in each candidate; e.g. `ai_data_center` covers semis + Vertiv-style HVAC
@@ -139,7 +147,12 @@ sector, theme_bucket, tech_score, rsi, atr, intraday_chart,
 momentum_profile, gap_from_prior_close_pct, price_vs_vwap_pct, ema_state,
 distance_from_high_pct, distance_from_low_pct, intraday_change_pct,
 volume_trend, five_day_change_pct, twenty_day_volume_ratio, sent_score,
-numeric_combined_score, earnings_days_until, discovery_sources.
+numeric_combined_score, earnings_days_until, discovery_sources,
+discovery_priority_score, candidate_priority_score,
+candidate_priority_reasons, peer_group, peer_rank, peer_leader,
+peer_pressure, peer_comparison_summary, sector_rank, sector_leader,
+sector_comparison_summary, theme_rank, theme_leader,
+theme_comparison_summary.
 
 `theme_bucket` is the broader correlation cluster (e.g. `ai_data_center`,
 `mega_cap_tech`, `healthcare`, `financials`, `energy`, `defensives`,
@@ -148,6 +161,15 @@ adjacent power names are treated as ONE bucket for the cap in rule 11, even
 though they span different GICS sectors. When `system_state.sector_guard_retry
 == true`, your previous response violated the cap; the violations list is in
 `system_state.sector_guard_violations` — fix them on this attempt.
+
+`candidate_priority_score` is a deterministic surfacing score from live
+momentum, relative volume, active discovery sources, technicals, and sentiment.
+It does NOT include any seed-watchlist or dynamic-watchlist membership bonus.
+Use it to make sure real outperformers and missed breakouts are compared
+against current holds. `peer_pressure.requires_explicit_justification=true`
+means Python will reject choosing this symbol over its stronger peer unless
+your reason names that stronger peer and explains why you still prefer this
+symbol.
 
 You also receive: equity, cash, risk_profile (max_position_pct,
 max_sector_pct, min_positions, max_positions, cash_reserve_pct,

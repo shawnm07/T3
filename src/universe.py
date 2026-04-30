@@ -1,4 +1,4 @@
-"""Trading universe construction: S&P 500 + custom watchlist."""
+"""Trading universe construction: broad indexes + seed/dynamic watchlists."""
 from __future__ import annotations
 import io
 import logging
@@ -9,6 +9,7 @@ import pandas as pd
 import requests
 
 from src.config import Config
+from src.dynamic_watchlist import load_dynamic_watchlist
 
 log = logging.getLogger(__name__)
 
@@ -133,8 +134,14 @@ def build_stock_universe(config: Config) -> list[str]:
             tickers.extend(sp500_tickers())
     elif config.get("universe", "include_sp500", default=True):
         tickers.extend(sp500_tickers())
-    watchlist = config.get("universe", "custom_watchlist", default=[]) or []
-    tickers.extend(watchlist)
+    seed_watchlist = config.get("universe", "seed_watchlist", default=None)
+    if seed_watchlist is None:
+        seed_watchlist = config.get("universe", "custom_watchlist", default=[]) or []
+    tickers.extend(seed_watchlist or [])
+    # Legacy key retained for backward compatibility. It is an eligibility
+    # source only; scoring is handled by discovery/selector priority.
+    tickers.extend(config.get("universe", "custom_watchlist", default=[]) or [])
+    tickers.extend(load_dynamic_watchlist(config))
     excluded = set(config.get("universe", "exclude_tickers", default=[]) or [])
     deduped = []
     seen = set()

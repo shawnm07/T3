@@ -7,7 +7,7 @@ discovered candidates} for the portfolio-selector to rank. Sources:
   - Alpha Vantage TOP_GAINERS_LOSERS (gainers + losers + most-active)
   - Alpha Vantage NEWS_SENTIMENT outliers (topic-driven discovery)
   - tradingview-screener volume-breakout + bollinger-squeeze scans
-  - Custom watchlist (from config.universe.custom_watchlist)
+  - Seed watchlist + auto-maintained dynamic watchlist (eligibility only)
 
 After dedup + screener-floor filtering + sector cap, the pool is capped at
 ``discovery.pool_size_max`` symbols.
@@ -22,7 +22,9 @@ from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from typing import Iterable
 
+from src.candidate_scoring import discovery_priority_score
 from src.config import Config
+from src.dynamic_watchlist import load_dynamic_watchlist
 from src.market_data import MarketDataService
 from src.universe import sp500_sectors
 
@@ -44,6 +46,8 @@ class Candidate:
     volume: int = 0
     market_cap_usd: float = 0.0
     is_held: bool = False
+    discovery_priority_score: float = 0.0
+    discovery_priority_reasons: list[str] = field(default_factory=list)
 
     def add_source(self, src: str) -> None:
         if src not in self.sources:
@@ -83,14 +87,31 @@ def discover_candidates(
             _upsert(pool, sym, "held", sectors, is_held=True)
             breakdown["held"] += 1
 
-    # 2. Custom watchlist (always merged unless disabled)
+    # 2. Seed + dynamic watchlists (eligibility only; no score bonus)
     if cfg.get("discovery", "always_include_watchlist", default=True):
+        seed_watchlist = cfg.get("universe", "seed_watchlist", default=None)
+        if seed_watchlist is None:
+            seed_watchlist = cfg.get("universe", "custom_watchlist", default=[]) or []
+        for sym in seed_watchlist or []:
+            sym = str(sym).upper()
+            if sym in excluded:
+                continue
+            _upsert(pool, sym, "seed_watchlist", sectors)
+            breakdown["seed_watchlist"] += 1
+        # Backward-compatible legacy custom_watchlist support. If both are
+        # present, duplicates are naturally deduped by _upsert.
         for sym in (cfg.get("universe", "custom_watchlist", default=[]) or []):
             sym = str(sym).upper()
             if sym in excluded:
                 continue
-            _upsert(pool, sym, "watchlist", sectors)
-            breakdown["watchlist"] += 1
+            _upsert(pool, sym, "legacy_watchlist", sectors)
+            breakdown["legacy_watchlist"] += 1
+
+    for sym in load_dynamic_watchlist(cfg):
+        if sym in excluded:
+            continue
+        _upsert(pool, sym, "dynamic_watchlist", sectors)
+        breakdown["dynamic_watchlist"] += 1
 
     # 2b. Peer-group expansion. This prevents a single familiar ticker from
     # crowding out obvious substitutes in the same trade (AMD vs INTC, MU vs
@@ -203,10 +224,13 @@ def discover_candidates(
     # 6. Apply screener floors (skip held — they bypass floors)
     pool = _apply_screener_floors(pool, cfg, held)
 
-    # 7. Sector cap on the pool (held bypass the cap)
+    # 7. Rank the raw pool by active market evidence, not by list membership.
+    _annotate_discovery_priorities(pool)
+
+    # 8. Sector cap on the pool (held retained for exit decisions)
     pool = _apply_sector_cap(pool, cfg, held)
 
-    # 8. Hard cap pool_size_max (held always retained)
+    # 9. Hard cap pool_size_max (held always retained)
     pool_max = int(cfg.get("discovery", "pool_size_max", default=50) or 50)
     candidates = _truncate_pool(list(pool.values()), pool_max, held)
 
@@ -406,6 +430,17 @@ def _apply_screener_floors(
     return out
 
 
+def _annotate_discovery_priorities(pool: dict[str, Candidate]) -> None:
+    for cand in pool.values():
+        score, reasons = discovery_priority_score(
+            cand.sources,
+            change_pct=cand.change_pct,
+            volume=cand.volume,
+        )
+        cand.discovery_priority_score = score
+        cand.discovery_priority_reasons = reasons
+
+
 def _apply_sector_cap(
     pool: dict[str, Candidate], cfg: Config, held: set[str]
 ) -> dict[str, Candidate]:
@@ -422,13 +457,20 @@ def _apply_sector_cap(
     keep: dict[str, Candidate] = {}
     dropped = 0
     for sector, members in by_sector.items():
-        # Held equities are NO LONGER exempt — they compete for sector slots like
-        # any other candidate so a saturated book cannot crowd out alternatives
-        # the AI never gets to see. Held names retain a ranking advantage via
-        # is_held in the sort key.
-        rest = list(members)
-        rest.sort(key=lambda c: (-int(c.is_held), -len(c.sources), -abs(c.change_pct)))
-        kept = rest[:max_per_sector]
+        # Held equities are required in the selector input so the AI can exit
+        # them, but they do not consume the non-held discovery quota. Non-held
+        # names compete on active discovery priority, not source count or
+        # watchlist membership.
+        held_members = [c for c in members if c.is_held]
+        rest = [c for c in members if not c.is_held]
+        rest.sort(
+            key=lambda c: (
+                -float(c.discovery_priority_score or 0.0),
+                -abs(float(c.change_pct or 0.0)),
+                c.symbol,
+            )
+        )
+        kept = held_members + rest[:max_per_sector]
         dropped += len(members) - len(kept)
         for c in kept:
             keep[c.symbol] = c
@@ -440,14 +482,28 @@ def _apply_sector_cap(
 def _truncate_pool(
     candidates: list[Candidate], pool_max: int, held: set[str]
 ) -> list[Candidate]:
+    def _sort_key(c: Candidate) -> tuple[float, float, str]:
+        return (
+            -float(c.discovery_priority_score or 0.0),
+            -abs(float(c.change_pct or 0.0)),
+            c.symbol,
+        )
+
     if len(candidates) <= pool_max:
-        return candidates
+        return sorted(candidates, key=_sort_key)
     held_candidates = [c for c in candidates if c.is_held]
     rest = [c for c in candidates if not c.is_held]
-    # Rank by source count then absolute change% so multi-source signals win.
-    rest.sort(key=lambda c: (-len(c.sources), -abs(c.change_pct)))
+    # Rank by active discovery priority. Seed/dynamic watchlist membership is
+    # eligibility-only and receives no priority bonus.
+    rest.sort(
+        key=lambda c: (
+            -float(c.discovery_priority_score or 0.0),
+            -abs(float(c.change_pct or 0.0)),
+            c.symbol,
+        )
+    )
     keep_count = max(0, pool_max - len(held_candidates))
-    truncated = held_candidates + rest[:keep_count]
+    truncated = sorted(held_candidates + rest[:keep_count], key=_sort_key)
     log.info("[discovery] truncated pool from %d to %d (held=%d kept all)",
              len(candidates), len(truncated), len(held_candidates))
     return truncated

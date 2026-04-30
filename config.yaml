@@ -31,7 +31,9 @@ universe:
   # Russell 1000 superset (~1000 names incl. S&P 500 + mid-caps via iShares IWB).
   # AI cost is unchanged — AI only runs on top `max_candidates_per_scan`.
   include_russell_1000: true
-  custom_watchlist:
+  # Static seed list: eligibility only, never a score bonus. The bot maintains
+  # data/state/dynamic_watchlist.json from scan evidence for the active list.
+  seed_watchlist:
     - NVDA
     - TSLA
     - AAPL
@@ -58,6 +60,8 @@ universe:
     - UNH
     - V
     - JPM
+  # Legacy compatibility key. Keep empty so there is no separate static bias.
+  custom_watchlist: []
   exclude_tickers: []
   peer_groups:
     semiconductors:
@@ -123,7 +127,7 @@ overnight:
   max_new_positions: 3        # cap on fresh overnight buys per preclose run
   size_multiplier: 0.5        # shrink normal sizing for overnight carry (0..1)
   scan_candidates: 30         # top-N technical longs to score for overnight gap
-  discovery_pool_size: 45     # include discovery/watchlist/peer/news names in preclose scoring
+  discovery_pool_size: 45     # include discovery/seed/dynamic/peer/news names in preclose scoring
   enable_new_buys: true       # false = only close losers, don't open new overnight trades
   # Weekend (Fri→Mon) and pre-holiday hold rules. Activated when the next
   # trading session is ≥ 2 calendar days away. Weekend gap risk is
@@ -321,6 +325,8 @@ selector:
   max_consecutive_failures: 3      # escalate via Telegram after this many in a row
   tie_tolerance_score: 5           # opportunity-score window for tie-break
   retry_validation_failures: 1     # extra retry on count/range or anti-stagnation errors
+  peer_outperformance_threshold: 10 # lower-scoring peer needs explicit justification
+  missed_breakout_threshold: 72     # log non-selected high-priority breakouts
   state_file: data/state/selector_state.json   # persists consecutive_failures counter
   floor_breach_conditions:
     top_score_below: 0.50          # allow <3 when no candidate scores above this
@@ -342,6 +348,28 @@ discovery:
   always_include_watchlist: true
   always_include_held: true
   include_peer_groups: true
+
+dynamic_watchlist:
+  enabled: true
+  state_file: data/state/dynamic_watchlist.json
+  max_symbols: 80
+  ttl_days: 7
+  add_score: 65
+  keep_score: 45
+  # Membership is eligibility-only. The scoring layer gives no bonus for
+  # seed_watchlist, legacy custom_watchlist, or dynamic_watchlist membership.
+  score_bonus: 0
+
+preclose_earnings_catalyst:
+  enabled: true
+  lookahead_days: 1
+  buy_threshold: 0.60
+  min_sentiment: 0.05
+  size_multiplier: 0.35
+  allowed_sources:
+    - av_news
+    - av_gainers
+    - tv_breakout
 
 # Market data layer (Alpha Vantage primary, NEVER Alpaca for charts/news).
 # Falls back to tradingview-screener (no API key) and yfinance only.

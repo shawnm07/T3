@@ -10,7 +10,7 @@ Exits run first, then entries:
 
 1. **Market check** — Alpaca clock; skip if closed (unless `--force`)
 2. **Macro regime** — `macro.py`: SPY EMA50/200, VIXY proxy, breadth → score [-1,1], regime: `risk_on / neutral / risk_off`. Halt NEW entries if score < -0.55 or VIX spike.
-3. **Discovery** — `discovery.py`: held positions + Alpha Vantage movers (gainers/losers/actives) + news-sentiment outliers + TradingView breakouts/squeezes + custom watchlist → pool of ~40-50 candidates
+3. **Discovery** — `discovery.py`: held positions + Alpha Vantage movers (gainers/losers/actives) + news-sentiment outliers + TradingView breakouts/squeezes + seed/dynamic watchlists (eligibility only, no score bonus) → pool of ~40-50 candidates
 4. **Technicals** — `technicals.py`: RSI, MACD, EMA50/200, ATR, trend/momentum/volatility score per symbol
 5. **Fundamentals** — `fundamentals.py`: yfinance → PE, PEG, rev growth, ROE, debt/equity
 6. **Sentiment** — `sentiment.py`: Alpaca news API, lexical scoring

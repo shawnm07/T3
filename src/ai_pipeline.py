@@ -789,6 +789,32 @@ def validate_selector_response(
                 f"viable candidates: {viable_new[:5]}"
             )
 
+    # Peer-relative pressure: if the selector chooses a weaker peer while a
+    # stronger similar company is in the same pool, it must explicitly justify
+    # the lower-ranked choice by naming the stronger peer. This catches AMD vs
+    # INTC and MU vs SNDK/WDC style failures without blindly forcing a ticker.
+    selected_set = {str(s).upper() for s in selected}
+    peer_gap_threshold = float(
+        cfg.get("selector", "peer_outperformance_threshold", default=10) or 10
+    )
+    for s in selected_set:
+        meta = pool_meta.get(s, {}) if isinstance(pool_meta, dict) else {}
+        pressure = meta.get("peer_pressure") or {}
+        stronger = str(pressure.get("stronger_peer") or "").upper()
+        try:
+            gap = float(pressure.get("score_gap", 0) or 0)
+        except (TypeError, ValueError):
+            gap = 0.0
+        if not stronger or stronger in selected_set or gap < peer_gap_threshold:
+            continue
+        info = per_sym.get(s, {}) if isinstance(per_sym, dict) else {}
+        reason = str(info.get("one_sentence_reason", "") or "")
+        if stronger.lower() not in reason.lower():
+            problems.append(
+                f"selected {s} trails stronger peer {stronger} by {gap:.1f} "
+                "priority points without explicitly justifying that peer choice"
+            )
+
     if "exhaustion_penalty_applied" not in result:
         problems.append("exhaustion_penalty_applied missing")
     elif not isinstance(result.get("exhaustion_penalty_applied"), list):
@@ -820,7 +846,7 @@ def _selector_problems_are_retryable(problems: list[str]) -> bool:
     if not problems:
         return False
     keywords = ("selected count", "duplicates in selected_positions",
-                "incorporate new opportunities")
+                "incorporate new opportunities", "trails stronger peer")
     return all(any(kw in p for kw in keywords) for p in problems)
 
 
@@ -892,7 +918,9 @@ def run_portfolio_selector(
                     "\nFix and re-emit the JSON. You MUST honor the 3-6 selection "
                     "count rule and the anti-stagnation rule (include at least one "
                     "currently_held=false candidate within 5 score points of your "
-                    "lowest selected position)."
+                    "lowest selected position). If a selected stock trails a stronger "
+                    "peer, either select the stronger peer or explicitly name why the "
+                    "weaker peer is still preferred."
                 )
                 ctx_with_feedback = {**context, "_validator_feedback": feedback}
                 context = ctx_with_feedback  # next loop iteration uses this

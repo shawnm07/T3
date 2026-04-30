@@ -65,7 +65,7 @@ Each scan runs this pipeline:
 1. **Macro regime** (`src/macro.py`) — SPY trend, VIXY, S&P-500 breadth →
    `risk_on` / `neutral` / `risk_off` with score in [-1, 1].
 2. **Technical screen** (`src/technicals.py`) — compute trend + momentum +
-   volatility for the entire S&P 500 + custom watchlist, keep top-N by
+   volatility for the broad universe plus seed/dynamic eligibility lists, keep top-N by
    |score|.
 3. **Per-symbol deep dive** for those candidates:
    - Fundamentals via yfinance — PE/PEG, rev+eps growth, ROE, debt/equity
@@ -129,7 +129,7 @@ trading-bot/
 │   ├── risk.py                    # Sizing + stops + sector caps
 │   ├── sentiment.py               # News sentiment
 │   ├── technicals.py              # RSI / MACD / ATR / EMA signals
-│   └── universe.py                # S&P 500 + watchlist
+│   └── universe.py                # indexes + seed/dynamic watchlists
 ├── scripts/
 │   ├── eod_report.py              # End-of-day P&L report
 │   ├── premarket_brief.py         # 08:30 macro brief

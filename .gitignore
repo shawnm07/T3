@@ -5,6 +5,7 @@
 __pycache__/
 *.pyc
 .venv/
+.codex-venv/
 venv/
 data/cache/
 data/trades.jsonl

@@ -1,8 +1,11 @@
 """Trade executor: receives sized decisions and submits orders."""
 from __future__ import annotations
 import logging
+import math
+import re
 import uuid
 from dataclasses import dataclass
+from decimal import Decimal, ROUND_CEILING, ROUND_FLOOR, ROUND_HALF_UP
 from typing import Any
 
 from src.alpaca_client import AlpacaClient
@@ -14,15 +17,39 @@ from src.risk import SizingDecision
 log = logging.getLogger(__name__)
 
 
+def _ceil_cents(value: float) -> float:
+    return float(Decimal(str(value)).quantize(Decimal("0.01"), rounding=ROUND_CEILING))
+
+
+def _round_cents(value: float) -> float:
+    return float(Decimal(str(value)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
+
+
+def _floor_cents(value: float) -> float:
+    return float(Decimal(str(value)).quantize(Decimal("0.01"), rounding=ROUND_FLOOR))
+
+
+def _floor_qty(value: float, places: int = 6) -> float:
+    quantum = Decimal("1").scaleb(-places)
+    return float(Decimal(str(value)).quantize(quantum, rounding=ROUND_FLOOR))
+
+
+_BASE_PRICE_RE = re.compile(r'"base_price"\s*:\s*"?(?P<price>[0-9]+(?:\.[0-9]+)?)"?')
+
+
 @dataclass
 class ExecutionResult:
     symbol: str
     status: str  # "submitted" | "rejected" | "filled" | "unfilled"
     order_id: str | None = None
+    stop_order_id: str | None = None
     message: str = ""
     filled_qty: float = 0.0
     filled_avg_price: float | None = None
     final_status: str = ""
+    stop_status: str = ""
+    stop_price: float | None = None
+    stop_error: str = ""
     ok: bool = False  # True if order filled (or partially filled with qty > 0)
 
     def to_dict(self) -> dict[str, Any]:
@@ -30,11 +57,16 @@ class ExecutionResult:
             "symbol": self.symbol,
             "status": self.status,
             "order_id": self.order_id,
+            "stop_order_id": self.stop_order_id,
             "message": self.message,
             "filled_qty": round(float(self.filled_qty), 6),
             "filled_avg_price": (round(float(self.filled_avg_price), 4)
                                  if self.filled_avg_price is not None else None),
             "final_status": self.final_status,
+            "stop_status": self.stop_status,
+            "stop_price": (round(float(self.stop_price), 4)
+                           if self.stop_price is not None else None),
+            "stop_error": self.stop_error,
             "ok": self.ok,
         }
 
@@ -56,7 +88,7 @@ class TradeExecutor:
         pct = max(0.0, float(self.hard_stop_loss_pct or 0.0))
         if entry <= 0 or pct <= 0:
             return None
-        return round(entry * (1.0 - pct), 2)
+        return _ceil_cents(entry * (1.0 - pct))
 
     def _protective_stop_loss_price(
         self,
@@ -73,17 +105,21 @@ class TradeExecutor:
         if stop_loss in (None, ""):
             return hard_stop, "hard_stop"
         try:
-            ai_stop = round(float(stop_loss), 2)
+            ai_stop = _round_cents(float(stop_loss))
         except (TypeError, ValueError) as exc:
             raise ValueError("stop_loss not numeric") from exc
-        if ai_stop <= 0 or ai_stop >= entry:
-            raise ValueError(
-                f"stop_loss {ai_stop} must be > 0 and < entry_price {entry}"
+        if ai_stop <= 0:
+            raise ValueError(f"stop_loss {ai_stop} must be > 0")
+        if ai_stop >= entry:
+            log.warning(
+                "Ignoring stale/invalid AI stop %.4f because it is >= entry %.4f; "
+                "using hard stop %.4f",
+                ai_stop, entry, hard_stop,
             )
+            return hard_stop, "ai_stop_invalid_for_entry_used_hard_stop"
         if ai_stop < hard_stop:
-            raise ValueError(
-                f"stop_loss {ai_stop} is wider than hard stop floor {hard_stop}"
-            )
+            log.warning("Clamping AI stop %.4f to hard stop floor %.4f", ai_stop, hard_stop)
+            return hard_stop, "ai_stop_clamped_to_hard_stop"
         return ai_stop, ("ai_tighter_stop" if ai_stop > hard_stop else "hard_stop")
 
     def _take_profit_or_none(self, take_profit: float | None, entry_price: float | None) -> float | None:
@@ -101,9 +137,29 @@ class TradeExecutor:
         return target
 
     @staticmethod
-    def _client_order_id(symbol: str) -> str:
+    def _client_order_id(symbol: str, prefix: str = "tb-entry") -> str:
         clean = "".join(ch for ch in str(symbol).upper() if ch.isalnum())[:10]
-        return f"tb-protect-{clean}-{uuid.uuid4().hex[:12]}"
+        return f"{prefix}-{clean}-{uuid.uuid4().hex[:12]}"
+
+    @staticmethod
+    def _protected_bracket_qty(symbol: str, qty: float) -> int:
+        """Alpaca rejects fractional bracket/OTO orders; submit whole shares."""
+        try:
+            qty_f = abs(float(qty))
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"qty not numeric for protected order: {qty!r}") from exc
+        whole_qty = math.floor(qty_f)
+        if whole_qty < 1:
+            raise ValueError(
+                f"protected buy qty for {symbol} rounds below 1 whole share "
+                f"(requested {qty_f:.6f})"
+            )
+        if abs(qty_f - whole_qty) > 1e-9:
+            log.warning(
+                "[%s] fractional protected buy qty %.6f rounded down to %d whole shares",
+                symbol, qty_f, whole_qty,
+            )
+        return whole_qty
 
     def _verify_fill(self, order) -> tuple[float, float | None, str, bool]:
         """Poll the order until terminal. Returns (filled_qty, filled_avg_price, final_status, ok)."""
@@ -139,6 +195,70 @@ class TradeExecutor:
             log.warning("Could not cancel unfilled protective parent order %s: %s",
                         order_id, e)
 
+    @staticmethod
+    def _base_price_from_error(error: str) -> float | None:
+        match = _BASE_PRICE_RE.search(str(error or ""))
+        if not match:
+            return None
+        try:
+            return float(match.group("price"))
+        except (TypeError, ValueError):
+            return None
+
+    def _submit_standalone_stop(
+        self,
+        symbol: str,
+        filled_qty: float,
+        entry_price: float | None,
+        requested_stop_loss: float | None,
+    ) -> tuple[object | None, float | None, str, str]:
+        """Submit a simple sell stop for the actual filled entry quantity.
+
+        Returns (stop_order, stop_price, stop_source, error). If Alpaca reports
+        a base-price threshold, retry once at ``base_price - $0.01``.
+        """
+        qty = _floor_qty(abs(float(filled_qty or 0.0)))
+        if qty <= 0:
+            return None, None, "none", "filled_qty <= 0"
+        stop_to_submit, stop_source = self._protective_stop_loss_price(
+            entry_price, requested_stop_loss,
+        )
+        try:
+            stop_order = self.client.submit_stop_loss(
+                symbol=symbol,
+                qty=qty,
+                stop_price=stop_to_submit,
+                side="sell",
+                tif="day",
+                client_order_id=self._client_order_id(symbol, prefix="tb-stop"),
+            )
+            return stop_order, stop_to_submit, stop_source, ""
+        except Exception as exc:
+            first_error = str(exc)
+            base_price = self._base_price_from_error(first_error)
+            if base_price is None:
+                return None, stop_to_submit, stop_source, first_error
+            adjusted_stop = _floor_cents(min(stop_to_submit, base_price - 0.01))
+            if adjusted_stop <= 0 or adjusted_stop >= stop_to_submit:
+                return None, stop_to_submit, stop_source, first_error
+            try:
+                stop_order = self.client.submit_stop_loss(
+                    symbol=symbol,
+                    qty=qty,
+                    stop_price=adjusted_stop,
+                    side="sell",
+                    tif="day",
+                    client_order_id=self._client_order_id(symbol, prefix="tb-stop"),
+                )
+                return (
+                    stop_order,
+                    adjusted_stop,
+                    f"{stop_source}_broker_base_price_adjusted",
+                    "",
+                )
+            except Exception as retry_exc:
+                return None, adjusted_stop, stop_source, str(retry_exc)
+
     def _cancel_symbol_orders_before_sell(self, symbol: str, reason: str) -> int:
         """Cancel open protective child orders before sells/trims/exits."""
         if not bool(self.cfg.get("execution", "cancel_open_orders_before_sell", default=True)):
@@ -161,32 +281,60 @@ class TradeExecutor:
                 sizing.entry, sizing.stop_loss,
             )
             take_profit = self._take_profit_or_none(sizing.take_profit, sizing.entry)
-            order = self.client.submit_bracket(
+            order_qty = float(sizing.qty)
+            order = self.client.submit_qty(
                 symbol=sizing.symbol,
-                qty=sizing.qty,
+                qty=order_qty,
                 side="buy",
-                stop_loss=stop_to_submit,
-                take_profit=take_profit,
-                tif="gtc",
+                tif="day",
                 client_order_id=self._client_order_id(sizing.symbol),
             )
             order_id = str(order.id)
             filled_qty, avg_price, final_status, ok = self._verify_fill(order)
+            stop_order = None
+            stop_order_id = None
+            stop_status = "not_submitted_entry_unfilled"
+            stop_error = ""
+            actual_stop = None
+            actual_stop_source = stop_source
+            if ok and filled_qty > 0:
+                stop_order, actual_stop, actual_stop_source, stop_error = self._submit_standalone_stop(
+                    sizing.symbol,
+                    filled_qty,
+                    avg_price or sizing.entry,
+                    sizing.stop_loss,
+                )
+                if stop_order is not None:
+                    stop_order_id = str(getattr(stop_order, "id", "") or "")
+                    stop_status = "submitted"
+                else:
+                    stop_status = "failed"
+                    log.error("[%s] entry filled but standalone stop failed: %s",
+                              sizing.symbol, stop_error)
             log_trade({
                 "event": "order_submitted",
                 "symbol": sizing.symbol,
                 "order_id": order_id,
+                "stop_order_id": stop_order_id,
+                "requested_qty": sizing.qty,
+                "submitted_qty": order_qty,
                 "sizing": sizing.to_dict(),
                 "decision": decision.to_dict(),
                 "protective_stop": {
                     "type": "stop_market",
+                    "placement": "standalone_after_entry_fill",
                     "entry_reference": sizing.entry,
+                    "filled_avg_price_reference": avg_price,
                     "stop_loss_pct": self.hard_stop_loss_pct,
                     "hard_stop_loss_floor": self._hard_stop_loss_price(sizing.entry),
-                    "stop_price": stop_to_submit,
-                    "stop_loss_source": stop_source,
+                    "pre_entry_stop_price": stop_to_submit,
+                    "stop_price": actual_stop,
+                    "stop_loss_source": actual_stop_source,
                     "original_stop_loss": sizing.stop_loss,
-                    "take_profit_submitted": take_profit,
+                    "take_profit_requested": take_profit,
+                    "take_profit_submitted": None,
+                    "stop_order_status": stop_status,
+                    "stop_order_error": stop_error,
                 },
                 "final_status": final_status,
                 "filled_qty": filled_qty,
@@ -201,9 +349,18 @@ class TradeExecutor:
                 symbol=sizing.symbol,
                 status="filled" if ok else "unfilled",
                 order_id=order_id,
-                message=f"{sizing.side} {sizing.qty} @ ~${sizing.entry} stop ${stop_to_submit} [{final_status}]",
+                stop_order_id=stop_order_id,
+                message=(
+                    f"{sizing.side} {order_qty} @ ~${sizing.entry} "
+                    f"standalone stop ${actual_stop or stop_to_submit} "
+                    f"[entry={final_status} stop={stop_status}]"
+                ),
                 filled_qty=filled_qty, filled_avg_price=avg_price,
-                final_status=final_status, ok=ok,
+                final_status=final_status,
+                stop_status=stop_status,
+                stop_price=actual_stop,
+                stop_error=stop_error,
+                ok=ok,
             )
         except Exception as e:
             log.error("Order submission failed for %s: %s", sizing.symbol, e)
@@ -221,45 +378,75 @@ class TradeExecutor:
         ai_audit: dict[str, Any] | None = None,
         entry_price: float | None = None,
     ) -> ExecutionResult:
-        """Submit a protected AI-sized buy.
+        """Submit an AI-sized buy, then place a standalone protective stop.
 
         The AI remains the sizing authority for share count. Python enforces
-        loss control: every BUY/ADD gets a stop-market OTO/bracket leg no wider
-        than 1% below entry. AI stop/take-profit fields are optional; a tighter
-        AI stop is honored, while a wider stop is rejected.
+        loss control: every BUY/ADD gets a separate stop-market order no wider
+        than 1% below the actual fill reference. AI stop fields are optional; a
+        tighter AI stop is honored, while a wider or stale stop is clamped to
+        the hard stop. Take-profit is audited but not submitted here because
+        this path intentionally avoids Alpaca advanced order classes.
         """
         try:
             if entry_price is None and ai_audit:
                 entry_price = ai_audit.get("entry_price") or ai_audit.get("ai_entry_price")
             stop_to_submit, stop_source = self._protective_stop_loss_price(entry_price, stop_loss)
             take_profit_to_submit = self._take_profit_or_none(take_profit, entry_price)
-            order = self.client.submit_bracket(
+            order_qty = float(qty)
+            order = self.client.submit_qty(
                 symbol=symbol,
-                qty=qty,
+                qty=order_qty,
                 side="buy",
-                stop_loss=stop_to_submit,
-                take_profit=take_profit_to_submit,
-                tif="gtc",
+                tif="day",
                 client_order_id=self._client_order_id(symbol),
             )
             order_id = str(order.id)
             filled_qty, avg_price, final_status, ok = self._verify_fill(order)
+            stop_order = None
+            stop_order_id = None
+            stop_status = "not_submitted_entry_unfilled"
+            stop_error = ""
+            actual_stop = None
+            actual_stop_source = stop_source
+            if ok and filled_qty > 0:
+                stop_order, actual_stop, actual_stop_source, stop_error = self._submit_standalone_stop(
+                    symbol,
+                    filled_qty,
+                    avg_price or entry_price,
+                    stop_loss,
+                )
+                if stop_order is not None:
+                    stop_order_id = str(getattr(stop_order, "id", "") or "")
+                    stop_status = "submitted"
+                else:
+                    stop_status = "failed"
+                    log.error("[%s] AI entry filled but standalone stop failed: %s",
+                              symbol, stop_error)
             log_trade({
                 "event": "ai_order_submitted",
                 "symbol": symbol,
                 "order_id": order_id,
-                "qty": qty,
+                "stop_order_id": stop_order_id,
+                "qty": order_qty,
+                "requested_qty": qty,
+                "submitted_qty": order_qty,
                 "stop_loss": stop_to_submit,
-                "take_profit": take_profit_to_submit,
+                "take_profit": None,
                 "protective_stop": {
                     "type": "stop_market",
+                    "placement": "standalone_after_entry_fill",
                     "entry_reference": entry_price,
+                    "filled_avg_price_reference": avg_price,
                     "stop_loss_pct": self.hard_stop_loss_pct,
                     "hard_stop_loss_floor": self._hard_stop_loss_price(entry_price),
-                    "stop_price": stop_to_submit,
-                    "stop_loss_source": stop_source,
+                    "pre_entry_stop_price": stop_to_submit,
+                    "stop_price": actual_stop,
+                    "stop_loss_source": actual_stop_source,
                     "ai_stop_loss": stop_loss,
                     "ai_take_profit": take_profit,
+                    "take_profit_submitted": None,
+                    "stop_order_status": stop_status,
+                    "stop_order_error": stop_error,
                 },
                 "reason": reason,
                 "ai_audit": ai_audit or {},
@@ -271,18 +458,26 @@ class TradeExecutor:
             })
             if not ok:
                 self._cancel_open_parent_if_needed(order_id, final_status, ok)
-                log.warning("[%s] AI bracket order %s did NOT fill (status=%s filled=%.4f)",
+                log.warning("[%s] AI entry order %s did NOT fill (status=%s filled=%.4f)",
                             symbol, order_id, final_status, filled_qty)
             return ExecutionResult(
                 symbol=symbol,
                 status="filled" if ok else "unfilled",
                 order_id=order_id,
-                message=f"buy {qty} stop ${stop_to_submit} [{final_status}]",
+                stop_order_id=stop_order_id,
+                message=(
+                    f"buy {order_qty} standalone stop ${actual_stop or stop_to_submit} "
+                    f"[entry={final_status} stop={stop_status}]"
+                ),
                 filled_qty=filled_qty, filled_avg_price=avg_price,
-                final_status=final_status, ok=ok,
+                final_status=final_status,
+                stop_status=stop_status,
+                stop_price=actual_stop,
+                stop_error=stop_error,
+                ok=ok,
             )
         except Exception as e:
-            log.error("AI bracket submission failed for %s: %s", symbol, e)
+            log.error("AI entry/stop submission failed for %s: %s", symbol, e)
             log_trade({"event": "ai_order_failed", "symbol": symbol, "error": str(e),
                        "qty": qty, "stop_loss": stop_loss, "take_profit": take_profit,
                        "ai_audit": ai_audit or {}})
@@ -299,8 +494,8 @@ class TradeExecutor:
         """Adjust a held position by an exact share delta from the AI.
 
         Negative deltas trim shares. Positive deltas are rejected here because
-        every BUY/ADD must go through ``execute_ai_bracket`` and receive the
-        hard protective stop. For full EXITs use ``close_position``.
+            every BUY/ADD must go through the entry-plus-standalone-stop path.
+            For full EXITs use ``close_position``.
         """
         try:
             abs_qty = abs(float(delta_qty))
@@ -312,7 +507,7 @@ class TradeExecutor:
                 return ExecutionResult(
                     symbol=symbol,
                     status="rejected",
-                    message="positive qty delta requires protected buy path",
+                    message="positive qty delta requires entry-plus-standalone-stop buy path",
                 )
             cancelled = self._cancel_symbol_orders_before_sell(symbol, reason)
             order = self.client.submit_qty(symbol, abs_qty, side=side, tif="day")

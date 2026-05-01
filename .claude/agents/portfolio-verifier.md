@@ -101,9 +101,11 @@ trade for these — they are done.
    off-limits.
 7. **Empty list is a valid (and common) answer.** If everything is within
    tolerance, return `corrective_trades: []` and explain why in the thesis.
-8. **Exact quantity required.** The executor submits your `delta_qty` exactly.
-   Do not emit only dollars. Use the `current_price` in the input row to
-   convert the needed gap into a share delta.
+8. **Share quantity required.** Do not emit only dollars. Use the
+   `current_price` in the input row to convert the needed gap into a share
+   delta. SELL deltas can be fractional; BUY deltas that require protective
+   bracket orders should be whole shares because the broker rejects fractional
+   protected orders.
 
 # Why this role exists
 

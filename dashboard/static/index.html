@@ -1,0 +1,299 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Trading Bot Dashboard</title>
+    <link rel="stylesheet" href="/static/styles.css">
+  </head>
+  <body>
+    <div class="shell">
+      <header class="topbar">
+        <div class="brand">
+          <div class="brand-mark">TB</div>
+          <div>
+            <p class="eyebrow">Local command center</p>
+            <h1>Trading Bot Dashboard</h1>
+          </div>
+        </div>
+        <div class="topbar-actions">
+          <span id="modeBadge" class="badge neutral">Loading</span>
+          <button id="refreshBtn" class="button">Refresh</button>
+          <button id="liveBtn" class="button primary">Live Snapshot</button>
+        </div>
+      </header>
+
+      <main>
+        <section class="metrics-grid" aria-label="Account metrics">
+          <article class="metric">
+            <span>Account Balance</span>
+            <strong id="metricEquity">--</strong>
+            <small id="metricEquityMeta">--</small>
+          </article>
+          <article class="metric">
+            <span>Cash</span>
+            <strong id="metricCash">--</strong>
+            <small id="metricCashMeta">--</small>
+          </article>
+          <article class="metric">
+            <span>Positions</span>
+            <strong id="metricPositions">--</strong>
+            <small id="metricPositionsMeta">--</small>
+          </article>
+          <article class="metric">
+            <span>Portfolio vs SPY</span>
+            <strong id="metricRelative">--</strong>
+            <small id="metricRelativeMeta">--</small>
+          </article>
+          <article class="metric">
+            <span>Last Scan</span>
+            <strong id="metricLastScan">--</strong>
+            <small id="metricLastScanMeta">--</small>
+          </article>
+          <article class="metric">
+            <span>Trade Tape</span>
+            <strong id="metricTrades">--</strong>
+            <small id="metricTradesMeta">--</small>
+          </article>
+        </section>
+
+        <section class="grid main-grid">
+          <article class="panel span-8 chart-panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Scheduled scan history</p>
+                <h2>Performance vs SPY</h2>
+              </div>
+              <div id="perfLegend" class="legend"></div>
+            </div>
+            <div class="chart-wrap tall">
+              <canvas id="performanceChart"></canvas>
+              <div id="performanceEmpty" class="empty-state hidden"></div>
+            </div>
+            <div class="source-line" id="performanceSource"></div>
+          </article>
+
+          <article class="panel span-4">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Current shape</p>
+                <h2>Allocation</h2>
+              </div>
+            </div>
+            <div class="chart-wrap donut-wrap">
+              <canvas id="allocationChart"></canvas>
+            </div>
+            <div id="allocationList" class="allocation-list"></div>
+          </article>
+        </section>
+
+        <section class="grid">
+          <article class="panel span-6 chart-panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Daily reports</p>
+                <h2>Account Balance</h2>
+              </div>
+            </div>
+            <div class="chart-wrap">
+              <canvas id="balanceChart"></canvas>
+              <div id="balanceEmpty" class="empty-state hidden"></div>
+            </div>
+          </article>
+
+          <article class="panel span-6">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">AI selector</p>
+                <h2>Portfolio Plan</h2>
+              </div>
+            </div>
+            <p id="portfolioThesis" class="thesis"></p>
+            <div id="targetWeights" class="target-list"></div>
+          </article>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">Holdings</p>
+              <h2>Positions</h2>
+            </div>
+            <span id="positionsSource" class="badge neutral">--</span>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                  <tr>
+                    <th>As Of</th>
+                    <th>Symbol</th>
+                    <th>Side</th>
+                  <th>Qty</th>
+                  <th>Avg Entry</th>
+                  <th>Current</th>
+                  <th>Market Value</th>
+                  <th>Weight</th>
+                  <th>P&amp;L</th>
+                  <th>Source</th>
+                </tr>
+              </thead>
+              <tbody id="positionsBody"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="grid">
+          <article class="panel span-7">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Latest scan</p>
+                <h2>Capital Movement</h2>
+              </div>
+            </div>
+            <div class="table-wrap compact-table">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Time</th>
+                    <th>Symbol</th>
+                    <th>Action</th>
+                    <th>Delta</th>
+                    <th>Target</th>
+                    <th>Entry</th>
+                    <th>Exit</th>
+                    <th>P&amp;L</th>
+                    <th>Reason</th>
+                  </tr>
+                </thead>
+                <tbody id="capitalPlanBody"></tbody>
+              </table>
+            </div>
+          </article>
+
+          <article class="panel span-5">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Market context</p>
+                <h2>Macro and Risk</h2>
+              </div>
+            </div>
+            <div id="macroGrid" class="info-grid"></div>
+            <div id="riskGrid" class="info-grid muted-grid"></div>
+          </article>
+        </section>
+
+        <section class="grid">
+          <article class="panel span-8 chart-panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Candidate universe</p>
+                <h2>Top Opportunities</h2>
+              </div>
+            </div>
+            <div class="chart-wrap">
+              <canvas id="opportunityChart"></canvas>
+            </div>
+          </article>
+
+          <article class="panel span-4">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Watchlist</p>
+                <h2>Dynamic Leaders</h2>
+              </div>
+              <button id="watchlistAllBtn" class="button">View All</button>
+            </div>
+            <div id="watchlistLeaders" class="stack-list"></div>
+          </article>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head table-tools">
+            <div>
+              <p class="eyebrow">Every ranked symbol</p>
+              <h2>Stock Decisions</h2>
+            </div>
+            <input id="symbolSearch" class="search" type="search" placeholder="Filter symbols">
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Symbol</th>
+                  <th>Time</th>
+                  <th>Action</th>
+                  <th>Opportunity</th>
+                  <th>Priority</th>
+                  <th>Momentum</th>
+                  <th>Target</th>
+                  <th>Delta</th>
+                  <th>Reason</th>
+                </tr>
+              </thead>
+              <tbody id="stockDecisionsBody"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="grid">
+          <article class="panel span-6">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Orders and executions</p>
+                <h2>Recent Trades</h2>
+              </div>
+            </div>
+            <div id="tradesList" class="event-list"></div>
+          </article>
+
+          <article class="panel span-6">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">AI and system log</p>
+                <h2>Recent Decisions</h2>
+              </div>
+            </div>
+            <div id="decisionsList" class="event-list"></div>
+          </article>
+        </section>
+
+        <section class="grid">
+          <article class="panel span-7">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Skipped leaders</p>
+                <h2>Missed Breakouts and Blocks</h2>
+              </div>
+            </div>
+            <div id="blockedList" class="stack-list"></div>
+          </article>
+
+          <article class="panel span-5">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Files</p>
+                <h2>Data Health</h2>
+              </div>
+            </div>
+            <div id="dataHealth" class="source-grid"></div>
+          </article>
+        </section>
+      </main>
+    </div>
+
+    <aside id="detailDrawer" class="drawer" aria-hidden="true">
+      <div class="drawer-head">
+        <div>
+          <p class="eyebrow">Symbol detail</p>
+          <h2 id="drawerTitle">--</h2>
+        </div>
+        <button id="drawerClose" class="icon-button" aria-label="Close">Close</button>
+      </div>
+      <div id="drawerBody" class="drawer-body"></div>
+    </aside>
+
+    <div id="chartTooltip" class="chart-tooltip hidden"></div>
+    <div id="toast" class="toast hidden"></div>
+    <script src="/static/app.js"></script>
+  </body>
+</html>

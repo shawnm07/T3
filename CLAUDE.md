@@ -1,6 +1,6 @@
 # Trading Bot — Context
 
-Autonomous Alpaca paper-trading bot. Goal: beat SPY. **Long US equities only** (no shorts, no crypto — code enforces this). Swing cadence, 4× daily scans on weekdays.
+Autonomous Alpaca paper-trading bot. Goal: beat SPY. **Long US equities only** (no shorts, no crypto — code enforces this). Swing cadence, 6× daily scans on weekdays.
 
 **Account:** PA34KBGT3V7E (~$99K paper equity).
 
@@ -50,7 +50,7 @@ src/decision.py            # numeric consensus engine
 src/risk.py                # sizing + stops + caps
 src/technicals.py          # RSI/MACD/ATR/EMA signals
 src/sector_guard.py        # diversification hard caps
-scripts/scan_and_trade.py  # intraday entry point (4×/day)
+scripts/scan_and_trade.py  # intraday entry point (6×/day)
 scripts/preclose_decision.py  # ~15:55 ET overnight hold/buy
 scripts/premarket_brief.py    # ~8:30 ET macro brief
 scripts/eod_report.py         # ~16:15 ET daily P&L vs SPY

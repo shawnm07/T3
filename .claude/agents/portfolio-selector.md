@@ -195,7 +195,8 @@ For every selected position you MUST output an exact, broker-ready order:
 - `entry_price` — the price you expect the entry to fill near (use
   `current_price`; this is informational for the audit trail).
 - `stop_loss` — optional. Python defaults to the 1% protective stop. You may
-  provide a tighter stop, but a wider stop will be rejected.
+  provide a tighter stop; a slightly wider/rounded stop is clamped to the hard
+  floor, but target the floor exactly when using a hard stop.
 - `take_profit` — optional. Omit it unless a specific profit-taking level is
   central to your thesis.
 - `delta_qty` — signed share delta vs the position currently held
@@ -224,6 +225,9 @@ For HOLD actions on currently-held names with no change: `qty=current_qty`,
 For REDUCE / INCREASE: emit the new total `qty`, the signed `delta_qty`,
 and optionally a take-profit if it is part of the thesis. Python will create
 the protective stop.
+
+For BUY / INCREASE protected buys, prefer whole-share `qty` / positive
+`delta_qty`; the broker rejects fractional protected bracket orders.
 
 For every symbol in the pool, make `per_symbol` read like a decision table:
 why it is being BOUGHT, INCREASED, HELD, REDUCED, EXITED, or PASSED. The
@@ -296,7 +300,9 @@ Exactly one sentence per symbol. Action-focused. Examples:
 - selected_positions is a subset of candidate_pool
 - target_weights.keys() == set(selected_positions)
 - 0 < every weight <= max_position_pct (0.50)
-- sum(target_weights) + spy_target_pct + cash_target_pct in [0.99, 1.01]
+- sum(target_weights) + spy_target_pct + cash_target_pct in [0.99, 1.01];
+  target exactly 1.0. The runtime may normalize tiny drift, but do not rely
+  on that for intentionally loose allocations.
 - every currently_held symbol either appears in selected_positions OR has
   per_symbol[sym].target_pct == 0 AND action == "EXIT"
 - per_symbol covers EVERY input symbol with exhaustion_penalty AND
@@ -306,7 +312,8 @@ Exactly one sentence per symbol. Action-focused. Examples:
   one_sentence_reason
 - every entry in selected_positions has all of: qty (>0), entry_price (>0),
   delta_qty (numeric). stop_loss and take_profit may be null; supplied
-  stop_loss must be tighter than 1% below entry_price.
+  stop_loss should be no wider than 1% below entry_price after cent rounding.
+  If uncertain, use null and the runtime will submit the hard 1% stop.
 - `qty * entry_price` does NOT exceed `equity * max_position_pct` for any
   selected symbol
 - effective stop risk does NOT exceed `equity * max_risk_per_trade_pct` for

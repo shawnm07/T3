@@ -13,7 +13,7 @@ Alpaca.
 | Benchmark | SPY |
 | Risk profile | balanced (max 20% drawdown, max 6 positions) |
 | Assets | US long equities |
-| Cadence | swing — research 2-4× weekdays |
+| Cadence | swing — research 6× weekdays |
 
 ## Quick commands
 
@@ -41,6 +41,7 @@ offset; see the top of `setup_schedule.ps1` when the East Coast switches to EST:
 | --- | --- | --- |
 | TradingBot_PreMarket | Mon-Fri 05:30 Phoenix | `premarket_brief.py` |
 | TradingBot_Scan_0700 | Mon-Fri 07:00 Phoenix | `scan_and_trade.py` |
+| TradingBot_Scan_0800 | Mon-Fri 08:00 Phoenix | `scan_and_trade.py` |
 | TradingBot_Scan_0900 | Mon-Fri 09:00 Phoenix | `scan_and_trade.py` |
 | TradingBot_Scan_1000 | Mon-Fri 10:00 Phoenix | `scan_and_trade.py` |
 | TradingBot_Scan_1100 | Mon-Fri 11:00 Phoenix | `scan_and_trade.py` |

@@ -1,8 +1,10 @@
 """Thin wrapper around alpaca-py: account, market data, news, orders."""
 from __future__ import annotations
 import logging
+import math
 import time
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal, ROUND_HALF_UP
 from typing import Iterable
 
 from alpaca.data.historical import StockHistoricalDataClient
@@ -14,11 +16,12 @@ from alpaca.data.requests import (
 )
 from alpaca.data.timeframe import TimeFrame
 from alpaca.trading.client import TradingClient
-from alpaca.trading.enums import OrderClass, OrderSide, TimeInForce
+from alpaca.trading.enums import OrderClass, OrderSide, OrderType, TimeInForce
 from alpaca.trading.requests import (
     GetOrdersRequest,
     LimitOrderRequest,
     MarketOrderRequest,
+    StopOrderRequest,
     StopLossRequest,
     TakeProfitRequest,
 )
@@ -31,6 +34,10 @@ log = logging.getLogger(__name__)
 # Snapshot cache TTL — keeps the (account, positions) view consistent for a
 # scan cycle without re-hitting Alpha Vantage dozens of times.
 _SNAPSHOT_TTL_SEC = 15.0
+
+
+def _round_cents(value: float) -> float:
+    return float(Decimal(str(value)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
 
 
 class AlpacaClient:
@@ -138,6 +145,38 @@ class AlpacaClient:
         return items
 
     # ---------- orders ----------
+    @staticmethod
+    def _day_time_in_force(tif: str | None, *, symbol: str, side: str) -> TimeInForce:
+        requested = str(tif or "day").lower()
+        if requested != "day":
+            log.warning(
+                "Forcing %s %s time_in_force %s -> day",
+                side.lower(), symbol, requested,
+            )
+        return TimeInForce.DAY
+
+    @staticmethod
+    def _protected_order_qty(symbol: str, qty: float) -> int:
+        """Alpaca bracket/OTO orders must be whole-share orders."""
+        try:
+            qty_f = float(qty)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"qty not numeric for protected {symbol} order: {qty!r}") from exc
+        if qty_f <= 0:
+            raise ValueError(f"protected {symbol} order qty must be > 0, got {qty!r}")
+        whole_qty = math.floor(qty_f)
+        if whole_qty < 1:
+            raise ValueError(
+                f"protected {symbol} order qty rounds below 1 whole share "
+                f"(requested {qty_f:.6f})"
+            )
+        if abs(qty_f - whole_qty) > 1e-9:
+            log.warning(
+                "Rounded protected %s order qty %.6f down to %d whole shares",
+                symbol, qty_f, whole_qty,
+            )
+        return whole_qty
+
     def submit_bracket(
         self,
         symbol: str,
@@ -151,37 +190,51 @@ class AlpacaClient:
         client_order_id: str | None = None,
     ):
         side_enum = OrderSide.BUY if side.lower() == "buy" else OrderSide.SELL
-        tif_enum = {"day": TimeInForce.DAY, "gtc": TimeInForce.GTC, "ioc": TimeInForce.IOC}[tif.lower()]
-        kwargs: dict = dict(symbol=symbol, qty=qty, side=side_enum, time_in_force=tif_enum)
+        tif_enum = self._day_time_in_force(tif, symbol=symbol, side=side)
+        has_stop = stop_loss not in (None, "")
+        has_take_profit = take_profit not in (None, "")
+        protected = has_stop or has_take_profit
+        submitted_qty = self._protected_order_qty(symbol, qty) if protected else qty
+        kwargs: dict = dict(symbol=symbol, qty=submitted_qty, side=side_enum, time_in_force=tif_enum)
         if client_order_id:
             kwargs["client_order_id"] = client_order_id
-        if stop_loss or take_profit:
-            kwargs["order_class"] = OrderClass.BRACKET if (stop_loss and take_profit) else OrderClass.OTO
-            if stop_loss:
-                stop_kwargs: dict = {"stop_price": round(stop_loss, 2)}
+        if protected:
+            kwargs["order_class"] = OrderClass.BRACKET if (has_stop and has_take_profit) else OrderClass.OTO
+            if has_stop:
+                stop_kwargs: dict = {"stop_price": _round_cents(stop_loss)}
                 if stop_loss_limit_price is not None:
-                    stop_kwargs["limit_price"] = round(stop_loss_limit_price, 2)
+                    stop_kwargs["limit_price"] = _round_cents(stop_loss_limit_price)
                 kwargs["stop_loss"] = StopLossRequest(**stop_kwargs)
-            if take_profit:
-                kwargs["take_profit"] = TakeProfitRequest(limit_price=round(take_profit, 2))
+            if has_take_profit:
+                kwargs["take_profit"] = TakeProfitRequest(limit_price=_round_cents(take_profit))
         if limit_price is not None:
-            kwargs["limit_price"] = round(limit_price, 2)
+            kwargs["limit_price"] = _round_cents(limit_price)
             req = LimitOrderRequest(**kwargs)
         else:
             req = MarketOrderRequest(**kwargs)
         order = self.trading.submit_order(req)
-        log.info("Submitted %s %s %s qty=%s order_id=%s", side, symbol, req.order_class or "simple", qty, order.id)
+        log.info("Submitted %s %s %s qty=%s order_id=%s", side, symbol, req.order_class or "simple", submitted_qty, order.id)
         self.invalidate_snapshot()
         return order
 
-    def submit_qty(self, symbol: str, qty: float, side: str, tif: str = "day"):
+    def submit_qty(
+        self,
+        symbol: str,
+        qty: float,
+        side: str,
+        tif: str = "day",
+        client_order_id: str | None = None,
+    ):
         """Submit a plain market order sized by exact share count (no bracket)."""
         side_enum = OrderSide.BUY if side.lower() == "buy" else OrderSide.SELL
-        tif_enum = {"day": TimeInForce.DAY, "gtc": TimeInForce.GTC, "ioc": TimeInForce.IOC}[tif.lower()]
-        req = MarketOrderRequest(
+        tif_enum = self._day_time_in_force(tif, symbol=symbol, side=side)
+        kwargs: dict = dict(
             symbol=symbol, qty=qty,
             side=side_enum, time_in_force=tif_enum,
         )
+        if client_order_id:
+            kwargs["client_order_id"] = client_order_id
+        req = MarketOrderRequest(**kwargs)
         order = self.trading.submit_order(req)
         log.info("Submitted qty %s %s %s order_id=%s", side, symbol, qty, order.id)
         self.invalidate_snapshot()
@@ -190,7 +243,7 @@ class AlpacaClient:
     def submit_notional(self, symbol: str, notional: float, side: str, tif: str = "day"):
         """Submit a plain market order sized by dollar notional (fractional-share)."""
         side_enum = OrderSide.BUY if side.lower() == "buy" else OrderSide.SELL
-        tif_enum = {"day": TimeInForce.DAY, "gtc": TimeInForce.GTC, "ioc": TimeInForce.IOC}[tif.lower()]
+        tif_enum = self._day_time_in_force(tif, symbol=symbol, side=side)
         req = MarketOrderRequest(
             symbol=symbol, notional=round(notional, 2),
             side=side_enum, time_in_force=tif_enum,
@@ -200,19 +253,60 @@ class AlpacaClient:
         self.invalidate_snapshot()
         return order
 
-    def close_position(self, symbol: str, qty: float | None = None, percentage: float | None = None):
-        from alpaca.trading.requests import ClosePositionRequest
-        # alpaca-py requires one of qty/percentage. Default to a full close (100%)
-        # when the caller specifies neither.
-        if qty is None and percentage is None:
-            percentage = 100
-        req = ClosePositionRequest(
-            qty=str(qty) if qty is not None else None,
-            percentage=str(percentage) if percentage is not None else None,
+    def submit_stop_loss(
+        self,
+        symbol: str,
+        qty: float,
+        stop_price: float,
+        side: str = "sell",
+        tif: str = "day",
+        client_order_id: str | None = None,
+    ):
+        """Submit a standalone stop order.
+
+        This intentionally uses Alpaca's simple ``type=stop`` order shape
+        instead of an OTO/bracket ``stop_loss`` leg so fractional entries can
+        be protected after their actual fill quantity is known.
+        """
+        side_enum = OrderSide.BUY if side.lower() == "buy" else OrderSide.SELL
+        tif_enum = self._day_time_in_force(tif, symbol=symbol, side=side)
+        kwargs: dict = dict(
+            symbol=symbol,
+            qty=qty,
+            side=side_enum,
+            type=OrderType.STOP,
+            time_in_force=tif_enum,
+            stop_price=_round_cents(stop_price),
         )
-        res = self.trading.close_position(symbol, req)
+        if client_order_id:
+            kwargs["client_order_id"] = client_order_id
+        req = StopOrderRequest(**kwargs)
+        order = self.trading.submit_order(req)
+        log.info(
+            "Submitted standalone stop %s %s qty=%s stop=%.2f order_id=%s",
+            side, symbol, qty, _round_cents(stop_price), order.id,
+        )
         self.invalidate_snapshot()
-        return res
+        return order
+
+    def close_position(self, symbol: str, qty: float | None = None, percentage: float | None = None):
+        sym = str(symbol or "").upper()
+        raw_qty = 0.0
+        for pos in self.get_positions_raw() or []:
+            if str(getattr(pos, "symbol", "") or "").upper() == sym:
+                raw_qty = float(getattr(pos, "qty", 0) or 0)
+                break
+        if raw_qty == 0:
+            raise ValueError(f"no open position for {symbol}")
+        if qty is None:
+            pct = 100.0 if percentage is None else max(0.0, min(100.0, float(percentage)))
+            close_qty = abs(raw_qty) * (pct / 100.0)
+        else:
+            close_qty = min(abs(float(qty)), abs(raw_qty))
+        if close_qty <= 0:
+            raise ValueError(f"close quantity must be > 0 for {symbol}")
+        side = "sell" if raw_qty > 0 else "buy"
+        return self.submit_qty(sym, close_qty, side=side, tif="day")
 
     def get_order(self, order_id: str):
         return self.trading.get_order_by_id(order_id)

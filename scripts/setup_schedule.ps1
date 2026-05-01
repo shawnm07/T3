@@ -64,13 +64,13 @@ foreach ($obsolete in @("TradingBot_Scan_1230","TradingBot_Scan_1530")) {
 $triggerPre = New-ScheduledTaskTrigger -Weekly -WeeksInterval 1 -DaysOfWeek $weekdays -At "05:30"
 Register-BotTask "PreMarket" (Join-Path $BotDir "scripts\premarket_brief.py") @($triggerPre)
 
-# Intraday scans: Phoenix 07:00, 09:00, 10:00, 11:00, 12:00
-# (= 10/12/13/14/15 ET EDT), weekdays. These scans may open new
+# Intraday scans: Phoenix 07:00, 08:00, 09:00, 10:00, 11:00, 12:00
+# (= 10/11/12/13/14/15 ET EDT), weekdays. These scans may open new
 # continuation-confirmed positions; PreClose owns explicit overnight buys.
-foreach ($t in @("07:00","09:00","10:00","11:00","12:00")) {
+foreach ($t in @("07:00","08:00","09:00","10:00","11:00","12:00")) {
     $trig = New-ScheduledTaskTrigger -Weekly -WeeksInterval 1 -DaysOfWeek $weekdays -At $t
     $tag = "Scan_" + ($t -replace ":", "")
-    Register-BotTask $tag (Join-Path $BotDir "scripts\scan_and_trade.py") @($trig)
+    Register-BotTask $tag (Join-Path $BotDir "scripts\scan_and_trade.py") @($trig) @("--scheduled-run")
 }
 
 # Pre-close overnight decision: Phoenix 12:55 (= 15:55 ET EDT, 5 min before close), weekdays

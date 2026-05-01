@@ -20,6 +20,7 @@ except ModuleNotFoundError:
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from src.ai_pipeline import validate_selector_response
+from src.ai_research import _extract_json
 from src.candidate_scoring import (
     annotate_candidate_leadership,
     discovery_priority_score,
@@ -212,6 +213,124 @@ def test_validator_requires_explicit_peer_justification():
     assert ok, problems
 
 
+def test_extract_json_skips_invalid_braces_before_real_object():
+    text = (
+        "Analyzing first with a pseudo dict {'not': 'json'}.\n"
+        "{\"ok\": true, \"nested\": {\"value\": 1}}\n"
+    )
+
+    assert _extract_json(text) == {"ok": True, "nested": {"value": 1}}
+
+
+def test_selector_validator_repairs_rounded_exit_delta_qty():
+    cfg = DummyConfig()
+    result = _selector_result("Best remaining upside.")
+    result["per_symbol"]["DELL"] = {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": -27.0,
+        "entry_price": 197.87,
+        "stop_loss": None,
+        "take_profit": None,
+        "action": "EXIT",
+        "confidence": 0.7,
+        "opportunity_score": 20,
+        "one_sentence_reason": "Exit to rotate capital into stronger remaining upside.",
+        "exhaustion_penalty": False,
+        "remaining_upside_score": 20,
+    }
+    result["candidate_rankings"].append({
+        "symbol": "DELL",
+        "rank": 3,
+        "opportunity_score": 20,
+        "currently_held": True,
+        "exhausted": False,
+        "remaining_upside_score": 20,
+        "one_sentence_reason": "Exit to rotate capital into stronger remaining upside.",
+    })
+
+    ok, problems = validate_selector_response(
+        result,
+        held_symbols=["DELL"],
+        pool_symbols=["AMD", "INTC", "DELL"],
+        pool_meta={
+            "AMD": {"currently_held": False, "current_qty": 0},
+            "INTC": {"currently_held": False, "current_qty": 0},
+            "DELL": {"currently_held": True, "current_qty": 27.137076279},
+        },
+        cfg=cfg,
+        allow_floor_breach=True,
+        equity=100_000,
+    )
+
+    assert ok, problems
+    assert result["per_symbol"]["DELL"]["delta_qty"] == -27.137076279
+    assert result["_auto_repaired"]["exit_delta_qty"]["DELL"]["from"] == -27.0
+
+
+def test_selector_validator_repairs_small_stop_and_allocation_drift():
+    cfg = DummyConfig()
+    result = _selector_result("Best remaining upside.")
+    result["cash_target_pct"] = 0.05
+    result["per_symbol"]["AMD"].update({
+        "qty": 1,
+        "delta_qty": 1,
+        "entry_price": 977.1567,
+        "stop_loss": 967.385,
+        "take_profit": 990,
+    })
+
+    ok, problems = validate_selector_response(
+        result,
+        held_symbols=[],
+        pool_symbols=["AMD", "INTC"],
+        pool_meta={
+            "AMD": {"currently_held": False, "current_qty": 0},
+            "INTC": {"currently_held": False, "current_qty": 0},
+        },
+        cfg=cfg,
+        allow_floor_breach=True,
+        equity=100_000,
+    )
+
+    assert ok, problems
+    assert result["per_symbol"]["AMD"]["stop_loss"] == 967.39
+    assert result["cash_target_pct"] == 0.0
+    assert result["_auto_repaired"]["stop_loss_floor"]["AMD"]["from"] == 967.385
+    assert "allocation_total" in result["_auto_repaired"]
+
+
+def test_selector_validator_drops_non_pool_rankings():
+    cfg = DummyConfig()
+    result = _selector_result("Best remaining upside.")
+    result["candidate_rankings"].append({
+        "symbol": "ETN_dup",
+        "rank": 3,
+        "opportunity_score": 1,
+        "currently_held": False,
+        "exhausted": False,
+        "remaining_upside_score": 1,
+        "one_sentence_reason": "Duplicate artifact.",
+    })
+
+    ok, problems = validate_selector_response(
+        result,
+        held_symbols=[],
+        pool_symbols=["AMD", "INTC"],
+        pool_meta={
+            "AMD": {"currently_held": False, "current_qty": 0},
+            "INTC": {"currently_held": False, "current_qty": 0},
+        },
+        cfg=cfg,
+        allow_floor_breach=True,
+        equity=100_000,
+    )
+
+    assert ok, problems
+    assert {r["symbol"] for r in result["candidate_rankings"]} == {"AMD", "INTC"}
+    assert result["_auto_repaired"]["candidate_rankings_extra_removed"] == ["ETN_dup"]
+
+
 def test_dynamic_watchlist_updates_without_list_bias():
     with tempfile.TemporaryDirectory() as tmp:
         state_file = str(Path(tmp) / "dynamic_watchlist.json")
@@ -242,6 +361,9 @@ if __name__ == "__main__":
     test_list_sources_are_eligibility_only()
     test_peer_leadership_marks_weaker_peer_pressure()
     test_validator_requires_explicit_peer_justification()
+    test_selector_validator_repairs_rounded_exit_delta_qty()
+    test_selector_validator_repairs_small_stop_and_allocation_drift()
+    test_selector_validator_drops_non_pool_rankings()
     test_dynamic_watchlist_updates_without_list_bias()
     test_missed_breakout_detection_catches_unselected_leader()
     print("candidate scoring tests passed")

@@ -6,7 +6,7 @@ Two responsibilities:
    (NY-time date) as the baseline. Subsequent calls return
    ``(equity_now - baseline, pct, source)`` — independent of any
    external market-data API.
-2. **SPY daily %.** Fetch via Twelve Data (primary) → yfinance →
+2. **SPY daily %.** Fetch via Twelve Data (primary) -> yfinance ->
    Alpha Vantage. Each provider's quota is managed by its own
    :class:`~src.api_keys.KeyPool` so no single provider becomes a
    blocker.
@@ -222,9 +222,10 @@ def get_spy_daily_pct(
 ) -> tuple[float, str]:
     """Return (spy_daily_pct, source).
 
-    Provider order: Twelve Data → yfinance → Alpha Vantage → Alpaca bars
-    (last-resort, only if ``alpaca_client`` is provided).
+    Provider order: Twelve Data -> yfinance -> Alpha Vantage.
+    Alpaca market data is intentionally not used.
     """
+    _ = alpaca_client  # Backward-compatible parameter; intentionally unused.
     if twelve_pool is None:
         twelve_pool = KeyPool.from_env("twelve_data", "TWELVEDATA_API_KEYS")
     if av_pool is None:
@@ -247,17 +248,92 @@ def get_spy_daily_pct(
         if v is not None:
             return v, "alpha_vantage"
 
-    if alpaca_client is not None:
-        try:
-            bars = alpaca_client.get_stock_bars(["SPY"], lookback_days=10)
-            spy = bars.xs("SPY", level="symbol") if "symbol" in bars.index.names else bars
-            if len(spy) >= 2:
-                prev = float(spy["close"].iloc[-2])
-                curr = float(spy["close"].iloc[-1])
-                if prev > 0:
-                    return (curr / prev) - 1, "alpaca_fallback"
-        except Exception as e:
-            log.warning("[daily_pnl] Alpaca SPY fallback failed: %s", e)
-
     log.warning("[daily_pnl] All SPY providers exhausted; returning 0.0")
+    return 0.0, "unavailable"
+
+
+def get_spy_period_pct(bars_back: int = 5) -> tuple[float, str]:
+    """Return SPY percent change over ``bars_back`` daily bars.
+
+    Uses external market-data providers only. ``bars_back=5`` approximates a
+    one-week trading return; ``bars_back=21`` approximates one month.
+    """
+    bars_back = max(1, int(bars_back or 1))
+    outputsize = bars_back + 2
+
+    twelve_pool = KeyPool.from_env("twelve_data", "TWELVEDATA_API_KEYS")
+    if twelve_pool.has_keys():
+        key = twelve_pool.acquire()
+        if key:
+            try:
+                resp = requests.get(
+                    _TWELVE_URL,
+                    params={
+                        "symbol": "SPY",
+                        "interval": "1day",
+                        "outputsize": outputsize,
+                        "apikey": key,
+                    },
+                    timeout=10,
+                )
+                data = resp.json() or {}
+                if data.get("status") == "error":
+                    msg = (data.get("message") or "").lower()
+                    if "limit" in msg or "credit" in msg or "rate" in msg:
+                        twelve_pool.mark_throttled(key)
+                    elif "key" in msg or "auth" in msg or "invalid" in msg:
+                        twelve_pool.mark_dead(key)
+                else:
+                    values = data.get("values") or []
+                    if len(values) > bars_back:
+                        curr = float(values[0]["close"])
+                        prev = float(values[bars_back]["close"])
+                        if prev > 0:
+                            return (curr / prev) - 1, "twelve_data"
+            except Exception as e:
+                log.warning("[daily_pnl] Twelve Data SPY period fetch failed: %s", e)
+
+    try:
+        import yfinance as yf  # type: ignore
+        hist = yf.Ticker("SPY").history(period="3mo", interval="1d")
+        if hist is not None and len(hist) > bars_back:
+            prev = float(hist["Close"].iloc[-(bars_back + 1)])
+            curr = float(hist["Close"].iloc[-1])
+            if prev > 0:
+                return (curr / prev) - 1, "yfinance"
+    except Exception as e:
+        log.warning("[daily_pnl] yfinance SPY period fetch failed: %s", e)
+
+    av_pool = KeyPool.from_env(
+        "alpha_vantage", "ALPHA_VANTAGE_API_KEYS",
+        singular_env="ALPHA_VANTAGE_API_KEY",
+    )
+    if av_pool.has_keys():
+        key = av_pool.acquire()
+        if key:
+            try:
+                resp = requests.get(
+                    _AV_URL,
+                    params={
+                        "function": "TIME_SERIES_DAILY",
+                        "symbol": "SPY",
+                        "apikey": key,
+                    },
+                    timeout=10,
+                )
+                data = resp.json() or {}
+                note = data.get("Note") or data.get("Information")
+                if note:
+                    av_pool.mark_throttled(key)
+                series = data.get("Time Series (Daily)") or {}
+                dates = sorted(series.keys(), reverse=True)
+                if len(dates) > bars_back:
+                    curr = float(series[dates[0]]["4. close"])
+                    prev = float(series[dates[bars_back]]["4. close"])
+                    if prev > 0:
+                        return (curr / prev) - 1, "alpha_vantage"
+            except Exception as e:
+                log.warning("[daily_pnl] Alpha Vantage SPY period fetch failed: %s", e)
+
+    log.warning("[daily_pnl] All SPY period providers exhausted; returning 0.0")
     return 0.0, "unavailable"

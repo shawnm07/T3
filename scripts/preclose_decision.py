@@ -13,6 +13,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from src.config import Config
+from src.daily_pnl import get_daily_pnl, get_spy_daily_pct
 from src.logging_setup import setup_logging
 from src.orchestrator import TradingOrchestrator
 from src.telegram_notifier import notify_preclose, send_alert
@@ -50,13 +51,22 @@ def main() -> int:
         # $0 in the Telegram message.
         equity = float(result.get("equity", 0.0) or 0.0)
         positions_count = int(result.get("positions_count", 0) or 0)
-        if equity <= 0.0:
-            try:
-                acct, pos = orch.client.get_snapshot()
-                equity = float(acct.equity)
-                positions_count = len([p for p in pos if "/" not in p.symbol])
-            except Exception as e:
-                log.warning("Preclose fallback snapshot failed: %s", e)
+        account = None
+        positions = []
+        try:
+            account, positions = orch.client.get_snapshot(force_refresh=True, log_detail=False)
+            equity = float(account.equity)
+            positions_count = len([p for p in positions if "/" not in p.symbol])
+        except Exception as e:
+            log.warning("Preclose notification snapshot failed: %s", e)
+
+        pnl = get_daily_pnl(equity) if equity > 0 else None
+        try:
+            spy_daily_pct, spy_src = get_spy_daily_pct()
+            log.info("SPY daily: %.2f%% [src=%s]", spy_daily_pct * 100, spy_src)
+        except Exception as e:
+            log.warning("SPY fetch failed: %s", e)
+            spy_daily_pct = 0.0
 
         notify_preclose(
             equity=equity,
@@ -68,6 +78,11 @@ def main() -> int:
             bearish_halt=bearish_halt,
             halt_threshold=halt_threshold,
             dry_run=args.dry_run,
+            cash=float(account.cash) if account else None,
+            positions=positions,
+            daily_pnl=pnl.pnl_dollars if pnl else 0.0,
+            daily_pnl_pct=pnl.pnl_pct if pnl else 0.0,
+            spy_daily_pct=spy_daily_pct,
         )
         return 0
 

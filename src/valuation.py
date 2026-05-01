@@ -6,16 +6,15 @@ decisions. This module recomputes them from:
 
 * share quantity + average entry price (from Alpaca — reliable)
 * cash balance (from Alpaca — reliable)
-* **independently fetched** current market prices (Alpha Vantage for stocks)
+* **independently fetched** current market prices (Twelve Data -> Alpha
+  Vantage -> yfinance for stocks)
 
 Every call site in the bot that needs equity / P/L / market value should go
 through :func:`build_snapshot` (or use the wrapper methods on
 :class:`AlpacaClient`) rather than reading Alpaca's fields directly.
 
-Extended-hours pricing: Alpha Vantage's ``GLOBAL_QUOTE`` returns the latest
-regular-market trade. If an extended-hours (pre/post-market) price is
-available, we log that it is being used; otherwise we log that we are
-falling back to the regular-market last trade.
+No Alpaca market-data fallback is used. Alpaca supplies only share quantities,
+average entry, and cash.
 """
 from __future__ import annotations
 
@@ -36,6 +35,7 @@ log = logging.getLogger(__name__)
 # is set. New deployments should use ALPHA_VANTAGE_API_KEYS (plural).
 ALPHA_VANTAGE_KEY = os.getenv("ALPHA_VANTAGE_API_KEY", "")
 _AV_URL = "https://www.alphavantage.co/query"
+_TWELVE_PRICE_URL = "https://api.twelvedata.com/price"
 
 # Price cache TTL (seconds). Keeps scan hot loops under Alpha Vantage
 # rate limits while still being fresh enough for sizing decisions.
@@ -46,15 +46,16 @@ _PRICE_TTL = 20.0
 class PricedQuote:
     symbol: str
     price: float
-    source: str              # "alpha_vantage" | "alpha_vantage_extended" | "alpaca_stock_fallback"
+    source: str              # "twelve_data" | "alpha_vantage" | "yfinance"
     extended_hours: bool = False
 
 
 class PricingService:
-    """Fetch live prices for stocks from Alpha Vantage.
+    """Fetch live prices for stocks from non-Alpaca providers.
 
-    Falls back to Alpaca's latest stock quote if Alpha Vantage is unreachable
-    or rate-limited. Caches prices for ``_PRICE_TTL`` seconds.
+    Provider order: Twelve Data -> Alpha Vantage -> yfinance. Alpaca is never
+    used for market prices; it is only accepted for quantities and cash in the
+    surrounding snapshot builder. Caches prices for ``_PRICE_TTL`` seconds.
     """
 
     def __init__(self, alpaca_client=None, av_key: str | None = None,
@@ -65,6 +66,7 @@ class PricingService:
             "alpha_vantage", "ALPHA_VANTAGE_API_KEYS",
             singular_env="ALPHA_VANTAGE_API_KEY",
         )
+        self._twelve_pool = KeyPool.from_env("twelve_data", "TWELVEDATA_API_KEYS")
         self._av_key = av_key  # legacy override; only used if pool empty
         self._ttl = ttl
         self._cache: dict[str, tuple[float, PricedQuote]] = {}
@@ -91,10 +93,50 @@ class PricingService:
 
     # ---------- fetchers ----------
     def _fetch(self, symbol: str) -> PricedQuote | None:
+        q = self._fetch_twelve_data(symbol)
+        if q is not None:
+            return q
         q = self._fetch_alpha_vantage(symbol)
         if q is not None:
             return q
-        return self._fetch_alpaca_stock(symbol)
+        return self._fetch_yfinance(symbol)
+
+    def _fetch_twelve_data(self, symbol: str) -> PricedQuote | None:
+        max_attempts = max(1, len(getattr(self._twelve_pool, "_keys", [])) or 1)
+        for _ in range(max_attempts):
+            key = self._twelve_pool.acquire() if self._twelve_pool.has_keys() else None
+            if not key:
+                return None
+            try:
+                resp = self._session.get(
+                    _TWELVE_PRICE_URL,
+                    params={"symbol": symbol, "apikey": key},
+                    timeout=10,
+                )
+                data = resp.json() or {}
+            except Exception as e:
+                log.warning("[valuation] Twelve Data fetch failed for %s: %s", symbol, e)
+                return None
+            if data.get("status") == "error":
+                msg = str(data.get("message") or "")
+                msg_l = msg.lower()
+                if "limit" in msg_l or "credit" in msg_l or "rate" in msg_l:
+                    self._twelve_pool.mark_throttled(key)
+                    continue
+                if "key" in msg_l or "auth" in msg_l or "invalid" in msg_l:
+                    self._twelve_pool.mark_dead(key)
+                    continue
+                log.warning("[valuation] Twelve Data error for %s: %s", symbol, msg[:120])
+                return None
+            try:
+                price = float(data.get("price", 0) or 0)
+            except (TypeError, ValueError):
+                log.warning("[valuation] Twelve Data unparseable price for %s: %r", symbol, data)
+                return None
+            if price > 0:
+                log.debug("[valuation] %s priced via Twelve Data = $%.4f", symbol, price)
+                return PricedQuote(symbol=symbol, price=price, source="twelve_data")
+        return None
 
     def _fetch_alpha_vantage(self, symbol: str) -> PricedQuote | None:
         # Try keys in rotation; on throttle, mark and try next.
@@ -145,28 +187,35 @@ class PricingService:
                   symbol, price)
         return PricedQuote(symbol=symbol, price=price, source="alpha_vantage", extended_hours=False)
 
-    def _fetch_alpaca_stock(self, symbol: str) -> PricedQuote | None:
-        if self._alpaca is None:
-            return None
+    def _fetch_yfinance(self, symbol: str) -> PricedQuote | None:
         try:
-            q = self._alpaca.get_stock_quote(symbol)
+            import yfinance as yf  # type: ignore
+        except ImportError:
+            return None
+        yf_symbol = symbol.replace(".", "-")
+        price = 0.0
+        try:
+            ticker = yf.Ticker(yf_symbol)
+            fast = getattr(ticker, "fast_info", {}) or {}
+            getter = getattr(fast, "get", None)
+            if callable(getter):
+                price = float(getter("last_price", 0) or 0)
+            elif isinstance(fast, dict):
+                price = float(fast.get("last_price", 0) or 0)
         except Exception as e:
-            log.warning("[valuation] Alpaca stock quote fallback failed for %s: %s", symbol, e)
+            log.debug("[valuation] yfinance fast_info failed for %s: %s", symbol, e)
+        if price <= 0:
+            try:
+                hist = yf.Ticker(yf_symbol).history(period="5d", interval="1d")
+                if hist is not None and len(hist) > 0:
+                    price = float(hist["Close"].dropna().iloc[-1])
+            except Exception as e:
+                log.warning("[valuation] yfinance fallback failed for %s: %s", symbol, e)
+                return None
+        if price <= 0:
             return None
-        # Prefer mid; fall back to ask/bid/last.
-        bid = float(getattr(q, "bid_price", 0) or 0)
-        ask = float(getattr(q, "ask_price", 0) or 0)
-        if bid > 0 and ask > 0:
-            price = (bid + ask) / 2
-        elif ask > 0:
-            price = ask
-        elif bid > 0:
-            price = bid
-        else:
-            return None
-        log.info("[valuation] %s using Alpaca stock-quote fallback = $%.4f "
-                 "(Alpha Vantage unavailable; regular-market last trade)", symbol, price)
-        return PricedQuote(symbol=symbol, price=price, source="alpaca_stock_fallback", extended_hours=False)
+        log.debug("[valuation] %s priced via yfinance = $%.4f", symbol, price)
+        return PricedQuote(symbol=symbol, price=price, source="yfinance", extended_hours=False)
 
 # --------------------------------------------------------------------------- #
 #  Valued wrappers — attribute-compatible with alpaca-py Position / Account   #

@@ -106,6 +106,7 @@ scheduling:
   premarket_time: "08:30"
   intraday_times:
     - "10:00"
+    - "11:00"
     - "12:00"
     - "13:00"
     - "14:00"
@@ -164,6 +165,15 @@ execution:
   cancel_open_orders_before_sell: true
 
 benchmark: SPY
+
+performance_history:
+  enabled: true
+  path: data/performance/portfolio_vs_spy.json
+  benchmark: SPY
+  # The scan task starts on schedule, then AI/rebalance work may take 5-10 min.
+  # Use the scan start time for this gate and allow a little scheduler drift.
+  schedule_start_grace_minutes: 2
+  schedule_finish_grace_minutes: 20
 
 cash_proxy:
   # Park idle cash (above cash_reserve_pct floor) in SPY so uninvested equity
@@ -257,22 +267,22 @@ ai:
   # MODEL ROUTER
   # ----------------------------------------------------------------
   # HARD RULE: every AI decision that can directly lead to buying,
-  # selling, sizing, or modifying exposure MUST use Opus 4.7. The
+  # selling, sizing, or modifying exposure MUST use trade_critical_model. The
   # central router in src/ai_research.py enforces this: agents listed
   # in TRADE_CRITICAL_AGENTS have their model forced to
   # trade_critical_model regardless of what the caller passes in.
   # ================================================================
-  trade_critical_model: claude-sonnet-4-6    # toggle: claude-opus-4-7 (max accuracy) ↔ claude-sonnet-4-6 (lower cost)
+  trade_critical_model: claude-sonnet-4-6      # toggle: claude-opus-4-7 (max accuracy) ↔ claude-sonnet-4-6 (lower cost)
   non_critical_model: claude-haiku-4-5-20251001  # analysts / logging / summaries only
   verifier_model: claude-sonnet-4-6          # Sonnet 4.6 for the post-execution portfolio verifier
   # Legacy aliases — retained for callers that haven't migrated yet.
-  model: claude-sonnet-4-6                   # mirrors trade_critical_model
+  model: claude-sonnet-4-6                     # mirrors trade_critical_model
   haiku_model: claude-haiku-4-5-20251001  # technical/fundamental/sentiment analysts (fast, cheap)
   # Per-agent model overrides (only consulted for agents NOT in the
   # TRADE_CRITICAL_AGENTS hard-coded set in src/ai_research.py).
   model_per_agent:
     portfolio-verifier: claude-sonnet-4-6
-  max_candidates_per_scan: 5       # top-N by numeric score to send to AI
+  max_candidates_per_scan: 10       # top-N by numeric score to send to AI
   min_numeric_combined_for_ai: 0.30  # pre-filter: only analyze these
   parallel_analyst_calls: true     # technical/fundamental/sentiment agents run concurrently
   max_tokens_per_call: 1500
@@ -303,7 +313,7 @@ telegram:
 # UNIFIED PORTFOLIO SELECTOR (Phase 0 — feature-flagged off)
 # ----------------------------------------------------------------
 # Replaces the two-pipeline split (portfolio-arbiter for held +
-# decision-arbiter for new candidates) with one Opus 4.7 agent that
+# decision-arbiter for new candidates) with one ai agent that
 # ranks held ∪ discovered in a single pool and returns 3–6 selected
 # positions with score-weighted target weights. NO incumbent bias.
 # ================================================================

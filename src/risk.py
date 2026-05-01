@@ -2,12 +2,21 @@
 from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
+from decimal import Decimal, ROUND_CEILING, ROUND_HALF_UP
 from typing import Any
 
 from src.config import Config
 from src.universe import sp500_sectors
 
 log = logging.getLogger(__name__)
+
+
+def _ceil_cents(value: float) -> float:
+    return float(Decimal(str(value)).quantize(Decimal("0.01"), rounding=ROUND_CEILING))
+
+
+def _round_cents(value: float) -> float:
+    return float(Decimal(str(value)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
 
 
 @dataclass
@@ -64,7 +73,10 @@ class RiskManager:
         self.last_sizing_audit: dict[str, Any] | None = None
 
     def _is_cash_proxy(self, symbol: str) -> bool:
-        return self.cash_proxy_enabled and symbol == self.cash_proxy_symbol
+        return (
+            self.cash_proxy_enabled
+            and str(symbol or "").strip().upper() == str(self.cash_proxy_symbol or "").strip().upper()
+        )
 
     def hard_stop_loss_price(self, entry: float) -> float:
         """Return the execution-layer hard stop price for a long entry."""
@@ -72,10 +84,15 @@ class RiskManager:
         pct = max(0.0, float(self.hard_stop_loss_pct or 0.0))
         if entry_f <= 0 or pct <= 0:
             return 0.0
-        return round(entry_f * (1.0 - pct), 2)
+        return _ceil_cents(entry_f * (1.0 - pct))
 
     def protective_stop_loss_price(self, entry: float, stop_loss: float | None = None) -> float:
-        """Return the stop to submit: hard 1% floor, unless AI supplies tighter."""
+        """Return the stop to submit: hard 1% floor, unless AI supplies tighter.
+
+        A supplied stop that is a little wider than the hard floor is clamped to
+        the floor. This keeps harmless model/penny drift from blocking an
+        otherwise valid protected order.
+        """
         entry_f = float(entry or 0.0)
         hard_stop = self.hard_stop_loss_price(entry_f)
         if hard_stop <= 0 or hard_stop >= entry_f:
@@ -83,14 +100,27 @@ class RiskManager:
         if stop_loss in (None, ""):
             return hard_stop
         try:
-            ai_stop = round(float(stop_loss), 2)
+            ai_stop = _round_cents(float(stop_loss))
         except (TypeError, ValueError) as exc:
             raise ValueError("stop_loss_not_numeric") from exc
         if ai_stop <= 0 or ai_stop >= entry_f:
             raise ValueError("stop_loss_must_be_between_zero_and_entry")
         if ai_stop < hard_stop:
-            raise ValueError(f"stop_loss_wider_than_hard_stop_floor_{hard_stop}")
+            log.warning("Clamping AI stop %.4f to hard stop floor %.4f", ai_stop, hard_stop)
+            return hard_stop
         return ai_stop
+
+    def _stop_loss_source(self, entry: float, stop_loss: float | None, protective_stop: float) -> str:
+        hard_stop = self.hard_stop_loss_price(entry)
+        if stop_loss in (None, ""):
+            return "hard_stop"
+        try:
+            ai_stop = _round_cents(float(stop_loss))
+        except (TypeError, ValueError):
+            return "hard_stop"
+        if ai_stop < hard_stop:
+            return "ai_stop_clamped_to_hard_stop"
+        return "ai_tighter_stop" if protective_stop > hard_stop else "hard_stop"
 
     def validate_ai_sizing(
         self,
@@ -148,7 +178,7 @@ class RiskManager:
             self.last_sizing_audit = audit
             return False, audit
         audit["stop_loss"] = protective_stop
-        audit["stop_loss_source"] = "ai_tighter_stop" if protective_stop > hard_stop else "hard_stop"
+        audit["stop_loss_source"] = self._stop_loss_source(entry, stop_loss, protective_stop)
         if take_profit not in (None, ""):
             try:
                 take_profit_f = float(take_profit)
@@ -164,9 +194,13 @@ class RiskManager:
                 return False, audit
         # Duplicate / max-positions check (skip for cash proxy)
         if not self._is_cash_proxy(symbol):
-            held_syms = {getattr(p, "symbol", "") for p in (existing_positions or [])}
-            held_syms.discard(self.cash_proxy_symbol if self.cash_proxy_enabled else "")
-            if symbol in held_syms:
+            symbol_norm = str(symbol or "").strip().upper()
+            held_syms = {
+                str(getattr(p, "symbol", "") or "").strip().upper()
+                for p in (existing_positions or [])
+                if not self._is_cash_proxy(getattr(p, "symbol", ""))
+            }
+            if symbol_norm in held_syms:
                 audit["status"] = "rejected"
                 audit["reject_reason"] = "already_held_use_rebalance_path"
                 self.last_sizing_audit = audit
@@ -247,7 +281,7 @@ class RiskManager:
                 "source": "ai_direct",
                 "hard_stop_loss_pct": float(self.hard_stop_loss_pct),
                 "hard_stop_loss_floor": hard_stop,
-                "stop_loss_source": "ai_tighter_stop" if protective_stop > hard_stop else "hard_stop",
+                "stop_loss_source": self._stop_loss_source(float(entry), stop_loss, protective_stop),
                 "ai_stop_loss": stop_loss,
                 "ai_take_profit": take_profit,
             },
@@ -387,7 +421,8 @@ class RiskManager:
 
         qty = float(int(notional / price)) if price else 0.0
         if qty == 0 and price:
-            # Allow fractional for high-priced names (account supports it)
+            # Simple orders can be fractional; protected bracket buys are
+            # guarded by the executor and require at least one whole share.
             qty = round(notional / price, 4)
 
         if qty <= 0:

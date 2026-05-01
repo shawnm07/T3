@@ -44,11 +44,11 @@ AGENTS_DIR = Path(__file__).resolve().parents[1] / ".claude" / "agents"
 
 # Cost toggle — change TRADE_CRITICAL_MODEL_DEFAULT to switch tiers:
 #   OPUS_MODEL   = max accuracy, higher cost
-#   SONNET_MODEL = lower cost (currently active)
+#   SONNET_MODEL = lower cost
 OPUS_MODEL   = "claude-opus-4-7"
 SONNET_MODEL = "claude-sonnet-4-6"
 
-TRADE_CRITICAL_MODEL_DEFAULT = SONNET_MODEL
+TRADE_CRITICAL_MODEL_DEFAULT = OPUS_MODEL
 NON_CRITICAL_MODEL_DEFAULT = "claude-haiku-4-5-20251001"
 
 # Agents whose output directly authorizes or modifies capital allocation.
@@ -135,25 +135,21 @@ def _extract_json(text: str) -> dict | None:
     if text.startswith("```"):
         text = re.sub(r"^```(?:json)?\s*", "", text)
         text = re.sub(r"\s*```\s*$", "", text)
+    decoder = json.JSONDecoder()
     try:
-        return json.loads(text)
+        parsed, _ = decoder.raw_decode(text)
+        return parsed if isinstance(parsed, dict) else None
     except json.JSONDecodeError:
         pass
-    # Find first balanced {...} block
-    start = text.find("{")
-    if start == -1:
-        return None
-    depth = 0
-    for i, ch in enumerate(text[start:], start=start):
-        if ch == "{":
-            depth += 1
-        elif ch == "}":
-            depth -= 1
-            if depth == 0:
-                try:
-                    return json.loads(text[start : i + 1])
-                except json.JSONDecodeError:
-                    return None
+    # Find the first valid JSON object, skipping prose/pseudo-dicts that may
+    # contain braces before the real response.
+    for m in re.finditer(r"{", text):
+        try:
+            parsed, _ = decoder.raw_decode(text[m.start():])
+        except json.JSONDecodeError:
+            continue
+        if isinstance(parsed, dict):
+            return parsed
     return None
 
 
@@ -204,6 +200,19 @@ class AIResearcher:
             self._client = AsyncAnthropic(api_key=self.api_key, timeout=self.timeout)
         return self._client
 
+    async def aclose(self) -> None:
+        client = self._client
+        self._client = None
+        if client is None:
+            return
+        close = getattr(client, "aclose", None)
+        if close is None:
+            return
+        try:
+            await close()
+        except Exception as e:
+            log.debug("Anthropic async client close failed: %s", e)
+
     def model_for(self, task_type: str) -> str:
         """Return the model id this researcher uses for a given task_type.
         Thin wrapper around module-level get_ai_model() that prefers config.
@@ -253,8 +262,9 @@ class AIResearcher:
             system_blocks.append({"type": "text", "text": extra_instructions.strip()})
 
         user_content = (
-            "Here is the pre-computed research context. Analyze it per your instructions"
-            " and return the JSON object.\n\n```json\n"
+            "Here is the pre-computed research context. Analyze it internally per your "
+            "instructions and return ONLY the JSON object. Do not include prose, bullets, "
+            "markdown fences, or analysis before/after the JSON.\n\n```json\n"
             + json.dumps(context, indent=2, default=str)
             + "\n```"
         )

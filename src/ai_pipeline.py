@@ -7,8 +7,10 @@ orchestrator blends with the numeric score.
 from __future__ import annotations
 import asyncio
 import logging
+import sys
 import time
 from dataclasses import dataclass, field
+from decimal import Decimal, ROUND_CEILING, ROUND_HALF_UP
 from typing import Any
 
 from src.ai_research import AIResearcher
@@ -16,6 +18,9 @@ from src.config import Config
 from src.decision import TradeDecision
 
 log = logging.getLogger(__name__)
+
+if sys.platform.startswith("win") and hasattr(asyncio, "WindowsSelectorEventLoopPolicy"):
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 
 @dataclass
@@ -51,6 +56,9 @@ class AIPipeline:
     def __init__(self, config: Config, researcher: AIResearcher | None = None):
         self.cfg = config
         self.ai = researcher or AIResearcher(config)
+
+    async def aclose(self) -> None:
+        await self.ai.aclose()
 
     async def analyze_candidate(
         self,
@@ -246,6 +254,16 @@ class AIPipeline:
         )
 
 
+def _run_with_ai_cleanup(ai: AIResearcher, awaitable):
+    async def _runner():
+        try:
+            return await awaitable
+        finally:
+            await ai.aclose()
+
+    return asyncio.run(_runner())
+
+
 _REQUIRED_PER_SYMBOL_FIELDS = (
     "target_pct", "action", "opportunity_score", "one_sentence_reason",
 )
@@ -260,6 +278,14 @@ def _hard_stop_loss_pct(cfg: Config) -> float:
         return max(0.0, float(cfg.get("risk", "hard_stop_loss_pct", default=0.01)))
     except (TypeError, ValueError):
         return 0.01
+
+
+def _ceil_cents(value: float) -> float:
+    return float(Decimal(str(value)).quantize(Decimal("0.01"), rounding=ROUND_CEILING))
+
+
+def _round_cents(value: float) -> float:
+    return float(Decimal(str(value)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
 
 
 def validate_arbiter_response(
@@ -396,7 +422,7 @@ def run_portfolio_arbiter(
     last_problems: list[str] = []
     for attempt in range(1, max_attempts + 1):
         try:
-            result = asyncio.run(pipeline.portfolio_rebalance_arbiter(context))
+            result = _run_with_ai_cleanup(ai, pipeline.portfolio_rebalance_arbiter(context))
         except Exception as e:
             last_error = f"{type(e).__name__}: {e}"
             log.warning(
@@ -533,7 +559,8 @@ def validate_selector_response(
 
     # AI-direct order params: qty / entry_price / delta_qty are authoritative.
     # Python enforces a protective stop no wider than 1% below entry. A tighter
-    # AI stop is honored; a wider supplied stop is rejected.
+    # AI stop is honored; a wider supplied stop is clamped to the hard floor so
+    # a harmless model rounding miss cannot abort the entire scan.
     equity_for_check = 0.0
     try:
         equity_for_check = float(equity or 0)
@@ -546,6 +573,13 @@ def validate_selector_response(
             equity_for_check = 0.0
     max_risk_pct = float(cfg.get("risk", "max_risk_per_trade_pct", default=0.005))
     hard_stop_pct = _hard_stop_loss_pct(cfg)
+
+    def _current_qty_for(sym: str) -> float:
+        try:
+            return float((pool_meta.get(sym, {}) or {}).get("current_qty", 0) or 0)
+        except (TypeError, ValueError):
+            return 0.0
+
     for s in selected:
         info = per_sym.get(s) if isinstance(per_sym, dict) else None
         if not isinstance(info, dict):
@@ -564,7 +598,7 @@ def validate_selector_response(
             problems.append(f"per_symbol[{s}].qty must be > 0 for selected positions, got {qty}")
         if entry <= 0:
             problems.append(f"per_symbol[{s}].entry_price must be > 0, got {entry}")
-        hard_stop_floor = round(entry * (1.0 - hard_stop_pct), 2) if entry > 0 and hard_stop_pct > 0 else 0.0
+        hard_stop_floor = _ceil_cents(entry * (1.0 - hard_stop_pct)) if entry > 0 and hard_stop_pct > 0 else 0.0
         stop_for_risk = hard_stop_floor
         raw_stop = info.get("stop_loss")
         if raw_stop not in (None, ""):
@@ -575,13 +609,24 @@ def validate_selector_response(
             else:
                 if stop <= 0 or stop >= entry:
                     problems.append(f"per_symbol[{s}].stop_loss ({stop}) must be > 0 and < entry_price ({entry})")
-                elif hard_stop_floor > 0 and round(stop, 2) < hard_stop_floor:
-                    problems.append(
-                        f"per_symbol[{s}].stop_loss ({stop}) is wider than "
-                        f"hard_stop_loss_pct floor ({hard_stop_floor})"
-                    )
+                elif hard_stop_floor > 0 and stop < hard_stop_floor:
+                    info["stop_loss"] = hard_stop_floor
+                    result.setdefault("_auto_repaired", {})
+                    result["_auto_repaired"].setdefault("stop_loss_floor", {})[s] = {
+                        "from": stop,
+                        "to": hard_stop_floor,
+                    }
+                    stop_for_risk = hard_stop_floor
                 elif hard_stop_floor > 0:
-                    stop_for_risk = max(round(stop, 2), hard_stop_floor)
+                    rounded_stop = _round_cents(stop)
+                    if rounded_stop != stop:
+                        info["stop_loss"] = rounded_stop
+                        result.setdefault("_auto_repaired", {})
+                        result["_auto_repaired"].setdefault("stop_loss_rounding", {})[s] = {
+                            "from": stop,
+                            "to": rounded_stop,
+                        }
+                    stop_for_risk = max(rounded_stop, hard_stop_floor)
         raw_target = info.get("take_profit")
         if raw_target not in (None, ""):
             try:
@@ -591,17 +636,24 @@ def validate_selector_response(
             else:
                 if target <= 0 or target <= entry:
                     problems.append(f"per_symbol[{s}].take_profit ({target}) must be > entry_price ({entry})")
-        meta = pool_meta.get(s, {}) if isinstance(pool_meta, dict) else {}
-        try:
-            current_qty = float(meta.get("current_qty", 0) or 0)
-        except (TypeError, ValueError):
-            current_qty = 0.0
+        current_qty = _current_qty_for(s)
         expected_delta = qty - current_qty
         if abs(delta_qty - expected_delta) > 0.01:
-            problems.append(
-                f"per_symbol[{s}].delta_qty {delta_qty} inconsistent with "
-                f"qty {qty} minus current_qty {current_qty}"
-            )
+            delta_tolerance = max(0.05, abs(expected_delta) * 0.02)
+            if abs(delta_qty - expected_delta) <= delta_tolerance:
+                info["delta_qty"] = expected_delta
+                result.setdefault("_auto_repaired", {})
+                result["_auto_repaired"].setdefault("delta_qty_rounding", {})[s] = {
+                    "from": delta_qty,
+                    "to": expected_delta,
+                    "expected_from_qty_minus_current": True,
+                }
+                delta_qty = expected_delta
+            else:
+                problems.append(
+                    f"per_symbol[{s}].delta_qty {delta_qty} inconsistent with "
+                    f"qty {qty} minus current_qty {current_qty}"
+                )
         # Risk-per-trade hard cap (use a contextual equity if provided)
         if entry > 0 and hard_stop_pct > 0:
             ctx_equity = 0.0
@@ -621,14 +673,61 @@ def validate_selector_response(
                     )
 
     try:
-        spy_t = float(result.get("spy_target_pct", 0) or 0)
-        cash_t = float(result.get("cash_target_pct", 0) or 0)
-        wsum = sum(float(v) for v in target_w.values())
+        spy_t = max(0.0, float(result.get("spy_target_pct", 0) or 0))
+        cash_t = max(0.0, float(result.get("cash_target_pct", 0) or 0))
+        target_w = {s: max(0.0, float(v)) for s, v in target_w.items()}
+        wsum = sum(target_w.values())
         total = wsum + spy_t + cash_t
         if not (0.99 <= total <= 1.01):
-            problems.append(f"weights+spy+cash sum {total:.3f} outside [0.99, 1.01]")
+            if total <= 0 or total > 1.25:
+                problems.append(f"weights+spy+cash sum {total:.3f} outside repair band")
+                raise RuntimeError("allocation total outside repair band")
+            before = {
+                "target_weights": dict(target_w),
+                "spy_target_pct": spy_t,
+                "cash_target_pct": cash_t,
+                "total": total,
+            }
+            if total < 0.99:
+                cash_t += 1.0 - total
+            elif total > 1.01:
+                excess = total - 1.0
+                if cash_t >= excess:
+                    cash_t -= excess
+                else:
+                    excess -= cash_t
+                    cash_t = 0.0
+                    invested = wsum + spy_t
+                    if invested > 0:
+                        scale = max(0.0, (invested - excess) / invested)
+                        target_w = {s: v * scale for s, v in target_w.items()}
+                        spy_t *= scale
+            target_w = {s: round(v, 6) for s, v in target_w.items() if v > 0}
+            for s, w in target_w.items():
+                if isinstance(per_sym, dict) and isinstance(per_sym.get(s), dict):
+                    per_sym[s]["target_pct"] = w
+            spy_t = round(spy_t, 6)
+            cash_t = round(max(0.0, 1.0 - sum(target_w.values()) - spy_t), 6)
+            result["target_weights"] = target_w
+            result["spy_target_pct"] = spy_t
+            result["cash_target_pct"] = cash_t
+            result.setdefault("_auto_repaired", {})
+            result["_auto_repaired"]["allocation_total"] = {
+                "from": before,
+                "to": {
+                    "target_weights": dict(target_w),
+                    "spy_target_pct": spy_t,
+                    "cash_target_pct": cash_t,
+                    "total": round(sum(target_w.values()) + spy_t + cash_t, 6),
+                },
+            }
+            total = sum(target_w.values()) + spy_t + cash_t
+            if not (0.99 <= total <= 1.01):
+                problems.append(f"weights+spy+cash sum {total:.3f} outside [0.99, 1.01]")
     except (TypeError, ValueError):
         problems.append("weights/spy/cash not numeric")
+        spy_t, cash_t = 0.0, 0.0
+    except RuntimeError:
         spy_t, cash_t = 0.0, 0.0
 
     spy_dec = result.get("spy_decision")
@@ -692,6 +791,13 @@ def validate_selector_response(
                 qty_exit = -1.0
             if qty_exit != 0:
                 problems.append(f"held {s} EXIT requires qty=0, got {qty_exit}")
+            current_qty = _current_qty_for(s)
+            repairable_full_exit = (
+                action == "EXIT"
+                and tp == 0.0
+                and qty_exit == 0
+                and current_qty > 0
+            )
             if "delta_qty" in info:
                 try:
                     dq = float(info.get("delta_qty", 0) or 0)
@@ -699,17 +805,31 @@ def validate_selector_response(
                     dq = 1.0
                 if dq > 0:
                     problems.append(f"held {s} EXIT delta_qty must be <= 0, got {dq}")
-                try:
-                    current_qty = float((pool_meta.get(s, {}) or {}).get("current_qty", 0) or 0)
-                except (TypeError, ValueError):
-                    current_qty = 0.0
-                if current_qty > 0 and abs(dq + current_qty) > 0.01:
-                    problems.append(
-                        f"held {s} EXIT delta_qty must equal -current_qty "
-                        f"({-current_qty}), got {dq}"
-                    )
+                elif current_qty > 0 and abs(dq + current_qty) > 0.01:
+                    if repairable_full_exit:
+                        info["delta_qty"] = -current_qty
+                        result.setdefault("_auto_repaired", {})
+                        result["_auto_repaired"].setdefault("exit_delta_qty", {})[s] = {
+                            "from": dq,
+                            "to": -current_qty,
+                        }
+                    else:
+                        problems.append(
+                            f"held {s} EXIT delta_qty must equal -current_qty "
+                            f"({-current_qty}), got {dq}"
+                        )
             else:
-                problems.append(f"held {s} EXIT missing delta_qty")
+                if repairable_full_exit:
+                    info["delta_qty"] = -current_qty
+                    result.setdefault("_auto_repaired", {})
+                    result["_auto_repaired"].setdefault("exit_delta_qty", {})[s] = {
+                        "from": None,
+                        "to": -current_qty,
+                    }
+                else:
+                    problems.append(
+                        f"held {s} EXIT missing delta_qty"
+                    )
 
     missing_per_sym = [s for s in pool_symbols if s not in per_sym]
     if missing_per_sym:
@@ -735,6 +855,22 @@ def validate_selector_response(
         ranked_syms = {r.get("symbol") for r in rankings if isinstance(r, dict)}
         missing_rank = pool_set - ranked_syms
         extra_rank = ranked_syms - pool_set
+        if extra_rank:
+            kept_rankings = [
+                r for r in rankings
+                if not isinstance(r, dict) or r.get("symbol") in pool_set
+            ]
+            removed_rankings = [
+                r.get("symbol") for r in rankings
+                if isinstance(r, dict) and r.get("symbol") in extra_rank
+            ]
+            rankings = kept_rankings
+            result["candidate_rankings"] = rankings
+            result.setdefault("_auto_repaired", {})
+            result["_auto_repaired"]["candidate_rankings_extra_removed"] = removed_rankings
+            ranked_syms = {r.get("symbol") for r in rankings if isinstance(r, dict)}
+            missing_rank = pool_set - ranked_syms
+            extra_rank = set()
         repairable_rank = [
             s for s in sorted(missing_rank)
             if s not in selected
@@ -764,8 +900,6 @@ def validate_selector_response(
             missing_rank = pool_set - ranked_syms
         if missing_rank:
             problems.append(f"candidate_rankings missing {len(missing_rank)} symbols: {sorted(missing_rank)[:5]}")
-        if extra_rank:
-            problems.append(f"candidate_rankings has non-pool symbols: {sorted(extra_rank)[:5]}")
 
     # Anti-stagnation enforcement
     if not allow_floor_breach and selected:
@@ -889,7 +1023,7 @@ def run_portfolio_selector(
     while attempt < max_attempts:
         attempt += 1
         try:
-            result = asyncio.run(pipeline.portfolio_selector(context))
+            result = _run_with_ai_cleanup(ai, pipeline.portfolio_selector(context))
         except Exception as e:
             last_error = f"{type(e).__name__}: {e}"
             log.warning("PORTFOLIO SELECTOR attempt %d/%d raised: %s",
@@ -983,7 +1117,7 @@ def run_portfolio_verifier(
         return None
     pipeline = AIPipeline(config, ai)
     try:
-        result = asyncio.run(pipeline.portfolio_verifier(context))
+        result = _run_with_ai_cleanup(ai, pipeline.portfolio_verifier(context))
     except Exception as e:
         log.warning("PORTFOLIO VERIFIER call raised: %s — skipping reconcile", e)
         return None
@@ -1012,7 +1146,7 @@ def run_exit_arbiter(
         return None
     pipeline = AIPipeline(config, ai)
     try:
-        result = asyncio.run(pipeline.exit_arbiter_verdict(context))
+        result = _run_with_ai_cleanup(ai, pipeline.exit_arbiter_verdict(context))
     except Exception as e:
         log.critical("EXIT ARBITER call failed: %s — holding position (fail-safe)", e)
         return None
@@ -1041,7 +1175,7 @@ def run_entry_arbiter_single(
         )
         return None
     try:
-        result = asyncio.run(ai.call_agent(
+        result = _run_with_ai_cleanup(ai, ai.call_agent(
             "decision-arbiter", context, task_type="trade_critical",
         ))
     except Exception as e:
@@ -1064,7 +1198,7 @@ def run_earnings_gate(
         return None
     pipeline = AIPipeline(config, ai)
     try:
-        result = asyncio.run(pipeline.earnings_gate_verdict(context))
+        result = _run_with_ai_cleanup(ai, pipeline.earnings_gate_verdict(context))
     except Exception as e:
         log.warning("Earnings gate failed: %s", e)
         return None
@@ -1115,4 +1249,4 @@ def run_ai_on_candidates(
             out[c.symbol] = r
         return out
 
-    return asyncio.run(_all())
+    return _run_with_ai_cleanup(ai, _all())

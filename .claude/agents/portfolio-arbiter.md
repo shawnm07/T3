@@ -57,7 +57,9 @@ position fading into the close. Reflect this in `opportunity_score` and `action`
   },
   "trading_rules": [ "..." ],
   "execution_constraints": {
-    "fractional_shares_supported": true,
+    "fractional_shares_supported_for_simple_orders": true,
+    "protected_buy_orders_require_whole_shares": true,
+    "time_in_force": "day",
     "min_trade_usd": 500,
     "min_rebalance_delta_usd": 500,
     "min_rebalance_delta_pct": 0.15,
@@ -184,6 +186,9 @@ For each held position (excluding SPY), set ALL of:
 - `confidence` 0..1
 - `opportunity_score` 0..100 — see below
 - `one_sentence_reason` — exactly one sentence, action-focused, intraday-aware
+
+For BUY / INCREASE actions that require protected bracket orders, prefer whole
+share target quantities; simple sells may be fractional.
 
 ## Opportunity scoring
 

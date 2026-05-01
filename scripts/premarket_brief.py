@@ -10,6 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from src.alpaca_client import AlpacaClient
 from src.config import Config
+from src.daily_pnl import get_daily_pnl, get_spy_daily_pct
 from src.journal import log_decision
 from src.logging_setup import setup_logging
 from src.orchestrator import TradingOrchestrator
@@ -71,9 +72,8 @@ def main() -> int:
             log.warning("Cancel stale orders failed: %s", e)
 
         macro = orch.macro_brief()
-        # Independent valuation (see src/valuation.py): equity, market_value,
-        # unrealized_pl[pc], current_price are all recomputed from
-        # Alpha-Vantage-sourced current prices.
+        # Independent valuation (see src/valuation.py): cash/qty come from
+        # Alpaca; market prices come from non-Alpaca providers.
         account, positions = client.get_snapshot()
         log.info(
             "Pre-market: equity=$%.2f cash=$%.2f positions=%d regime=%s",
@@ -85,6 +85,13 @@ def main() -> int:
             return str(s).split(".")[-1].upper()
 
         total_pnl = sum(float(p.unrealized_pl) for p in positions)
+        pnl = get_daily_pnl(float(account.equity))
+        try:
+            spy_daily_pct, spy_src = get_spy_daily_pct()
+            log.info("SPY daily: %.2f%% [src=%s]", spy_daily_pct * 100, spy_src)
+        except Exception as e:
+            log.warning("SPY fetch failed: %s", e)
+            spy_daily_pct = 0.0
 
         # Format positions for notification; annotate with upcoming earnings so
         # the morning brief flags binary-event risk.
@@ -98,6 +105,9 @@ def main() -> int:
                 "side": _side_str(p),
                 "qty": str(p.qty),
                 "unrealized_pnl": float(p.unrealized_pl),
+                "market_value": float(p.market_value),
+                "current_price": float(p.current_price),
+                "price_source": getattr(p, "price_source", ""),
             }
             if earnings_enabled and "/" not in p.symbol:
                 info = fetch_earnings(p.symbol, ttl_hours=earnings_ttl)
@@ -124,6 +134,11 @@ def main() -> int:
             total_pnl=total_pnl,
             cancelled_orders=cancelled_count,
             positions_list=positions_list,
+            account_balance=float(account.equity),
+            cash=float(account.cash),
+            daily_pnl=pnl.pnl_dollars,
+            daily_pnl_pct=pnl.pnl_pct,
+            spy_daily_pct=spy_daily_pct,
         )
         return 0
 

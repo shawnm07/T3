@@ -9,6 +9,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from src.alpaca_client import AlpacaClient
 from src.config import Config
+from src.daily_pnl import get_spy_period_pct
 from src.journal import log_decision, read_recent_trades
 from src.logging_setup import setup_logging
 from src.telegram_notifier import notify_weekly, send_alert
@@ -31,10 +32,11 @@ def main() -> int:
             month_ret = (equity[-1] / equity[-22]) - 1 if equity[-22] else 0
 
         try:
-            spy = client.get_stock_bars(["SPY"], lookback_days=90)
-            s = spy.xs("SPY", level="symbol") if "symbol" in spy.index.names else spy
-            spy_week = (float(s["close"].iloc[-1]) / float(s["close"].iloc[-6])) - 1 if len(s) >= 6 else 0
-            spy_month = (float(s["close"].iloc[-1]) / float(s["close"].iloc[-22])) - 1 if len(s) >= 22 else 0
+            spy_week, spy_week_src = get_spy_period_pct(5)
+            spy_month, spy_month_src = get_spy_period_pct(21)
+            log.info("SPY week %.2f%% [%s], month %.2f%% [%s]",
+                     spy_week * 100, spy_week_src,
+                     spy_month * 100, spy_month_src)
         except Exception as e:
             log.warning("SPY fetch failed: %s", e)
             spy_week = spy_month = 0

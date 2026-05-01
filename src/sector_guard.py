@@ -201,6 +201,36 @@ def force_compliance(
         except (TypeError, ValueError):
             return 0.0
 
+    def _sync_scaled_qty(sym: str, ratio: float) -> None:
+        info = per_symbol.get(sym)
+        if not isinstance(info, dict):
+            return
+        try:
+            old_qty = float(info.get("qty", info.get("target_qty", 0)) or 0)
+            old_delta = float(info.get("delta_qty", 0) or 0)
+        except (TypeError, ValueError):
+            return
+        current_qty = old_qty - old_delta
+        new_qty = round(max(0.0, old_qty * max(0.0, ratio)), 6)
+        info["qty"] = new_qty
+        info["target_qty"] = new_qty
+        info["delta_qty"] = round(new_qty - current_qty, 6)
+
+    def _sync_exit_qty(sym: str) -> None:
+        info = per_symbol.get(sym)
+        if not isinstance(info, dict):
+            return
+        try:
+            old_qty = float(info.get("qty", info.get("target_qty", 0)) or 0)
+            old_delta = float(info.get("delta_qty", 0) or 0)
+        except (TypeError, ValueError):
+            current_qty = 0.0
+        else:
+            current_qty = max(0.0, old_qty - old_delta)
+        info["qty"] = 0
+        info["target_qty"] = 0
+        info["delta_qty"] = round(-current_qty, 6) if current_qty > 0 else 0
+
     # Process count violations FIRST so weight violations see the post-exit
     # state and don't overwrite EXIT decisions with REDUCE.
     ordered_violations = sorted(
@@ -224,6 +254,7 @@ def force_compliance(
                 target_weights[sym] = new
                 if sym in per_symbol:
                     per_symbol[sym]["target_pct"] = new
+                    _sync_scaled_qty(sym, new / old if old > 0 else 0.0)
                     # Don't clobber EXIT — keep REDUCE only when still long.
                     if per_symbol[sym].get("action") not in ("EXIT", "PASS"):
                         per_symbol[sym]["action"] = "REDUCE"
@@ -246,7 +277,7 @@ def force_compliance(
             target_weights[sym] = 0.0
             if sym in per_symbol:
                 per_symbol[sym]["target_pct"] = 0.0
-                per_symbol[sym]["target_qty"] = 0
+                _sync_exit_qty(sym)
                 per_symbol[sym]["action"] = "EXIT"
                 per_symbol[sym]["one_sentence_reason"] = (
                     f"Sector-guard forced exit: {v.kind}={v.bucket} exceeded "

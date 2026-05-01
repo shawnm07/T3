@@ -11,7 +11,7 @@ import pandas as pd
 
 from src.alpaca_client import AlpacaClient
 from src.config import Config
-from src.daily_pnl import get_daily_pnl, get_spy_daily_pct
+from src.daily_pnl import get_daily_pnl, get_spy_daily_pct, get_spy_period_pct
 from src.journal import log_decision, read_recent_trades
 from src.logging_setup import setup_logging
 from src.telegram_notifier import notify_eod, send_alert
@@ -45,22 +45,16 @@ def main() -> int:
         else:
             period_ret = 0
 
-        # SPY benchmark via Twelve Data → yfinance → Alpha Vantage → Alpaca.
+        # SPY benchmark via Twelve Data -> yfinance -> Alpha Vantage.
         try:
             spy_daily, spy_src = get_spy_daily_pct(alpaca_client=client)
             log.info("SPY daily: %.2f%% [src=%s]", spy_daily * 100, spy_src)
         except Exception as e:
             log.warning("SPY benchmark fetch failed: %s", e)
             spy_daily = 0
-        # 30d SPY (period benchmark) still uses Alpaca bars — only needed for
-        # the JSON research report, not the Telegram message.
         try:
-            spy_bars = client.get_stock_bars(["SPY"], lookback_days=30)
-            spy = spy_bars.xs("SPY", level="symbol") if "symbol" in spy_bars.index.names else spy_bars
-            if len(spy) >= 2:
-                spy_30d = (float(spy["close"].iloc[-1]) / float(spy["close"].iloc[0])) - 1
-            else:
-                spy_30d = 0
+            spy_30d, spy_30d_src = get_spy_period_pct(30)
+            log.info("SPY 30d: %.2f%% [src=%s]", spy_30d * 100, spy_30d_src)
         except Exception as e:
             log.warning("SPY 30d fetch failed: %s", e)
             spy_30d = 0
@@ -106,17 +100,19 @@ def main() -> int:
         out = Path(__file__).resolve().parents[1] / "data" / "research" / f"{today}_eod.json"
         out.write_text(json.dumps(report, indent=2, default=str))
 
-        # Send EOD notification. Equity passed = total account balance
-        # (cash + positions); the EOD message renders just one Account line
-        # rather than splitting equity/cash per user preference.
+        # Send EOD notification. The value passed as `equity` is the total
+        # account balance (cash + externally-priced positions); the Telegram
+        # text never relies on Alpaca market values.
         notify_eod(
             daily_return=daily_ret,
             daily_vs_spy=daily_ret - spy_daily,
             spy_daily=spy_daily,
+            daily_pnl=pnl.pnl_dollars,
             trades_today=len(today_trades),
             positions_count=len(positions),
             equity=float(account.equity),
             cash=float(account.cash),
+            positions=positions,
         )
         return 0
 

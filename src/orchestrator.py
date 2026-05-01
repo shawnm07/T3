@@ -98,11 +98,14 @@ class TradingOrchestrator:
         self._last_ai_cash_target_pct: float | None = None
 
     def _is_cash_proxy(self, symbol: str) -> bool:
-        return self.cash_proxy_enabled and symbol == self.cash_proxy_symbol
+        return (
+            self.cash_proxy_enabled
+            and str(symbol or "").strip().upper() == str(self.cash_proxy_symbol or "").strip().upper()
+        )
 
     def _get_proxy_position(self, positions):
-        for p in positions:
-            if self._is_cash_proxy(p.symbol):
+        for p in positions or []:
+            if self._is_cash_proxy(getattr(p, "symbol", "")):
                 return p
         return None
 
@@ -543,7 +546,8 @@ class TradingOrchestrator:
 
         Deterministic and filesystem-free. The scheduled scan times are:
           10:00 ET → FIRST  (window: 09:30–11:00 ET)
-          12:00, 14:00, 15:30 ET → MIDDAY  (window: 11:00–16:00 ET)
+          11:00, 12:00, 13:00, 14:00, 15:00 ET → MIDDAY
+            (window: 11:00–16:00 ET)
         Anything outside market hours returns UNKNOWN and earnings checks are
         skipped (fail-safe: never assume first scan).
         """
@@ -1744,11 +1748,17 @@ class TradingOrchestrator:
         spy_position_value = 0.0
         spy_qty = 0.0
         if self.cash_proxy_enabled:
-            for p in holdings:
-                if self._is_cash_proxy(p.symbol):
-                    spy_position_value = abs(float(p.market_value))
+            position_sources = list(holdings or [])
+            try:
+                snapshot_positions = self.client.get_positions()
+            except Exception:
+                snapshot_positions = []
+            position_sources.extend(snapshot_positions or [])
+            for p in position_sources:
+                if self._is_cash_proxy(getattr(p, "symbol", "")):
+                    spy_position_value = abs(float(getattr(p, "market_value", 0) or 0))
                     try:
-                        spy_qty = float(p.qty)
+                        spy_qty = float(getattr(p, "qty", 0) or 0)
                     except Exception:
                         spy_qty = 0.0
                     break
@@ -1878,7 +1888,12 @@ class TradingOrchestrator:
 
         # --- Execution constraints ---
         execution_constraints = {
-            "fractional_shares_supported": True,
+            "fractional_shares_supported_for_entry_orders": True,
+            "buy_entry_order_class": "simple",
+            "attached_stop_loss_on_entry_order": False,
+            "protective_stop_order": "submitted_as_separate_simple_sell_stop_after_entry_fill",
+            "fractional_stop_orders_require_time_in_force_day": True,
+            "time_in_force": "day",
             "min_trade_usd": float(self.cfg.get("risk", "min_trade_usd", default=500)),
             "min_rebalance_delta_usd": float(self.cfg.get(
                 "rebalance", "min_delta_usd", default=500)),
@@ -1942,16 +1957,19 @@ class TradingOrchestrator:
         import asyncio
         pipeline = AIPipeline(self.cfg, self.ai)
         async def _all():
-            tasks = [pipeline.analyze_candidate(d.symbol, d, macro.to_dict(), portfolio_ctx)
-                     for d in candidates]
-            results = await asyncio.gather(*tasks, return_exceptions=True)
-            out = {}
-            for d, r in zip(candidates, results):
-                if isinstance(r, Exception):
-                    log.warning("AI on held %s failed: %s", d.symbol, r)
-                    continue
-                out[d.symbol] = r
-            return out
+            try:
+                tasks = [pipeline.analyze_candidate(d.symbol, d, macro.to_dict(), portfolio_ctx)
+                         for d in candidates]
+                results = await asyncio.gather(*tasks, return_exceptions=True)
+                out = {}
+                for d, r in zip(candidates, results):
+                    if isinstance(r, Exception):
+                        log.warning("AI on held %s failed: %s", d.symbol, r)
+                        continue
+                    out[d.symbol] = r
+                return out
+            finally:
+                await pipeline.aclose()
         return asyncio.run(_all())
 
     def _validate_rebalance_buy_action(
@@ -1989,6 +2007,8 @@ class TradingOrchestrator:
         if qty <= 0 or entry <= 0:
             audit.update({"status": "rejected", "reject_reason": "non_positive_qty_or_entry"})
             return False, audit
+        submitted_qty = qty
+        audit["submitted_qty"] = submitted_qty
         try:
             protective_stop = self.risk.protective_stop_loss_price(entry, action.ai_stop_loss)
         except ValueError as exc:
@@ -2006,7 +2026,7 @@ class TradingOrchestrator:
                 audit.update({"status": "rejected", "reject_reason": "target_not_above_entry"})
                 return False, audit
 
-        delta_notional = qty * entry
+        delta_notional = submitted_qty * entry
         post_notional = float(action.current_notional or 0) + delta_notional
         max_notional = float(equity) * float(self.risk.max_position_pct)
         audit["delta_notional"] = round(delta_notional, 2)
@@ -2028,7 +2048,7 @@ class TradingOrchestrator:
             })
             return False, audit
 
-        risk_usd = qty * (entry - protective_stop)
+        risk_usd = submitted_qty * (entry - protective_stop)
         risk_cap = float(equity) * float(audit["max_risk_per_trade_pct"])
         audit["risk_usd"] = round(risk_usd, 2)
         audit["max_risk_usd"] = round(risk_cap, 2)
@@ -2127,21 +2147,27 @@ class TradingOrchestrator:
                         "skipped": "buy_safety_rejected",
                         "risk_sizer": buy_audit,
                     }
+                entry_ref = getattr(action, "ai_entry_price", None)
+                if not entry_ref and abs(delta_qty) > 0:
+                    entry_ref = float(action.delta_notional) / abs(delta_qty)
+                submitted_qty = float(buy_audit.get("submitted_qty") or delta_qty)
+                funding_requirement = submitted_qty * float(entry_ref or 0)
+                if funding_requirement <= 0:
+                    funding_requirement = float(action.delta_notional)
                 funded_notional = self._funded_buy_notional(
-                    action.symbol, action.delta_notional, equity, cash_floor_pct, label,
+                    action.symbol, funding_requirement, equity, cash_floor_pct, label,
                 )
-                if funded_notional + 0.01 < float(action.delta_notional):
+                if funded_notional + 0.01 < funding_requirement:
                     return {
                         **action_dict,
                         "skipped": "insufficient_confirmed_cash",
                         "funded_notional": round(funded_notional, 2),
                     }
-                entry_ref = getattr(action, "ai_entry_price", None)
-                if not entry_ref and abs(delta_qty) > 0:
-                    entry_ref = float(action.delta_notional) / abs(delta_qty)
+                ai_audit["submitted_qty"] = submitted_qty
+                ai_audit["funding_requirement"] = round(funding_requirement, 2)
                 exec_result = self.executor.execute_ai_bracket(
                     symbol=action.symbol,
-                    qty=delta_qty,
+                    qty=submitted_qty,
                     entry_price=float(entry_ref),
                     stop_loss=action.ai_stop_loss,
                     take_profit=action.ai_take_profit,
@@ -2610,30 +2636,23 @@ class TradingOrchestrator:
                 continue
             tw = float(target_weights.get(sym, 0.0) or 0.0)
             if tw <= 0.0:
-                # Target zero but residual shares — force full close via percentage=100.
-                try:
-                    log.info("Verifier dust-sweep: force-closing %s (qty=%s, target=0%%)", sym, qty)
-                    order = self.client.close_position(sym, percentage=100)
-                    order_id = str(getattr(order, "id", "") or "") or None
-                    final_status = "submitted"
-                    filled_qty = 0.0
-                    if order_id:
-                        final, ok = self.client.wait_for_order_fill(
-                            order_id, timeout_s=30.0, poll_s=1.0,
-                        )
-                        if final is not None:
-                            final_status = str(getattr(final, "status", "") or "submitted").lower().replace("orderstatus.", "")
-                            filled_qty = float(getattr(final, "filled_qty", 0) or 0)
-                    dust_closed.append({
-                        "symbol": sym, "action": "force_close_100pct",
-                        "qty_before": qty, "filled_qty": filled_qty,
-                        "final_status": final_status, "order_id": order_id,
-                    })
-                except Exception as e:
-                    msg = str(e)
-                    log.warning("Verifier dust-sweep: close_position(%s) failed: %s", sym, msg)
-                    dust_closed.append({"symbol": sym, "action": "force_close_failed",
-                                        "qty_before": qty, "error": msg})
+                # Target zero but residual shares. Route through the executor so
+                # protective child orders are canceled before the close request.
+                log.info("Verifier dust-sweep: force-closing %s (qty=%s, target=0%%)", sym, qty)
+                exec_result = self.executor.close_position(
+                    sym,
+                    reason="verifier dust-sweep target=0",
+                )
+                action = "force_close_100pct" if exec_result.ok else "force_close_failed"
+                dust_closed.append({
+                    "symbol": sym,
+                    "action": action,
+                    "qty_before": qty,
+                    "filled_qty": exec_result.filled_qty,
+                    "final_status": exec_result.final_status,
+                    "order_id": exec_result.order_id,
+                    "error": None if exec_result.ok else exec_result.message,
+                })
 
         # Refresh after dust sweep so weight calc reflects post-close state.
         if dust_closed:
@@ -3676,8 +3695,9 @@ class TradingOrchestrator:
 
         self._reset_selector_failures()
 
-        # Diversification veto: reject any plan that violates the per-sector
-        # / per-theme cap. One repair retry, then forced compliance.
+        # Diversification veto: force deterministic compliance with per-sector
+        # / per-theme caps before execution. This avoids another large Opus
+        # call immediately after selector success, which can hit TPM limits.
         cash_proxy = self.cash_proxy_symbol if self.cash_proxy_enabled else None
         guard = sector_guard.validate(
             target_weights=result.get("target_weights") or {},
@@ -3689,48 +3709,26 @@ class TradingOrchestrator:
         if not guard.ok:
             log_decision({"event": "sector_guard_violation",
                           "violations": [v.to_dict() for v in guard.violations]})
-            ctx_retry = dict(ctx)
-            ss_retry = dict(ctx_retry.get("system_state") or {})
-            ss_retry["sector_guard_violations"] = [v.to_dict() for v in guard.violations]
-            ss_retry["sector_guard_retry"] = True
-            ctx_retry["system_state"] = ss_retry
-            retry_result = run_portfolio_selector(
-                self.cfg, ctx_retry, pool_symbols=pool_symbols, pool_meta=pool_meta,
-                held_symbols=held_symbols, allow_floor_breach=allow_floor_breach,
+            forced = sector_guard.force_compliance(
+                target_weights=result.get("target_weights") or {},
+                per_symbol=result.get("per_symbol") or {},
+                violations=guard.violations,
+                cash_proxy_symbol=cash_proxy,
             )
-            if retry_result is not None:
-                guard2 = sector_guard.validate(
-                    target_weights=retry_result.get("target_weights") or {},
-                    per_symbol=retry_result.get("per_symbol") or {},
-                    pool_meta=pool_meta,
-                    cfg=self.cfg,
-                    cash_proxy_symbol=cash_proxy,
-                )
-                if guard2.ok:
-                    result = retry_result
-                    log_decision({"event": "sector_guard_repair_ok"})
-                else:
-                    forced = sector_guard.force_compliance(
-                        target_weights=retry_result.get("target_weights") or {},
-                        per_symbol=retry_result.get("per_symbol") or {},
-                        violations=guard2.violations,
-                        cash_proxy_symbol=cash_proxy,
-                    )
-                    result = retry_result
-                    log_decision({"event": "sector_guard_forced",
-                                  "forced_exits": forced,
-                                  "violations": [v.to_dict() for v in guard2.violations]})
-            else:
-                forced = sector_guard.force_compliance(
-                    target_weights=result.get("target_weights") or {},
-                    per_symbol=result.get("per_symbol") or {},
-                    violations=guard.violations,
-                    cash_proxy_symbol=cash_proxy,
-                )
-                log_decision({"event": "sector_guard_forced",
-                              "forced_exits": forced,
-                              "violations": [v.to_dict() for v in guard.violations],
-                              "retry": "ai_unavailable"})
+            guard_after = sector_guard.validate(
+                target_weights=result.get("target_weights") or {},
+                per_symbol=result.get("per_symbol") or {},
+                pool_meta=pool_meta,
+                cfg=self.cfg,
+                cash_proxy_symbol=cash_proxy,
+            )
+            log_decision({"event": "sector_guard_forced",
+                          "forced_exits": forced,
+                          "violations": [v.to_dict() for v in guard.violations],
+                          "post_guard_ok": guard_after.ok,
+                          "post_guard_violations": [
+                              v.to_dict() for v in guard_after.violations
+                          ]})
 
         log_decision({"event": "selector_output", "result": result})
         log_decision({

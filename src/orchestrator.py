@@ -22,7 +22,10 @@ from src.candidate_scoring import (
 )
 from src.decision import DecisionEngine, TradeDecision
 from src.discovery import Candidate, discover_candidates
-from src.dynamic_watchlist import update_dynamic_watchlist
+from src.dynamic_watchlist import (
+    remove_dynamic_watchlist_symbols,
+    update_dynamic_watchlist,
+)
 from src.earnings import EarningsInfo, fetch_earnings, within_window
 from src.executor import TradeExecutor
 from src.fundamentals import compute_fundamentals
@@ -102,6 +105,92 @@ class TradingOrchestrator:
             self.cash_proxy_enabled
             and str(symbol or "").strip().upper() == str(self.cash_proxy_symbol or "").strip().upper()
         )
+
+    def _asset_ai_reject_reason(self, info: dict[str, Any]) -> str | None:
+        status = str(info.get("status") or "").lower()
+        if status != "active":
+            return f"asset_not_active:{status or 'unknown'}"
+        if info.get("tradable") is not True:
+            return "asset_not_tradable"
+        return None
+
+    @staticmethod
+    def _asset_lookup_failure_reason(exc: Exception) -> str:
+        msg = str(exc).lower()
+        if "404" in msg or "not found" in msg:
+            return "asset_not_found"
+        return "asset_lookup_failed"
+
+    def _prune_untradable_candidates(
+        self,
+        candidates: list[Candidate],
+        held_symbols: set[str],
+    ) -> tuple[list[Candidate], list[dict[str, Any]]]:
+        """Remove non-held candidates Alpaca does not verify as tradable."""
+        held = {str(sym or "").upper() for sym in held_symbols}
+        kept: list[Candidate] = []
+        removed: list[dict[str, Any]] = []
+
+        for cand in candidates or []:
+            sym = str(cand.symbol or "").strip().upper()
+            if not sym:
+                continue
+            if cand.is_held or sym in held or "/" in sym or self._is_cash_proxy(sym):
+                kept.append(cand)
+                continue
+            try:
+                asset = self.client.get_asset_info(sym)
+            except Exception as exc:
+                removed.append({
+                    "symbol": sym,
+                    "reason": self._asset_lookup_failure_reason(exc),
+                    "error": str(exc),
+                    "sources": list(cand.sources),
+                })
+                continue
+
+            reason = self._asset_ai_reject_reason(asset)
+            if reason:
+                removed.append({
+                    "symbol": sym,
+                    "reason": reason,
+                    "asset": asset,
+                    "sources": list(cand.sources),
+                })
+                continue
+            kept.append(cand)
+
+        if not removed:
+            return kept, []
+
+        persisted_symbols = [
+            row["symbol"]
+            for row in removed
+            if row.get("reason") != "asset_lookup_failed"
+        ]
+        dynamic_update: dict[str, Any] | None = None
+        if persisted_symbols:
+            try:
+                dynamic_update = remove_dynamic_watchlist_symbols(
+                    self.cfg,
+                    persisted_symbols,
+                    reason="alpaca_asset_not_ai_eligible",
+                )
+            except Exception as exc:
+                dynamic_update = {"error": str(exc)}
+                log.warning("[dynamic_watchlist] asset-prune removal failed: %s", exc)
+
+        log_decision({
+            "event": "candidate_pool_asset_pruned",
+            "removed": removed,
+            "dynamic_watchlist": dynamic_update,
+        })
+        log.info(
+            "[selector] removed %d non-AI-eligible candidates after Alpaca asset check: %s",
+            len(removed),
+            ", ".join(f"{row['symbol']}:{row['reason']}" for row in removed),
+        )
+        return kept, removed
 
     def _get_proxy_position(self, positions):
         for p in positions or []:
@@ -1893,6 +1982,8 @@ class TradingOrchestrator:
             "attached_stop_loss_on_entry_order": False,
             "protective_stop_order": "submitted_as_separate_simple_sell_stop_after_entry_fill",
             "fractional_stop_orders_require_time_in_force_day": True,
+            "non_fractionable_assets": "executor rounds BUY qty down to whole shares; below 1 share is rejected",
+            "non_tradable_assets": "executor rejects before order submission",
             "time_in_force": "day",
             "min_trade_usd": float(self.cfg.get("risk", "min_trade_usd", default=500)),
             "min_rebalance_delta_usd": float(self.cfg.get(
@@ -2008,6 +2099,23 @@ class TradingOrchestrator:
             audit.update({"status": "rejected", "reject_reason": "non_positive_qty_or_entry"})
             return False, audit
         submitted_qty = qty
+        normalizer = getattr(self.client, "normalize_buy_qty_for_asset", None)
+        if normalizer is not None:
+            try:
+                submitted_qty, asset_audit, asset_reject = normalizer(action.symbol, qty)
+            except Exception as exc:
+                audit.update({
+                    "status": "rejected",
+                    "reject_reason": f"asset_preflight_failed: {exc}",
+                })
+                return False, audit
+            audit["asset_check"] = asset_audit
+            if asset_reject:
+                audit.update({
+                    "status": "rejected",
+                    "reject_reason": asset_reject,
+                })
+                return False, audit
         audit["submitted_qty"] = submitted_qty
         try:
             protective_stop = self.risk.protective_stop_loss_price(entry, action.ai_stop_loss)
@@ -2963,6 +3071,14 @@ class TradingOrchestrator:
         candidates, breakdown = discover_candidates(
             self.cfg, mds, held_symbols=held_syms,
         )
+        candidates, asset_removed = self._prune_untradable_candidates(
+            candidates,
+            set(held_syms),
+        )
+        for row in asset_removed:
+            reason = str(row.get("reason") or "unknown").split(":", 1)[0]
+            key = f"alpaca_{reason}_removed"
+            breakdown[key] = int(breakdown.get(key, 0) or 0) + 1
         return candidates, breakdown
 
     def _stage_new_entry_targets(

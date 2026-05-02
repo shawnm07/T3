@@ -52,6 +52,7 @@ class AlpacaClient:
         # import at module load — valuation.py only needs the instance).
         self._pricing = None
         self._snapshot_cache: tuple[float, object, list] | None = None
+        self._asset_info_cache: dict[str, dict] = {}
 
     def _get_pricing(self):
         if self._pricing is None:
@@ -104,6 +105,89 @@ class AlpacaClient:
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, max=10))
     def get_clock(self):
         return self.trading.get_clock()
+
+    # ---------- assets ----------
+    @staticmethod
+    def _enum_value(value):
+        return getattr(value, "value", value)
+
+    def get_asset_info(self, symbol: str) -> dict:
+        """Return cached Alpaca asset metadata needed for order preflight."""
+        sym = str(symbol or "").strip().upper()
+        if not sym:
+            raise ValueError("empty symbol")
+        cache = getattr(self, "_asset_info_cache", None)
+        if cache is None:
+            cache = {}
+            self._asset_info_cache = cache
+        if sym in cache:
+            return dict(cache[sym])
+        asset = self.trading.get_asset(sym)
+
+        def _get(name: str):
+            if isinstance(asset, dict):
+                return asset.get(name)
+            return getattr(asset, name, None)
+
+        info = {
+            "symbol": str(_get("symbol") or sym).upper(),
+            "name": _get("name"),
+            "asset_class": self._enum_value(_get("asset_class")),
+            "exchange": self._enum_value(_get("exchange")),
+            "status": self._enum_value(_get("status")),
+            "tradable": _get("tradable"),
+            "fractionable": _get("fractionable"),
+        }
+        cache[sym] = info
+        return dict(info)
+
+    def normalize_buy_qty_for_asset(
+        self,
+        symbol: str,
+        qty: float,
+    ) -> tuple[float, dict, str | None]:
+        """Validate tradability and convert non-fractionable buys to whole qty.
+
+        Returns ``(submitted_qty, audit, reject_reason)``. ``reject_reason`` is
+        ``None`` when the order can proceed.
+        """
+        try:
+            qty_f = float(qty)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"qty not numeric for {symbol}: {qty!r}") from exc
+        audit: dict = {
+            "symbol": str(symbol or "").upper(),
+            "requested_qty": qty_f,
+        }
+        if qty_f <= 0:
+            return qty_f, audit, "non_positive_qty"
+        try:
+            info = self.get_asset_info(symbol)
+        except Exception as exc:
+            audit["lookup_error"] = str(exc)
+            return qty_f, audit, f"asset_lookup_failed: {exc}"
+        audit["asset"] = info
+        status = str(info.get("status") or "").lower()
+        if status and status != "active":
+            return qty_f, audit, f"asset_not_active: {status}"
+        if info.get("tradable") is False:
+            return qty_f, audit, "asset_not_tradable"
+        submitted_qty = qty_f
+        if info.get("fractionable") is False:
+            whole_qty = math.floor(qty_f)
+            audit["fractionable"] = False
+            if whole_qty < 1:
+                return qty_f, audit, "asset_not_fractionable_qty_below_one_share"
+            if abs(qty_f - whole_qty) > 1e-9:
+                submitted_qty = float(whole_qty)
+                audit["qty_adjustment"] = "rounded_down_to_whole_share_for_non_fractionable_asset"
+                audit["submitted_qty"] = submitted_qty
+                log.warning(
+                    "Rounded non-fractionable %s buy qty %.6f down to %.0f whole shares",
+                    symbol, qty_f, submitted_qty,
+                )
+        audit.setdefault("submitted_qty", submitted_qty)
+        return submitted_qty, audit, None
 
     # ---------- stock data ----------
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=15))

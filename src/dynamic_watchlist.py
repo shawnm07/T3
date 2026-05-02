@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterable
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -188,6 +188,72 @@ def update_dynamic_watchlist(
         "state_file": str(path),
         "active_count": len(ranked),
         "added_or_refreshed": sorted(set(added_or_refreshed)),
+        "removed": removed,
+    }
+
+
+def remove_dynamic_watchlist_symbols(
+    cfg: Any,
+    symbols: Iterable[str],
+    *,
+    reason: str = "asset_not_tradable",
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    """Remove known-bad symbols from the persisted dynamic watchlist."""
+    if not bool(_cfg(cfg, "dynamic_watchlist", "enabled", default=True)):
+        return {"skipped": "disabled"}
+
+    requested = sorted({
+        str(sym).strip().upper()
+        for sym in symbols or []
+        if str(sym or "").strip()
+    })
+    current = now or datetime.now(timezone.utc)
+    now_text = _now_iso(current)
+    state = _load_state(cfg)
+    stored: dict[str, dict[str, Any]] = {
+        str(sym).upper(): dict(info or {})
+        for sym, info in (state.get("symbols") or {}).items()
+        if sym
+    }
+
+    removed: list[dict[str, Any]] = []
+    for sym in requested:
+        if sym not in stored:
+            continue
+        stored.pop(sym, None)
+        removed.append({"symbol": sym, "reason": reason})
+
+    if not removed:
+        return {
+            "state_file": str(_path(cfg)),
+            "active_count": len(stored),
+            "removed": [],
+        }
+
+    history = list(state.get("last_removed") or [])
+    history.extend({
+        "symbol": row["symbol"],
+        "reason": row["reason"],
+        "removed_at": now_text,
+    } for row in removed)
+
+    state = {
+        **{k: v for k, v in state.items() if k != "symbols"},
+        "updated_at": now_text,
+        "symbols": stored,
+        "last_removed": history[-50:],
+        "notes": state.get(
+            "notes",
+            "Eligibility only; dynamic-watchlist membership is not a score bonus.",
+        ),
+    }
+    path = _path(cfg)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(state, indent=2), encoding="utf-8")
+    return {
+        "state_file": str(path),
+        "active_count": len(stored),
         "removed": removed,
     }
 

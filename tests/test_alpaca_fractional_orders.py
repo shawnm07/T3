@@ -98,6 +98,17 @@ class _FakeTrading:
     def __init__(self):
         self.last_request = None
         self.positions = [SimpleNamespace(symbol="TSLA", qty="12.3456")]
+        self.assets = {
+            "TSLA": SimpleNamespace(
+                symbol="TSLA",
+                name="Tesla",
+                asset_class="us_equity",
+                exchange="NASDAQ",
+                status="active",
+                tradable=True,
+                fractionable=True,
+            )
+        }
 
     def submit_order(self, req):
         self.last_request = req
@@ -105,6 +116,9 @@ class _FakeTrading:
 
     def get_all_positions(self):
         return self.positions
+
+    def get_asset(self, symbol):
+        return self.assets[str(symbol).upper()]
 
 
 def _client():
@@ -209,6 +223,45 @@ def test_standalone_stop_loss_keeps_fractional_qty_and_simple_order():
     assert req.client_order_id == "stop-1"
 
 
+def test_asset_preflight_rejects_not_tradable():
+    client = _client()
+    client.trading.assets["AKAN"] = SimpleNamespace(
+        symbol="AKAN",
+        name="Akan",
+        asset_class="us_equity",
+        exchange="NASDAQ",
+        status="active",
+        tradable=False,
+        fractionable=True,
+    )
+
+    submitted_qty, audit, reject = client.normalize_buy_qty_for_asset("AKAN", 170.8276)
+
+    assert submitted_qty == 170.8276
+    assert reject == "asset_not_tradable"
+    assert audit["asset"]["tradable"] is False
+
+
+def test_asset_preflight_rounds_non_fractionable_buy_to_whole_share():
+    client = _client()
+    client.trading.assets["AVLN"] = SimpleNamespace(
+        symbol="AVLN",
+        name="Avalon",
+        asset_class="us_equity",
+        exchange="NYSE",
+        status="active",
+        tradable=True,
+        fractionable=False,
+    )
+
+    submitted_qty, audit, reject = client.normalize_buy_qty_for_asset("AVLN", 49.9494)
+
+    assert reject is None
+    assert submitted_qty == 49.0
+    assert audit["qty_adjustment"] == "rounded_down_to_whole_share_for_non_fractionable_asset"
+    assert audit["asset"]["fractionable"] is False
+
+
 def test_close_position_uses_day_qty_order():
     client = _client()
 
@@ -226,5 +279,7 @@ if __name__ == "__main__":
     test_qty_orders_are_day_tif_even_when_requested_otherwise()
     test_notional_orders_are_day_tif_even_when_requested_otherwise()
     test_standalone_stop_loss_keeps_fractional_qty_and_simple_order()
+    test_asset_preflight_rejects_not_tradable()
+    test_asset_preflight_rounds_non_fractionable_buy_to_whole_share()
     test_close_position_uses_day_qty_order()
     print("alpaca day order tests passed")

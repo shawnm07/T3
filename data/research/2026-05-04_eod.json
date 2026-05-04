@@ -1,0 +1,59 @@
+{
+  "date": "2026-05-04",
+  "equity": 99849.6908138367,
+  "cash": 4986.91,
+  "daily_return": -0.018,
+  "daily_vs_spy": -0.0143,
+  "period_return": 0,
+  "period_vs_spy": -0.1071,
+  "spy_daily": -0.0036,
+  "spy_30d": 0.1071,
+  "positions_count": 4,
+  "trades_today": 53,
+  "positions": [
+    {
+      "symbol": "AXTX",
+      "side": "PositionSide.LONG",
+      "qty": 313.0,
+      "avg_entry": 46.41,
+      "current_price": 46.61,
+      "pnl_pct": 0.0043,
+      "pnl_dollars": 62.6,
+      "market_value": 14588.93,
+      "price_source": "yfinance"
+    },
+    {
+      "symbol": "META",
+      "side": "PositionSide.LONG",
+      "qty": 15.4774,
+      "avg_entry": 611.73,
+      "current_price": 610.462,
+      "pnl_pct": -0.0021,
+      "pnl_dollars": -19.63,
+      "market_value": 9448.36,
+      "price_source": "yfinance"
+    },
+    {
+      "symbol": "PWR",
+      "side": "PositionSide.LONG",
+      "qty": 14.6949,
+      "avg_entry": 758.48,
+      "current_price": 757.38,
+      "pnl_pct": -0.0015,
+      "pnl_dollars": -16.16,
+      "market_value": 11129.62,
+      "price_source": "yfinance"
+    },
+    {
+      "symbol": "SPY",
+      "side": "PositionSide.LONG",
+      "qty": 83.138393354,
+      "avg_entry": 717.52,
+      "current_price": 718.03,
+      "pnl_pct": 0.0007,
+      "pnl_dollars": 42.4,
+      "market_value": 59695.86,
+      "price_source": "yfinance"
+    }
+  ]
+}

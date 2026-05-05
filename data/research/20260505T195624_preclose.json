@@ -1,0 +1,3501 @@
+{
+  "ts": "2026-05-05T19:56:24.201418+00:00",
+  "equity": 100502.555,
+  "positions_count": 1,
+  "market_bias": 0.289,
+  "weekend_session": false,
+  "session_gap_calendar_days": 1,
+  "hold_reports": [
+    {
+      "symbol": "GBTG",
+      "overnight": {
+        "symbol": "GBTG",
+        "score": 0.543,
+        "close_strength": 0.892,
+        "late_drift": -0.002,
+        "tech_bias": 0.738,
+        "sent_bias": 0.667,
+        "market_bias": 0.289,
+        "price": 9.49,
+        "notes": [
+          "closing_near_high"
+        ]
+      },
+      "directional_score": 0.543,
+      "decision": "hold",
+      "weekend_session": false
+    }
+  ],
+  "exits": [],
+  "candidate_reports": [
+    {
+      "symbol": "AMD",
+      "tech_score": 0.857,
+      "rsi": 72.3,
+      "overnight": {
+        "symbol": "AMD",
+        "score": 0.43,
+        "close_strength": 0.715,
+        "late_drift": 0.06,
+        "tech_bias": 0.857,
+        "sent_bias": 0.0,
+        "market_bias": 0.289,
+        "price": 357.25,
+        "notes": [
+          "closing_near_high"
+        ]
+      },
+      "intraday_chart": {
+        "current_price": 357.25,
+        "open": 344.2,
+        "day_high": 359.5716,
+        "day_low": 343.28,
+        "vwap": 352.7216,
+        "prior_close": 341.54,
+        "gap_from_prior_close_pct": 0.0078,
+        "price_vs_vwap_pct": 0.0128,
+        "distance_from_high_pct": -0.0065,
+        "distance_from_low_pct": 0.0407,
+        "intraday_change_pct": 0.0379,
+        "recent_trend": "rising",
+        "recent_slope_pct": 0.0026,
+        "volume_trend": "rising",
+        "volume_ratio_recent_to_prior": 1.473,
+        "twenty_day_volume_ratio": 0.917,
+        "ema5": 356.133,
+        "ema20": 356.1686,
+        "ema_state": "price_above_ema20",
+        "price_vs_ema20_pct": 0.003,
+        "ema20_slope_pct": -0.0008,
+        "classification": "consolidating",
+        "gap_only_risk": false,
+        "session_volume": 37001691,
+        "session_bar_count": 140
+      },
+      "momentum_profile": {
+        "score": 89.0,
+        "grade": "strong_continuation",
+        "passes_new_entry_gate": true,
+        "gap_only_risk": false,
+        "min_score": 55.0,
+        "reasons": [
+          "above_vwap",
+          "recent_trend_rising",
+          "volume_rising"
+        ]
+      },
+      "earnings": {
+        "symbol": "AMD",
+        "next_earnings_date": "2026-05-05",
+        "days_until_earnings": 0
+      },
+      "earnings_catalyst_exception": {
+        "enabled": false,
+        "near_earnings": true,
+        "days_until_earnings": 0,
+        "catalyst_source": false,
+        "catalyst_sentiment": false,
+        "buy_threshold": 0.6,
+        "size_multiplier": 0.35
+      },
+      "discovery_sources": [
+        "seed_watchlist",
+        "dynamic_watchlist",
+        "peer_group"
+      ],
+      "skipped": "near earnings without preclose catalyst exception"
+    },
+    {
+      "symbol": "SKK",
+      "tech_score": 0.795,
+      "rsi": 58.0,
+      "overnight": {
+        "symbol": "SKK",
+        "score": -0.038,
+        "close_strength": -0.741,
+        "late_drift": -0.163,
+        "tech_bias": 0.795,
+        "sent_bias": 0.25,
+        "market_bias": 0.289,
+        "price": 5.37,
+        "notes": [
+          "closing_near_low"
+        ]
+      },
+      "intraday_chart": {
+        "current_price": 5.37,
+        "open": 10.97,
+        "day_high": 11.15,
+        "day_low": 4.5101,
+        "vwap": 6.5204,
+        "prior_close": 12.19,
+        "gap_from_prior_close_pct": -0.1001,
+        "price_vs_vwap_pct": -0.1764,
+        "distance_from_high_pct": -0.5184,
+        "distance_from_low_pct": 0.1907,
+        "intraday_change_pct": -0.5105,
+        "recent_trend": "falling",
+        "recent_slope_pct": -0.0213,
+        "volume_trend": "flat",
+        "volume_ratio_recent_to_prior": 0.913,
+        "twenty_day_volume_ratio": 4.736,
+        "ema5": 5.4285,
+        "ema20": 5.4111,
+        "ema_state": "price_below_ema20",
+        "price_vs_ema20_pct": -0.0076,
+        "ema20_slope_pct": 0.0046,
+        "classification": "fading",
+        "gap_only_risk": false,
+        "session_volume": 5950614,
+        "session_bar_count": 138
+      },
+      "momentum_profile": {
+        "score": 0.0,
+        "grade": "fading",
+        "passes_new_entry_gate": false,
+        "gap_only_risk": false,
+        "min_score": 55.0,
+        "reasons": [
+          "below_vwap",
+          "below_5min_ema20",
+          "recent_trend_falling",
+          "fading_from_intraday_high",
+          "well_off_day_high"
+        ]
+      },
+      "earnings": {
+        "symbol": "SKK",
+        "next_earnings_date": null,
+        "days_until_earnings": null
+      },
+      "earnings_catalyst_exception": {
+        "enabled": false,
+        "near_earnings": false,
+        "days_until_earnings": null,
+        "catalyst_source": true,
+        "catalyst_sentiment": true,
+        "buy_threshold": 0.6,
+        "size_multiplier": 0.35
+      },
+      "discovery_sources": [
+        "av_gainers"
+      ],
+      "skipped": "ov -0.04 < threshold 0.45"
+    },
+    {
+      "symbol": "CNSP",
+      "tech_score": 0.779,
+      "rsi": 78.7,
+      "overnight": {
+        "symbol": "CNSP",
+        "score": 0.536,
+        "close_strength": 0.689,
+        "late_drift": 0.578,
+        "tech_bias": 0.779,
+        "sent_bias": 0.0,
+        "market_bias": 0.289,
+        "price": 7.12,
+        "notes": [
+          "closing_near_high",
+          "late_day_strength"
+        ]
+      },
+      "intraday_chart": {
+        "current_price": 7.12,
+        "open": 6.94,
+        "day_high": 7.46,
+        "day_low": 5.27,
+        "vwap": 6.3366,
+        "prior_close": 7.84,
+        "gap_from_prior_close_pct": -0.1148,
+        "price_vs_vwap_pct": 0.1236,
+        "distance_from_high_pct": -0.0456,
+        "distance_from_low_pct": 0.351,
+        "intraday_change_pct": 0.0259,
+        "recent_trend": "falling",
+        "recent_slope_pct": -0.0152,
+        "volume_trend": "fading",
+        "volume_ratio_recent_to_prior": 0.704,
+        "twenty_day_volume_ratio": 0.332,
+        "ema5": 7.1179,
+        "ema20": 6.9994,
+        "ema_state": "bullish",
+        "price_vs_ema20_pct": 0.0172,
+        "ema20_slope_pct": 0.0102,
+        "classification": "fading",
+        "gap_only_risk": false,
+        "session_volume": 1394901,
+        "session_bar_count": 138
+      },
+      "momentum_profile": {
+        "score": 21.0,
+        "grade": "fading",
+        "passes_new_entry_gate": false,
+        "gap_only_risk": false,
+        "min_score": 55.0,
+        "reasons": [
+          "above_vwap",
+          "ema5_above_ema20",
+          "recent_trend_falling",
+          "volume_fading",
+          "fading_from_intraday_high",
+          "well_off_day_high"
+        ]
+      },
+      "earnings": {
+        "symbol": "CNSP",
+        "next_earnings_date": null,
+        "days_until_earnings": null
+      },
+      "earnings_catalyst_exception": {
+        "enabled": false,
+        "near_earnings": false,
+        "days_until_earnings": null,
+        "catalyst_source": true,
+        "catalyst_sentiment": false,
+        "buy_threshold": 0.6,
+        "size_multiplier": 0.35
+      },
+      "discovery_sources": [
+        "dynamic_watchlist",
+        "av_gainers"
+      ],
+      "skipped": "rsi 78.7 > 78.0"
+    },
+    {
+      "symbol": "MCHP",
+      "tech_score": 0.838,
+      "rsi": 79.5,
+      "overnight": {
+        "symbol": "MCHP",
+        "score": 0.328,
+        "close_strength": 0.633,
+        "late_drift": -0.234,
+        "tech_bias": 0.838,
+        "sent_bias": 0.0,
+        "market_bias": 0.289,
+        "price": 98.18,
+        "notes": [
+          "closing_near_high"
+        ]
+      },
+      "intraday_chart": {
+        "current_price": 98.18,
+        "open": 95.45,
+        "day_high": 99.08,
+        "day_low": 94.17,
+        "vwap": 97.9073,
+        "prior_close": 95.3,
+        "gap_from_prior_close_pct": 0.0016,
+        "price_vs_vwap_pct": 0.0028,
+        "distance_from_high_pct": -0.0091,
+        "distance_from_low_pct": 0.0426,
+        "intraday_change_pct": 0.0286,
+        "recent_trend": "flat",
+        "recent_slope_pct": -0.0004,
+        "volume_trend": "fading",
+        "volume_ratio_recent_to_prior": 0.858,
+        "twenty_day_volume_ratio": 0.67,
+        "ema5": 98.2658,
+        "ema20": 98.491,
+        "ema_state": "bearish",
+        "price_vs_ema20_pct": -0.0032,
+        "ema20_slope_pct": -0.0017,
+        "classification": "consolidating",
+        "gap_only_risk": false,
+        "session_volume": 6510198,
+        "session_bar_count": 92
+      },
+      "momentum_profile": {
+        "score": 29.0,
+        "grade": "weak_or_flat",
+        "passes_new_entry_gate": false,
+        "gap_only_risk": false,
+        "min_score": 55.0,
+        "reasons": [
+          "above_vwap",
+          "below_5min_ema20",
+          "recent_trend_flat",
+          "volume_fading"
+        ]
+      },
+      "earnings": {
+        "symbol": "MCHP",
+        "next_earnings_date": "2026-05-07",
+        "days_until_earnings": 2
+      },
+      "earnings_catalyst_exception": {
+        "enabled": false,
+        "near_earnings": false,
+        "days_until_earnings": 2,
+        "catalyst_source": false,
+        "catalyst_sentiment": false,
+        "buy_threshold": 0.6,
+        "size_multiplier": 0.35
+      },
+      "discovery_sources": [],
+      "skipped": "rsi 79.5 > 78.0"
+    },
+    {
+      "symbol": "TXN",
+      "tech_score": 0.837,
+      "rsi": 76.3,
+      "overnight": {
+        "symbol": "TXN",
+        "score": 0.302,
+        "close_strength": 0.303,
+        "late_drift": -0.016,
+        "tech_bias": 0.837,
+        "sent_bias": 0.125,
+        "market_bias": 0.289,
+        "price": 280.08,
+        "notes": []
+      },
+      "intraday_chart": {
+        "current_price": 280.085,
+        "open": 279.35,
+        "day_high": 282.495,
+        "day_low": 275.58,
+        "vwap": 279.4267,
+        "prior_close": 280.89,
+        "gap_from_prior_close_pct": -0.0055,
+        "price_vs_vwap_pct": 0.0024,
+        "distance_from_high_pct": -0.0085,
+        "distance_from_low_pct": 0.0163,
+        "intraday_change_pct": 0.0026,
+        "recent_trend": "flat",
+        "recent_slope_pct": 0.0013,
+        "volume_trend": "rising",
+        "volume_ratio_recent_to_prior": 1.457,
+        "twenty_day_volume_ratio": 0.518,
+        "ema5": 279.881,
+        "ema20": 280.2711,
+        "ema_state": "bearish",
+        "price_vs_ema20_pct": -0.0007,
+        "ema20_slope_pct": -0.0012,
+        "classification": "consolidating",
+        "gap_only_risk": false,
+        "session_volume": 4186721,
+        "session_bar_count": 82
+      },
+      "momentum_profile": {
+        "score": 53.0,
+        "grade": "weak_or_flat",
+        "passes_new_entry_gate": false,
+        "gap_only_risk": false,
+        "min_score": 55.0,
+        "reasons": [
+          "above_vwap",
+          "below_5min_ema20",
+          "recent_trend_flat",
+          "volume_rising"
+        ]
+      },
+      "earnings": {
+        "symbol": "TXN",
+        "next_earnings_date": "2026-07-28",
+        "days_until_earnings": 84
+      },
+      "earnings_catalyst_exception": {
+        "enabled": false,
+        "near_earnings": false,
+        "days_until_earnings": 84,
+        "catalyst_source": false,
+        "catalyst_sentiment": true,
+        "buy_threshold": 0.6,
+        "size_multiplier": 0.35
+      },
+      "discovery_sources": [],
+      "skipped": "ov 0.30 < threshold 0.45"
+    },
+    {
+      "symbol": "AMKR",
+      "tech_score": 0.832,
+      "rsi": 70.9,
+      "overnight": {
+        "symbol": "AMKR",
+        "score": 0.347,
+        "close_strength": 0.592,
+        "late_drift": -0.103,
+        "tech_bias": 0.832,
+        "sent_bias": 0.0,
+        "market_bias": 0.289,
+        "price": 76.22,
+        "notes": []
+      },
+      "intraday_chart": {
+        "current_price": 76.215,
+        "open": 71.33,
+        "day_high": 77.55,
+        "day_low": 71.0,
+        "vwap": 76.0819,
+        "prior_close": 70.96,
+        "gap_from_prior_close_pct": 0.0052,
+        "price_vs_vwap_pct": 0.0017,
+        "distance_from_high_pct": -0.0172,
+        "distance_from_low_pct": 0.0735,
+        "intraday_change_pct": 0.0685,
+        "recent_trend": "falling",
+        "recent_slope_pct": -0.0026,
+        "volume_trend": "fading",
+        "volume_ratio_recent_to_prior": 0.584,
+        "twenty_day_volume_ratio": 0.978,
+        "ema5": 76.1258,
+        "ema20": 76.2743,
+        "ema_state": "bearish",
+        "price_vs_ema20_pct": -0.0008,
+        "ema20_slope_pct": -0.0018,
+        "classification": "fading",
+        "gap_only_risk": false,
+        "session_volume": 4896857,
+        "session_bar_count": 106
+      },
+      "momentum_profile": {
+        "score": 0.0,
+        "grade": "fading",
+        "passes_new_entry_gate": false,
+        "gap_only_risk": false,
+        "min_score": 55.0,
+        "reasons": [
+          "above_vwap",
+          "below_5min_ema20",
+          "recent_trend_falling",
+          "volume_fading",
+          "fading_from_intraday_high",
+          "large_move_without_fresh_push"
+        ]
+      },
+      "earnings": {
+        "symbol": "AMKR",
+        "next_earnings_date": "2026-07-27",
+        "days_until_earnings": 83
+      },
+      "earnings_catalyst_exception": {
+        "enabled": false,
+        "near_earnings": false,
+        "days_until_earnings": 83,
+        "catalyst_source": false,
+        "catalyst_sentiment": false,
+        "buy_threshold": 0.6,
+        "size_multiplier": 0.35
+      },
+      "discovery_sources": [],
+      "skipped": "ov 0.35 < threshold 0.45"
+    },
+    {
+      "symbol": "HCAI",
+      "tech_score": 0.769,
+      "rsi": 65.1,
+      "overnight": {
+        "symbol": "HCAI",
+        "score": -0.137,
+        "close_strength": -0.89,
+        "late_drift": -0.211,
+        "tech_bias": 0.769,
+        "sent_bias": 0.0,
+        "market_bias": 0.289,
+        "price": 15.22,
+        "notes": [
+          "closing_near_low"
+        ]
+      },
+      "intraday_chart": {
+        "current_price": 15.22,
+        "open": 17.8,
+        "day_high": 19.09,
+        "day_low": 14.9956,
+        "vwap": 16.4859,
+        "prior_close": 18.2,
+        "gap_from_prior_close_pct": -0.022,
+        "price_vs_vwap_pct": -0.0768,
+        "distance_from_high_pct": -0.2027,
+        "distance_from_low_pct": 0.015,
+        "intraday_change_pct": -0.1449,
+        "recent_trend": "falling",
+        "recent_slope_pct": -0.0127,
+        "volume_trend": "fading",
+        "volume_ratio_recent_to_prior": 0.841,
+        "twenty_day_volume_ratio": 0.052,
+        "ema5": 15.3163,
+        "ema20": 15.4098,
+        "ema_state": "bearish",
+        "price_vs_ema20_pct": -0.0123,
+        "ema20_slope_pct": -0.0035,
+        "classification": "fading",
+        "gap_only_risk": false,
+        "session_volume": 194549,
+        "session_bar_count": 102
+      },
+      "momentum_profile": {
+        "score": 0.0,
+        "grade": "fading",
+        "passes_new_entry_gate": false,
+        "gap_only_risk": false,
+        "min_score": 55.0,
+        "reasons": [
+          "below_vwap",
+          "below_5min_ema20",
+          "recent_trend_falling",
+          "volume_fading",
+          "fading_from_intraday_high",
+          "well_off_day_high"
+        ]
+      },
+      "earnings": {
+        "symbol": "HCAI",
+        "next_earnings_date": null,
+        "days_until_earnings": null
+      },
+      "earnings_catalyst_exception": {
+        "enabled": false,
+        "near_earnings": false,
+        "days_until_earnings": null,
+        "catalyst_source": true,
+        "catalyst_sentiment": false,
+        "buy_threshold": 0.6,
+        "size_multiplier": 0.35
+      },
+      "discovery_sources": [
+        "dynamic_watchlist",
+        "av_gainers"
+      ],
+      "skipped": "ov -0.14 < threshold 0.45"
+    },
+    {
+      "symbol": "ALAB",
+      "tech_score": 0.827,
+      "rsi": 70.6,
+      "overnight": {
+        "symbol": "ALAB",
+        "score": 0.168,
+        "close_strength": 0.506,
+        "late_drift": -0.637,
+        "tech_bias": 0.827,
+        "sent_bias": -0.125,
+        "market_bias": 0.289,
+        "price": 216.15,
+        "notes": [
+          "late_day_weakness"
+        ]
+      },
+      "intraday_chart": {
+        "current_price": 216.15,
+        "open": 202.6419,
+        "day_high": 220.79,
+        "day_low": 202.0,
+        "vwap": 215.8038,
+        "prior_close": 201.25,
+        "gap_from_prior_close_pct": 0.0069,
+        "price_vs_vwap_pct": 0.0016,
+        "distance_from_high_pct": -0.021,
+        "distance_from_low_pct": 0.07,
+        "intraday_change_pct": 0.0667,
+        "recent_trend": "falling",
+        "recent_slope_pct": -0.0105,
+        "volume_trend": "rising",
+        "volume_ratio_recent_to_prior": 1.264,
+        "twenty_day_volume_ratio": 0.973,
+        "ema5": 216.9659,
+        "ema20": 218.2428,
+        "ema_state": "bearish",
+        "price_vs_ema20_pct": -0.0096,
+        "ema20_slope_pct": -0.0043,
+        "classification": "fading",
+        "gap_only_risk": false,
+        "session_volume": 5738314,
+        "session_bar_count": 113
+      },
+      "momentum_profile": {
+        "score": 0.0,
+        "grade": "fading",
+        "passes_new_entry_gate": false,
+        "gap_only_risk": false,
+        "min_score": 55.0,
+        "reasons": [
+          "above_vwap",
+          "below_5min_ema20",
+          "recent_trend_falling",
+          "volume_rising",
+          "fading_from_intraday_high",
+          "well_off_day_high",
+          "large_move_without_fresh_push"
+        ]
+      },
+      "earnings": {
+        "symbol": "ALAB",
+        "next_earnings_date": "2026-05-05",
+        "days_until_earnings": 0
+      },
+      "earnings_catalyst_exception": {
+        "enabled": false,
+        "near_earnings": true,
+        "days_until_earnings": 0,
+        "catalyst_source": false,
+        "catalyst_sentiment": false,
+        "buy_threshold": 0.6,
+        "size_multiplier": 0.35
+      },
+      "discovery_sources": [],
+      "skipped": "near earnings without preclose catalyst exception"
+    },
+    {
+      "symbol": "AVT",
+      "tech_score": 0.818,
+      "rsi": 74.9,
+      "overnight": {
+        "symbol": "AVT",
+        "score": 0.153,
+        "close_strength": 0.122,
+        "late_drift": -0.306,
+        "tech_bias": 0.818,
+        "sent_bias": 0.0,
+        "market_bias": 0.289,
+        "price": 82.39,
+        "notes": []
+      },
+      "intraday_chart": {
+        "current_price": 82.385,
+        "open": 81.71,
+        "day_high": 83.43,
+        "day_low": 81.05,
+        "vwap": 82.835,
+        "prior_close": 80.42,
+        "gap_from_prior_close_pct": 0.016,
+        "price_vs_vwap_pct": -0.0054,
+        "distance_from_high_pct": -0.0125,
+        "distance_from_low_pct": 0.0165,
+        "intraday_change_pct": 0.0083,
+        "recent_trend": "falling",
+        "recent_slope_pct": -0.0065,
+        "volume_trend": "rising",
+        "volume_ratio_recent_to_prior": 1.27,
+        "twenty_day_volume_ratio": 0.359,
+        "ema5": 82.629,
+        "ema20": 82.8193,
+        "ema_state": "bearish",
+        "price_vs_ema20_pct": -0.0052,
+        "ema20_slope_pct": -0.0013,
+        "classification": "fading",
+        "gap_only_risk": false,
+        "session_volume": 520013,
+        "session_bar_count": 73
+      },
+      "momentum_profile": {
+        "score": 0.0,
+        "grade": "fading",
+        "passes_new_entry_gate": false,
+        "gap_only_risk": false,
+        "min_score": 55.0,
+        "reasons": [
+          "below_vwap",
+          "below_5min_ema20",
+          "recent_trend_falling",
+          "volume_rising",
+          "fading_from_intraday_high"
+        ]
+      },
+      "earnings": {
+        "symbol": "AVT",
+        "next_earnings_date": "2026-08-05",
+        "days_until_earnings": 92
+      },
+      "earnings_catalyst_exception": {
+        "enabled": false,
+        "near_earnings": false,
+        "days_until_earnings": 92,
+        "catalyst_source": false,
+        "catalyst_sentiment": false,
+        "buy_threshold": 0.6,
+        "size_multiplier": 0.35
+      },
+      "discovery_sources": [],
+      "skipped": "ov 0.15 < threshold 0.45"
+    },
+    {
+      "symbol": "RVMD",
+      "tech_score": 0.814,
+      "rsi": 63.5,
+      "overnight": {
+        "symbol": "RVMD",
+        "score": 0.163,
+        "close_strength": -0.084,
+        "late_drift": -0.014,
+        "tech_bias": 0.814,
+        "sent_bias": 0.0,
+        "market_bias": 0.289,
+        "price": 146.83,
+        "notes": []
+      },
+      "intraday_chart": {
+        "current_price": 146.83,
+        "open": 146.51,
+        "day_high": 149.87,
+        "day_low": 144.26,
+        "vwap": 146.3415,
+        "prior_close": 147.9,
+        "gap_from_prior_close_pct": -0.0094,
+        "price_vs_vwap_pct": 0.0033,
+        "distance_from_high_pct": -0.0203,
+        "distance_from_low_pct": 0.0178,
+        "intraday_change_pct": 0.0022,
+        "recent_trend": "rising",
+        "recent_slope_pct": 0.0018,
+        "volume_trend": "rising",
+        "volume_ratio_recent_to_prior": 1.281,
+        "twenty_day_volume_ratio": 0.26,
+        "ema5": 146.5923,
+        "ema20": 146.4963,
+        "ema_state": "bullish",
+        "price_vs_ema20_pct": 0.0023,
+        "ema20_slope_pct": -0.0001,
+        "classification": "consolidating",
+        "gap_only_risk": false,
+        "session_volume": 1158782,
+        "session_bar_count": 78
+      },
+      "momentum_profile": {
+        "score": 95.0,
+        "grade": "strong_continuation",
+        "passes_new_entry_gate": true,
+        "gap_only_risk": false,
+        "min_score": 55.0,
+        "reasons": [
+          "above_vwap",
+          "ema5_above_ema20",
+          "recent_trend_rising",
+          "volume_rising",
+          "well_off_day_high"
+        ]
+      },
+      "earnings": {
+        "symbol": "RVMD",
+        "next_earnings_date": "2026-05-06",
+        "days_until_earnings": 1
+      },
+      "earnings_catalyst_exception": {
+        "enabled": false,
+        "near_earnings": true,
+        "days_until_earnings": 1,
+        "catalyst_source": false,
+        "catalyst_sentiment": false,
+        "buy_threshold": 0.6,
+        "size_multiplier": 0.35
+      },
+      "discovery_sources": [],
+      "skipped": "near earnings without preclose catalyst exception"
+    },
+    {
+      "symbol": "STLD",
+      "tech_score": 0.812,
+      "rsi": 79.7,
+      "overnight": {
+        "symbol": "STLD",
+        "score": 0.447,
+        "close_strength": 0.738,
+        "late_drift": 0.137,
+        "tech_bias": 0.812,
+        "sent_bias": 0.0,
+        "market_bias": 0.289,
+        "price": 237.72,
+        "notes": [
+          "closing_near_high"
+        ]
+      },
+      "intraday_chart": {
+        "current_price": 237.72,
+        "open": 232.43,
+        "day_high": 238.735,
+        "day_low": 231.0,
+        "vwap": 236.3512,
+        "prior_close": 229.82,
+        "gap_from_prior_close_pct": 0.0114,
+        "price_vs_vwap_pct": 0.0058,
+        "distance_from_high_pct": -0.0043,
+        "distance_from_low_pct": 0.0291,
+        "intraday_change_pct": 0.0228,
+        "recent_trend": "flat",
+        "recent_slope_pct": -0.0004,
+        "volume_trend": "rising",
+        "volume_ratio_recent_to_prior": 1.345,
+        "twenty_day_volume_ratio": 0.553,
+        "ema5": 237.7665,
+        "ema20": 237.4997,
+        "ema_state": "bullish",
+        "price_vs_ema20_pct": 0.0009,
+        "ema20_slope_pct": 0.0009,
+        "classification": "near_high",
+        "gap_only_risk": false,
+        "session_volume": 653765,
+        "session_bar_count": 74
+      },
+      "momentum_profile": {
+        "score": 83.0,
+        "grade": "strong_continuation",
+        "passes_new_entry_gate": true,
+        "gap_only_risk": false,
+        "min_score": 55.0,
+        "reasons": [
+          "above_vwap",
+          "ema5_above_ema20",
+          "recent_trend_flat",
+          "volume_rising"
+        ]
+      },
+      "earnings": {
+        "symbol": "STLD",
+        "next_earnings_date": "2026-07-21",
+        "days_until_earnings": 77
+      },
+      "earnings_catalyst_exception": {
+        "enabled": false,
+        "near_earnings": false,
+        "days_until_earnings": 77,
+        "catalyst_source": false,
+        "catalyst_sentiment": false,
+        "buy_threshold": 0.6,
+        "size_multiplier": 0.35
+      },
+      "discovery_sources": [],
+      "skipped": "rsi 79.7 > 78.0"
+    },
+    {
+      "symbol": "VRT",
+      "tech_score": 0.809,
+      "rsi": 68.5,
+      "overnight": {
+        "symbol": "VRT",
+        "score": 0.403,
+        "close_strength": 0.711,
+        "late_drift": -0.003,
+        "tech_bias": 0.809,
+        "sent_bias": 0.0,
+        "market_bias": 0.289,
+        "price": 339.41,
+        "notes": [
+          "closing_near_high"
+        ]
+      },
+      "intraday_chart": {
+        "current_price": 339.41,
+        "open": 331.66,
+        "day_high": 341.0,
+        "day_low": 330.0,
+        "vwap": 336.8819,
+        "prior_close": 330.97,
+        "gap_from_prior_close_pct": 0.0021,
+        "price_vs_vwap_pct": 0.0075,
+        "distance_from_high_pct": -0.0047,
+        "distance_from_low_pct": 0.0285,
+        "intraday_change_pct": 0.0234,
+        "recent_trend": "flat",
+        "recent_slope_pct": -0.0001,
+        "volume_trend": "rising",
+        "volume_ratio_recent_to_prior": 1.115,
+        "twenty_day_volume_ratio": 0.741,
+        "ema5": 338.7487,
+        "ema20": 339.0421,
+        "ema_state": "price_above_ema20",
+        "price_vs_ema20_pct": 0.0011,
+        "ema20_slope_pct": -0.0011,
+        "classification": "near_high",
+        "gap_only_risk": false,
+        "session_volume": 4158003,
+        "session_bar_count": 127
+      },
+      "momentum_profile": {
+        "score": 69.0,
+        "grade": "acceptable_continuation",
+        "passes_new_entry_gate": true,
+        "gap_only_risk": false,
+        "min_score": 55.0,
+        "reasons": [
+          "above_vwap",
+          "recent_trend_flat",
+          "volume_rising"
+        ]
+      },
+      "earnings": {
+        "symbol": "VRT",
+        "next_earnings_date": "2026-07-29",
+        "days_until_earnings": 85
+      },
+      "earnings_catalyst_exception": {
+        "enabled": false,
+        "near_earnings": false,
+        "days_until_earnings": 85,
+        "catalyst_source": false,
+        "catalyst_sentiment": false,
+        "buy_threshold": 0.6,
+        "size_multiplier": 0.35
+      },
+      "discovery_sources": [
+        "seed_watchlist",
+        "dynamic_watchlist",
+        "peer_group"
+      ],
+      "skipped": "ov 0.40 < threshold 0.45"
+    },
+    {
+      "symbol": "AUR",
+      "tech_score": 0.807,
+      "rsi": 78.4,
+      "overnight": {
+        "symbol": "AUR",
+        "score": 0.388,
+        "close_strength": 0.516,
+        "late_drift": 0.097,
+        "tech_bias": 0.807,
+        "sent_bias": 0.125,
+        "market_bias": 0.289,
+        "price": 6.61,
+        "notes": []
+      },
+      "intraday_chart": {
+        "current_price": 6.605,
+        "open": 6.48,
+        "day_high": 6.715,
+        "day_low": 6.26,
+        "vwap": 6.5725,
+        "prior_close": 6.44,
+        "gap_from_prior_close_pct": 0.0062,
+        "price_vs_vwap_pct": 0.0049,
+        "distance_from_high_pct": -0.0164,
+        "distance_from_low_pct": 0.0551,
+        "intraday_change_pct": 0.0193,
+        "recent_trend": "rising",
+        "recent_slope_pct": 0.003,
+        "volume_trend": "rising",
+        "volume_ratio_recent_to_prior": 1.227,
+        "twenty_day_volume_ratio": 0.993,
+        "ema5": 6.5887,
+        "ema20": 6.5847,
+        "ema_state": "bullish",
+        "price_vs_ema20_pct": 0.0031,
+        "ema20_slope_pct": 0.0005,
+        "classification": "consolidating",
+        "gap_only_risk": false,
+        "session_volume": 22146351,
+        "session_bar_count": 123
+      },
+      "momentum_profile": {
+        "score": 100.0,
+        "grade": "strong_continuation",
+        "passes_new_entry_gate": true,
+        "gap_only_risk": false,
+        "min_score": 55.0,
+        "reasons": [
+          "above_vwap",
+          "ema5_above_ema20",
+          "recent_trend_rising",
+          "volume_rising"
+        ]
+      },
+      "earnings": {
+        "symbol": "AUR",
+        "next_earnings_date": "2026-05-06",
+        "days_until_earnings": 1
+      },
+      "earnings_catalyst_exception": {
+        "enabled": true,
+        "near_earnings": true,
+        "days_until_earnings": 1,
+        "catalyst_source": false,
+        "catalyst_sentiment": true,
+        "buy_threshold": 0.6,
+        "size_multiplier": 0.35
+      },
+      "discovery_sources": [],
+      "skipped": "rsi 78.4 > 78.0"
+    },
+    {
+      "symbol": "ESI",
+      "tech_score": 0.803,
+      "rsi": 73.4,
+      "overnight": {
+        "symbol": "ESI",
+        "score": 0.429,
+        "close_strength": 0.62,
+        "late_drift": 0.214,
+        "tech_bias": 0.803,
+        "sent_bias": 0.0,
+        "market_bias": 0.289,
+        "price": 44.23,
+        "notes": [
+          "closing_near_high"
+        ]
+      },
+      "intraday_chart": {
+        "current_price": 44.23,
+        "open": 42.78,
+        "day_high": 44.57,
+        "day_low": 42.78,
+        "vwap": 44.1116,
+        "prior_close": 42.8,
+        "gap_from_prior_close_pct": -0.0005,
+        "price_vs_vwap_pct": 0.0027,
+        "distance_from_high_pct": -0.0076,
+        "distance_from_low_pct": 0.0339,
+        "intraday_change_pct": 0.0339,
+        "recent_trend": "falling",
+        "recent_slope_pct": -0.0027,
+        "volume_trend": "rising",
+        "volume_ratio_recent_to_prior": 1.147,
+        "twenty_day_volume_ratio": 0.607,
+        "ema5": 44.2228,
+        "ema20": 44.1467,
+        "ema_state": "bullish",
+        "price_vs_ema20_pct": 0.0019,
+        "ema20_slope_pct": 0.0013,
+        "classification": "fading",
+        "gap_only_risk": false,
+        "session_volume": 1926659,
+        "session_bar_count": 75
+      },
+      "momentum_profile": {
+        "score": 53.0,
+        "grade": "fading",
+        "passes_new_entry_gate": false,
+        "gap_only_risk": false,
+        "min_score": 55.0,
+        "reasons": [
+          "above_vwap",
+          "ema5_above_ema20",
+          "recent_trend_falling",
+          "volume_rising",
+          "fading_from_intraday_high"
+        ]
+      },
+      "earnings": {
+        "symbol": "ESI",
+        "next_earnings_date": "2026-07-30",
+        "days_until_earnings": 86
+      },
+      "earnings_catalyst_exception": {
+        "enabled": false,
+        "near_earnings": false,
+        "days_until_earnings": 86,
+        "catalyst_source": false,
+        "catalyst_sentiment": false,
+        "buy_threshold": 0.6,
+        "size_multiplier": 0.35
+      },
+      "discovery_sources": [],
+      "skipped": "ov 0.43 < threshold 0.45"
+    },
+    {
+      "symbol": "CUE",
+      "tech_score": 0.8,
+      "rsi": 71.4,
+      "overnight": {
+        "symbol": "CUE",
+        "score": 0.208,
+        "close_strength": 0.386,
+        "late_drift": -0.388,
+        "tech_bias": 0.8,
+        "sent_bias": 0.0,
+        "market_bias": 0.289,
+        "price": 33.23,
+        "notes": []
+      },
+      "intraday_chart": {
+        "current_price": 33.235,
+        "open": 31.88,
+        "day_high": 34.89,
+        "day_low": 29.5,
+        "vwap": 32.5129,
+        "prior_close": 29.85,
+        "gap_from_prior_close_pct": 0.068,
+        "price_vs_vwap_pct": 0.0222,
+        "distance_from_high_pct": -0.0474,
+        "distance_from_low_pct": 0.1266,
+        "intraday_change_pct": 0.0425,
+        "recent_trend": "flat",
+        "recent_slope_pct": 0.0005,
+        "volume_trend": "fading",
+        "volume_ratio_recent_to_prior": 0.67,
+        "twenty_day_volume_ratio": 0.237,
+        "ema5": 33.3248,
+        "ema20": 33.2974,
+        "ema_state": "price_below_ema20",
+        "price_vs_ema20_pct": -0.0019,
+        "ema20_slope_pct": 0.0012,
+        "classification": "consolidating",
+        "gap_only_risk": false,
+        "session_volume": 491693,
+        "session_bar_count": 89
+      },
+      "momentum_profile": {
+        "score": 21.0,
+        "grade": "weak_or_flat",
+        "passes_new_entry_gate": false,
+        "gap_only_risk": false,
+        "min_score": 55.0,
+        "reasons": [
+          "above_vwap",
+          "below_5min_ema20",
+          "recent_trend_flat",
+          "volume_fading",
+          "well_off_day_high"
+        ]
+      },
+      "earnings": {
+        "symbol": "CUE",
+        "next_earnings_date": null,
+        "days_until_earnings": null
+      },
+      "earnings_catalyst_exception": {
+        "enabled": false,
+        "near_earnings": false,
+        "days_until_earnings": null,
+        "catalyst_source": false,
+        "catalyst_sentiment": false,
+        "buy_threshold": 0.6,
+        "size_multiplier": 0.35
+      },
+      "discovery_sources": [
+        "dynamic_watchlist"
+      ],
+      "skipped": "ov 0.21 < threshold 0.45"
+    },
+    {
+      "symbol": "ONTO",
+      "tech_score": 0.794,
+      "rsi": 67.1,
+      "overnight": {
+        "symbol": "ONTO",
+        "score": 0.435,
+        "close_strength": 0.541,
+        "late_drift": 0.339,
+        "tech_bias": 0.794,
+        "sent_bias": 0.0,
+        "market_bias": 0.289,
+        "price": 307.11,
+        "notes": []
+      },
+      "intraday_chart": {
+        "current_price": 307.11,
+        "open": 304.0,
+        "day_high": 309.7,
+        "day_low": 298.42,
+        "vwap": 305.2799,
+        "prior_close": 299.55,
+        "gap_from_prior_close_pct": 0.0149,
+        "price_vs_vwap_pct": 0.006,
+        "distance_from_high_pct": -0.0084,
+        "distance_from_low_pct": 0.0291,
+        "intraday_change_pct": 0.0102,
+        "recent_trend": "rising",
+        "recent_slope_pct": 0.0068,
+        "volume_trend": "rising",
+        "volume_ratio_recent_to_prior": 1.615,
+        "twenty_day_volume_ratio": 1.074,
+        "ema5": 305.7725,
+        "ema20": 306.248,
+        "ema_state": "price_above_ema20",
+        "price_vs_ema20_pct": 0.0028,
+        "ema20_slope_pct": -0.0016,
+        "classification": "consolidating",
+        "gap_only_risk": false,
+        "session_volume": 952714,
+        "session_bar_count": 78
+      },
+      "momentum_profile": {
+        "score": 89.0,
+        "grade": "strong_continuation",
+        "passes_new_entry_gate": true,
+        "gap_only_risk": false,
+        "min_score": 55.0,
+        "reasons": [
+          "above_vwap",
+          "recent_trend_rising",
+          "volume_rising"
+        ]
+      },
+      "earnings": {
+        "symbol": "ONTO",
+        "next_earnings_date": "2026-05-05",
+        "days_until_earnings": 0
+      },
+      "earnings_catalyst_exception": {
+        "enabled": false,
+        "near_earnings": true,
+        "days_until_earnings": 0,
+        "catalyst_source": false,
+        "catalyst_sentiment": false,
+        "buy_threshold": 0.6,
+        "size_multiplier": 0.35
+      },
+      "discovery_sources": [],
+      "skipped": "near earnings without preclose catalyst exception"
+    },
+    {
+      "symbol": "GNRC",
+      "tech_score": 0.793,
+      "rsi": 76.0,
+      "overnight": {
+        "symbol": "GNRC",
+        "score": 0.157,
+        "close_strength": -0.145,
+        "late_drift": 0.053,
+        "tech_bias": 0.793,
+        "sent_bias": 0.0,
+        "market_bias": 0.289,
+        "price": 261.98,
+        "notes": []
+      },
+      "intraday_chart": {
+        "current_price": 261.98,
+        "open": 257.99,
+        "day_high": 267.32,
+        "day_low": 257.99,
+        "vwap": 263.6199,
+        "prior_close": 257.07,
+        "gap_from_prior_close_pct": 0.0036,
+        "price_vs_vwap_pct": -0.0062,
+        "distance_from_high_pct": -0.02,
+        "distance_from_low_pct": 0.0155,
+        "intraday_change_pct": 0.0155,
+        "recent_trend": "falling",
+        "recent_slope_pct": -0.0027,
+        "volume_trend": "rising",
+        "volume_ratio_recent_to_prior": 2.141,
+        "twenty_day_volume_ratio": 0.495,
+        "ema5": 261.9483,
+        "ema20": 262.3861,
+        "ema_state": "bearish",
+        "price_vs_ema20_pct": -0.0015,
+        "ema20_slope_pct": -0.0009,
+        "classification": "fading",
+        "gap_only_risk": false,
+        "session_volume": 417690,
+        "session_bar_count": 75
+      },
+      "momentum_profile": {
+        "score": 0.0,
+        "grade": "fading",
+        "passes_new_entry_gate": false,
+        "gap_only_risk": false,
+        "min_score": 55.0,
+        "reasons": [
+          "below_vwap",
+          "below_5min_ema20",
+          "recent_trend_falling",
+          "volume_rising",
+          "fading_from_intraday_high",
+          "well_off_day_high"
+        ]
+      },
+      "earnings": {
+        "symbol": "GNRC",
+        "next_earnings_date": "2026-07-29",
+        "days_until_earnings": 85
+      },
+      "earnings_catalyst_exception": {
+        "enabled": false,
+        "near_earnings": false,
+        "days_until_earnings": 85,
+        "catalyst_source": false,
+        "catalyst_sentiment": false,
+        "buy_threshold": 0.6,
+        "size_multiplier": 0.35
+      },
+      "discovery_sources": [],
+      "skipped": "ov 0.16 < threshold 0.45"
+    },
+    {
+      "symbol": "XNDU",
+      "tech_score": 0.781,
+      "rsi": 43.1,
+      "overnight": {
+        "symbol": "XNDU",
+        "score": 0.191,
+        "close_strength": -0.441,
+        "late_drift": 0.552,
+        "tech_bias": 0.781,
+        "sent_bias": 0.0,
+        "market_bias": 0.289,
+        "price": 13.71,
+        "notes": [
+          "late_day_strength"
+        ]
+      },
+      "intraday_chart": {
+        "current_price": 13.715,
+        "open": 13.76,
+        "day_high": 15.25,
+        "day_low": 13.12,
+        "vwap": 13.8124,
+        "prior_close": 13.99,
+        "gap_from_prior_close_pct": -0.0164,
+        "price_vs_vwap_pct": -0.007,
+        "distance_from_high_pct": -0.1007,
+        "distance_from_low_pct": 0.0454,
+        "intraday_change_pct": -0.0033,
+        "recent_trend": "rising",
+        "recent_slope_pct": 0.0085,
+        "volume_trend": "rising",
+        "volume_ratio_recent_to_prior": 1.417,
+        "twenty_day_volume_ratio": 1.324,
+        "ema5": 13.6772,
+        "ema20": 13.602,
+        "ema_state": "bullish",
+        "price_vs_ema20_pct": 0.0083,
+        "ema20_slope_pct": 0.004,
+        "classification": "consolidating",
+        "gap_only_risk": false,
+        "session_volume": 8212620,
+        "session_bar_count": 140
+      },
+      "momentum_profile": {
+        "score": 65.0,
+        "grade": "acceptable_continuation",
+        "passes_new_entry_gate": true,
+        "gap_only_risk": false,
+        "min_score": 55.0,
+        "reasons": [
+          "below_vwap",
+          "ema5_above_ema20",
+          "recent_trend_rising",
+          "volume_rising",
+          "well_off_day_high"
+        ]
+      },
+      "earnings": {
+        "symbol": "XNDU",
+        "next_earnings_date": null,
+        "days_until_earnings": null
+      },
+      "earnings_catalyst_exception": {
+        "enabled": false,
+        "near_earnings": false,
+        "days_until_earnings": null,
+        "catalyst_source": false,
+        "catalyst_sentiment": false,
+        "buy_threshold": 0.6,
+        "size_multiplier": 0.35
+      },
+      "discovery_sources": [
+        "av_losers"
+      ],
+      "skipped": "ov 0.19 < threshold 0.45"
+    },
+    {
+      "symbol": "AVGO",
+      "tech_score": 0.738,
+      "rsi": 69.4,
+      "overnight": {
+        "symbol": "AVGO",
+        "score": 0.286,
+        "close_strength": 0.509,
+        "late_drift": -0.246,
+        "tech_bias": 0.738,
+        "sent_bias": 0.125,
+        "market_bias": 0.289,
+        "price": 429.24,
+        "notes": []
+      },
+      "intraday_chart": {
+        "current_price": 429.235,
+        "open": 416.6898,
+        "day_high": 433.39,
+        "day_low": 416.47,
+        "vwap": 427.1524,
+        "prior_close": 416.5,
+        "gap_from_prior_close_pct": 0.0005,
+        "price_vs_vwap_pct": 0.0049,
+        "distance_from_high_pct": -0.0096,
+        "distance_from_low_pct": 0.0307,
+        "intraday_change_pct": 0.0301,
+        "recent_trend": "falling",
+        "recent_slope_pct": -0.0039,
+        "volume_trend": "rising",
+        "volume_ratio_recent_to_prior": 1.565,
+        "twenty_day_volume_ratio": 0.593,
+        "ema5": 430.0052,
+        "ema20": 430.6627,
+        "ema_state": "bearish",
+        "price_vs_ema20_pct": -0.0033,
+        "ema20_slope_pct": -0.0009,
+        "classification": "fading",
+        "gap_only_risk": false,
+        "session_volume": 13055957,
+        "session_bar_count": 138
+      },
+      "momentum_profile": {
+        "score": 23.0,
+        "grade": "fading",
+        "passes_new_entry_gate": false,
+        "gap_only_risk": false,
+        "min_score": 55.0,
+        "reasons": [
+          "above_vwap",
+          "below_5min_ema20",
+          "recent_trend_falling",
+          "volume_rising",
+          "fading_from_intraday_high"
+        ]
+      },
+      "earnings": {
+        "symbol": "AVGO",
+        "next_earnings_date": "2026-06-03",
+        "days_until_earnings": 29
+      },
+      "earnings_catalyst_exception": {
+        "enabled": false,
+        "near_earnings": false,
+        "days_until_earnings": 29,
+        "catalyst_source": false,
+        "catalyst_sentiment": true,
+        "buy_threshold": 0.6,
+        "size_multiplier": 0.35
+      },
+      "discovery_sources": [
+        "seed_watchlist",
+        "dynamic_watchlist",
+        "peer_group"
+      ],
+      "skipped": "ov 0.29 < threshold 0.45"
+    },
+    {
+      "symbol": "QCOM",
+      "tech_score": 0.729,
+      "rsi": 77.8,
+      "overnight": {
+        "symbol": "QCOM",
+        "score": 0.7,
+        "close_strength": 0.959,
+        "late_drift": 0.653,
+        "tech_bias": 0.729,
+        "sent_bias": 0.5,
+        "market_bias": 0.289,
+        "price": 186.75,
+        "notes": [
+          "closing_near_high",
+          "late_day_strength"
+        ]
+      },
+      "intraday_chart": {
+        "current_price": 186.755,
+        "open": 167.5,
+        "day_high": 187.22,
+        "day_low": 164.79,
+        "vwap": 179.9402,
+        "prior_close": 168.38,
+        "gap_from_prior_close_pct": -0.0052,
+        "price_vs_vwap_pct": 0.0379,
+        "distance_from_high_pct": -0.0025,
+        "distance_from_low_pct": 0.1333,
+        "intraday_change_pct": 0.115,
+        "recent_trend": "rising",
+        "recent_slope_pct": 0.0126,
+        "volume_trend": "rising",
+        "volume_ratio_recent_to_prior": 2.14,
+        "twenty_day_volume_ratio": 1.361,
+        "ema5": 185.696,
+        "ema20": 184.431,
+        "ema_state": "bullish",
+        "price_vs_ema20_pct": 0.0126,
+        "ema20_slope_pct": 0.0042,
+        "classification": "breaking_out",
+        "gap_only_risk": false,
+        "session_volume": 24467182,
+        "session_bar_count": 135
+      },
+      "momentum_profile": {
+        "score": 100.0,
+        "grade": "strong_continuation",
+        "passes_new_entry_gate": true,
+        "gap_only_risk": false,
+        "min_score": 55.0,
+        "reasons": [
+          "above_vwap",
+          "ema5_above_ema20",
+          "recent_trend_rising",
+          "volume_rising",
+          "breaking_out",
+          "pressing_day_high"
+        ]
+      },
+      "earnings": {
+        "symbol": "QCOM",
+        "next_earnings_date": "2026-07-29",
+        "days_until_earnings": 85
+      },
+      "earnings_catalyst_exception": {
+        "enabled": false,
+        "near_earnings": false,
+        "days_until_earnings": 85,
+        "catalyst_source": false,
+        "catalyst_sentiment": true,
+        "buy_threshold": 0.6,
+        "size_multiplier": 0.35
+      },
+      "discovery_sources": [
+        "dynamic_watchlist",
+        "peer_group"
+      ]
+    },
+    {
+      "symbol": "CYTK",
+      "tech_score": 0.649,
+      "rsi": 72.6,
+      "overnight": {
+        "symbol": "CYTK",
+        "score": 0.069,
+        "close_strength": 0.034,
+        "late_drift": -0.547,
+        "tech_bias": 0.649,
+        "sent_bias": 0.25,
+        "market_bias": 0.289,
+        "price": 76.35,
+        "notes": [
+          "late_day_weakness"
+        ]
+      },
+      "intraday_chart": {
+        "current_price": 76.35,
+        "open": 67.52,
+        "day_high": 93.51,
+        "day_low": 58.0,
+        "vwap": 78.0453,
+        "prior_close": 66.05,
+        "gap_from_prior_close_pct": 0.0223,
+        "price_vs_vwap_pct": -0.0217,
+        "distance_from_high_pct": -0.1835,
+        "distance_from_low_pct": 0.3164,
+        "intraday_change_pct": 0.1308,
+        "recent_trend": "falling",
+        "recent_slope_pct": -0.0042,
+        "volume_trend": "rising",
+        "volume_ratio_recent_to_prior": 1.473,
+        "twenty_day_volume_ratio": 9.247,
+        "ema5": 76.4797,
+        "ema20": 76.9217,
+        "ema_state": "bearish",
+        "price_vs_ema20_pct": -0.0074,
+        "ema20_slope_pct": -0.0043,
+        "classification": "fading",
+        "gap_only_risk": false,
+        "session_volume": 15446300,
+        "session_bar_count": 129
+      },
+      "momentum_profile": {
+        "score": 0.0,
+        "grade": "fading",
+        "passes_new_entry_gate": false,
+        "gap_only_risk": false,
+        "min_score": 55.0,
+        "reasons": [
+          "below_vwap",
+          "below_5min_ema20",
+          "recent_trend_falling",
+          "volume_rising",
+          "fading_from_intraday_high",
+          "well_off_day_high",
+          "large_move_without_fresh_push"
+        ]
+      },
+      "earnings": {
+        "symbol": "CYTK",
+        "next_earnings_date": "2026-05-05",
+        "days_until_earnings": 0
+      },
+      "earnings_catalyst_exception": {
+        "enabled": true,
+        "near_earnings": true,
+        "days_until_earnings": 0,
+        "catalyst_source": true,
+        "catalyst_sentiment": true,
+        "buy_threshold": 0.6,
+        "size_multiplier": 0.35
+      },
+      "discovery_sources": [
+        "dynamic_watchlist",
+        "tv_breakout"
+      ],
+      "skipped": "ov 0.07 < threshold 0.60"
+    },
+    {
+      "symbol": "RLYB",
+      "tech_score": 0.643,
+      "rsi": 88.9,
+      "overnight": {
+        "symbol": "RLYB",
+        "score": -0.043,
+        "close_strength": -0.643,
+        "late_drift": -0.03,
+        "tech_bias": 0.643,
+        "sent_bias": 0.0,
+        "market_bias": 0.289,
+        "price": 14.09,
+        "notes": [
+          "closing_near_low"
+        ]
+      },
+      "intraday_chart": {
+        "current_price": 14.09,
+        "open": 13.8386,
+        "day_high": 15.3102,
+        "day_low": 13.825,
+        "vwap": 14.2204,
+        "prior_close": 14.12,
+        "gap_from_prior_close_pct": -0.0199,
+        "price_vs_vwap_pct": -0.0092,
+        "distance_from_high_pct": -0.0797,
+        "distance_from_low_pct": 0.0192,
+        "intraday_change_pct": 0.0182,
+        "recent_trend": "flat",
+        "recent_slope_pct": 0.0014,
+        "volume_trend": "rising",
+        "volume_ratio_recent_to_prior": 4.125,
+        "twenty_day_volume_ratio": 0.61,
+        "ema5": 14.0885,
+        "ema20": 14.0895,
+        "ema_state": "price_above_ema20",
+        "price_vs_ema20_pct": 0.0,
+        "ema20_slope_pct": 0.0004,
+        "classification": "consolidating",
+        "gap_only_risk": false,
+        "session_volume": 362013,
+        "session_bar_count": 107
+      },
+      "momentum_profile": {
+        "score": 31.0,
+        "grade": "weak_or_flat",
+        "passes_new_entry_gate": false,
+        "gap_only_risk": false,
+        "min_score": 55.0,
+        "reasons": [
+          "below_vwap",
+          "recent_trend_flat",
+          "volume_rising",
+          "well_off_day_high"
+        ]
+      },
+      "earnings": {
+        "symbol": "RLYB",
+        "next_earnings_date": null,
+        "days_until_earnings": null
+      },
+      "earnings_catalyst_exception": {
+        "enabled": false,
+        "near_earnings": false,
+        "days_until_earnings": null,
+        "catalyst_source": true,
+        "catalyst_sentiment": false,
+        "buy_threshold": 0.6,
+        "size_multiplier": 0.35
+      },
+      "discovery_sources": [
+        "av_gainers"
+      ],
+      "skipped": "rsi 88.9 > 78.0"
+    },
+    {
+      "symbol": "DELL",
+      "tech_score": 0.7,
+      "rsi": 68.3,
+      "overnight": {
+        "symbol": "DELL",
+        "score": 0.533,
+        "close_strength": 0.977,
+        "late_drift": 0.282,
+        "tech_bias": 0.7,
+        "sent_bias": 0.0,
+        "market_bias": 0.289,
+        "price": 217.32,
+        "notes": [
+          "closing_near_high"
+        ]
+      },
+      "intraday_chart": {
+        "current_price": 217.325,
+        "open": 213.2,
+        "day_high": 217.4,
+        "day_low": 210.9387,
+        "vwap": 214.8596,
+        "prior_close": 211.64,
+        "gap_from_prior_close_pct": 0.0074,
+        "price_vs_vwap_pct": 0.0115,
+        "distance_from_high_pct": -0.0003,
+        "distance_from_low_pct": 0.0303,
+        "intraday_change_pct": 0.0193,
+        "recent_trend": "rising",
+        "recent_slope_pct": 0.0038,
+        "volume_trend": "rising",
+        "volume_ratio_recent_to_prior": 1.33,
+        "twenty_day_volume_ratio": 0.463,
+        "ema5": 216.831,
+        "ema20": 216.1256,
+        "ema_state": "bullish",
+        "price_vs_ema20_pct": 0.0055,
+        "ema20_slope_pct": 0.0018,
+        "classification": "breaking_out",
+        "gap_only_risk": false,
+        "session_volume": 2805251,
+        "session_bar_count": 86
+      },
+      "momentum_profile": {
+        "score": 100.0,
+        "grade": "strong_continuation",
+        "passes_new_entry_gate": true,
+        "gap_only_risk": false,
+        "min_score": 55.0,
+        "reasons": [
+          "above_vwap",
+          "ema5_above_ema20",
+          "recent_trend_rising",
+          "volume_rising",
+          "breaking_out",
+          "pressing_day_high"
+        ]
+      },
+      "earnings": {
+        "symbol": "DELL",
+        "next_earnings_date": "2026-05-28",
+        "days_until_earnings": 23
+      },
+      "earnings_catalyst_exception": {
+        "enabled": false,
+        "near_earnings": false,
+        "days_until_earnings": 23,
+        "catalyst_source": false,
+        "catalyst_sentiment": false,
+        "buy_threshold": 0.6,
+        "size_multiplier": 0.35
+      },
+      "discovery_sources": [
+        "seed_watchlist",
+        "dynamic_watchlist",
+        "peer_group"
+      ]
+    },
+    {
+      "symbol": "GOOGL",
+      "tech_score": 0.684,
+      "rsi": 81.2,
+      "overnight": {
+        "symbol": "GOOGL",
+        "score": 0.2,
+        "close_strength": -0.116,
+        "late_drift": 0.127,
+        "tech_bias": 0.684,
+        "sent_bias": 0.25,
+        "market_bias": 0.289,
+        "price": 387.49,
+        "notes": []
+      },
+      "intraday_chart": {
+        "current_price": 387.49,
+        "open": 383.91,
+        "day_high": 392.8199,
+        "day_low": 383.27,
+        "vwap": 387.6792,
+        "prior_close": 383.25,
+        "gap_from_prior_close_pct": 0.0017,
+        "price_vs_vwap_pct": -0.0005,
+        "distance_from_high_pct": -0.0136,
+        "distance_from_low_pct": 0.011,
+        "intraday_change_pct": 0.0093,
+        "recent_trend": "rising",
+        "recent_slope_pct": 0.002,
+        "volume_trend": "rising",
+        "volume_ratio_recent_to_prior": 1.349,
+        "twenty_day_volume_ratio": 0.637,
+        "ema5": 387.3613,
+        "ema20": 386.7709,
+        "ema_state": "bullish",
+        "price_vs_ema20_pct": 0.0019,
+        "ema20_slope_pct": 0.0011,
+        "classification": "consolidating",
+        "gap_only_risk": false,
+        "session_volume": 17439348,
+        "session_bar_count": 140
+      },
+      "momentum_profile": {
+        "score": 91.0,
+        "grade": "strong_continuation",
+        "passes_new_entry_gate": true,
+        "gap_only_risk": false,
+        "min_score": 55.0,
+        "reasons": [
+          "ema5_above_ema20",
+          "recent_trend_rising",
+          "volume_rising"
+        ]
+      },
+      "earnings": {
+        "symbol": "GOOGL",
+        "next_earnings_date": "2026-07-23",
+        "days_until_earnings": 79
+      },
+      "earnings_catalyst_exception": {
+        "enabled": false,
+        "near_earnings": false,
+        "days_until_earnings": 79,
+        "catalyst_source": false,
+        "catalyst_sentiment": true,
+        "buy_threshold": 0.6,
+        "size_multiplier": 0.35
+      },
+      "discovery_sources": [
+        "seed_watchlist",
+        "dynamic_watchlist"
+      ],
+      "skipped": "rsi 81.2 > 78.0"
+    },
+    {
+      "symbol": "STX",
+      "tech_score": 0.661,
+      "rsi": 86.2,
+      "overnight": {
+        "symbol": "STX",
+        "score": 0.17,
+        "close_strength": 0.076,
+        "late_drift": -0.13,
+        "tech_bias": 0.661,
+        "sent_bias": 0.125,
+        "market_bias": 0.289,
+        "price": 766.13,
+        "notes": []
+      },
+      "intraday_chart": {
+        "current_price": 766.13,
+        "open": 742.2,
+        "day_high": 792.01,
+        "day_low": 736.0,
+        "vwap": 773.1643,
+        "prior_close": 738.54,
+        "gap_from_prior_close_pct": 0.005,
+        "price_vs_vwap_pct": -0.0091,
+        "distance_from_high_pct": -0.0327,
+        "distance_from_low_pct": 0.0409,
+        "intraday_change_pct": 0.0322,
+        "recent_trend": "falling",
+        "recent_slope_pct": -0.0042,
+        "volume_trend": "flat",
+        "volume_ratio_recent_to_prior": 1.034,
+        "twenty_day_volume_ratio": 1.238,
+        "ema5": 766.5897,
+        "ema20": 768.0735,
+        "ema_state": "bearish",
+        "price_vs_ema20_pct": -0.0025,
+        "ema20_slope_pct": -0.0017,
+        "classification": "fading",
+        "gap_only_risk": false,
+        "session_volume": 5472587,
+        "session_bar_count": 136
+      },
+      "momentum_profile": {
+        "score": 0.0,
+        "grade": "fading",
+        "passes_new_entry_gate": false,
+        "gap_only_risk": false,
+        "min_score": 55.0,
+        "reasons": [
+          "below_vwap",
+          "below_5min_ema20",
+          "recent_trend_falling",
+          "fading_from_intraday_high",
+          "well_off_day_high"
+        ]
+      },
+      "earnings": {
+        "symbol": "STX",
+        "next_earnings_date": "2026-07-28",
+        "days_until_earnings": 84
+      },
+      "earnings_catalyst_exception": {
+        "enabled": false,
+        "near_earnings": false,
+        "days_until_earnings": 84,
+        "catalyst_source": false,
+        "catalyst_sentiment": true,
+        "buy_threshold": 0.6,
+        "size_multiplier": 0.35
+      },
+      "discovery_sources": [
+        "dynamic_watchlist",
+        "peer_group"
+      ],
+      "skipped": "rsi 86.2 > 78.0"
+    },
+    {
+      "symbol": "INTC",
+      "tech_score": 0.659,
+      "rsi": 84.4,
+      "overnight": {
+        "symbol": "INTC",
+        "score": 0.361,
+        "close_strength": 0.591,
+        "late_drift": -0.357,
+        "tech_bias": 0.659,
+        "sent_bias": 0.75,
+        "market_bias": 0.289,
+        "price": 107.89,
+        "notes": []
+      },
+      "intraday_chart": {
+        "current_price": 107.89,
+        "open": 98.74,
+        "day_high": 110.48,
+        "day_low": 97.82,
+        "vwap": 107.2336,
+        "prior_close": 95.78,
+        "gap_from_prior_close_pct": 0.0309,
+        "price_vs_vwap_pct": 0.0061,
+        "distance_from_high_pct": -0.0234,
+        "distance_from_low_pct": 0.1029,
+        "intraday_change_pct": 0.0927,
+        "recent_trend": "falling",
+        "recent_slope_pct": -0.0035,
+        "volume_trend": "rising",
+        "volume_ratio_recent_to_prior": 1.422,
+        "twenty_day_volume_ratio": 1.157,
+        "ema5": 108.0369,
+        "ema20": 108.4241,
+        "ema_state": "bearish",
+        "price_vs_ema20_pct": -0.0049,
+        "ema20_slope_pct": -0.0028,
+        "classification": "fading",
+        "gap_only_risk": false,
+        "session_volume": 163644701,
+        "session_bar_count": 140
+      },
+      "momentum_profile": {
+        "score": 0.0,
+        "grade": "fading",
+        "passes_new_entry_gate": false,
+        "gap_only_risk": false,
+        "min_score": 55.0,
+        "reasons": [
+          "above_vwap",
+          "below_5min_ema20",
+          "recent_trend_falling",
+          "volume_rising",
+          "fading_from_intraday_high",
+          "well_off_day_high",
+          "large_move_without_fresh_push"
+        ]
+      },
+      "earnings": {
+        "symbol": "INTC",
+        "next_earnings_date": "2026-07-23",
+        "days_until_earnings": 79
+      },
+      "earnings_catalyst_exception": {
+        "enabled": false,
+        "near_earnings": false,
+        "days_until_earnings": 79,
+        "catalyst_source": false,
+        "catalyst_sentiment": true,
+        "buy_threshold": 0.6,
+        "size_multiplier": 0.35
+      },
+      "discovery_sources": [
+        "seed_watchlist",
+        "dynamic_watchlist",
+        "peer_group",
+        "av_most_active",
+        "tv_squeeze"
+      ],
+      "skipped": "rsi 84.4 > 78.0"
+    },
+    {
+      "symbol": "NOK",
+      "tech_score": 0.658,
+      "rsi": 81.5,
+      "overnight": {
+        "symbol": "NOK",
+        "score": 0.217,
+        "close_strength": 0.12,
+        "late_drift": 0.081,
+        "tech_bias": 0.658,
+        "sent_bias": 0.0,
+        "market_bias": 0.289,
+        "price": 13.54,
+        "notes": []
+      },
+      "intraday_chart": {
+        "current_price": 13.54,
+        "open": 13.36,
+        "day_high": 13.98,
+        "day_low": 12.98,
+        "vwap": 13.5368,
+        "prior_close": 13.14,
+        "gap_from_prior_close_pct": 0.0167,
+        "price_vs_vwap_pct": 0.0002,
+        "distance_from_high_pct": -0.0315,
+        "distance_from_low_pct": 0.0431,
+        "intraday_change_pct": 0.0135,
+        "recent_trend": "rising",
+        "recent_slope_pct": 0.0056,
+        "volume_trend": "fading",
+        "volume_ratio_recent_to_prior": 0.881,
+        "twenty_day_volume_ratio": 0.757,
+        "ema5": 13.5109,
+        "ema20": 13.5254,
+        "ema_state": "price_above_ema20",
+        "price_vs_ema20_pct": 0.0011,
+        "ema20_slope_pct": -0.0009,
+        "classification": "consolidating",
+        "gap_only_risk": false,
+        "session_volume": 83083677,
+        "session_bar_count": 140
+      },
+      "momentum_profile": {
+        "score": 45.0,
+        "grade": "weak_or_flat",
+        "passes_new_entry_gate": false,
+        "gap_only_risk": false,
+        "min_score": 55.0,
+        "reasons": [
+          "recent_trend_rising",
+          "volume_fading",
+          "well_off_day_high"
+        ]
+      },
+      "earnings": {
+        "symbol": "NOK",
+        "next_earnings_date": "2026-07-23",
+        "days_until_earnings": 79
+      },
+      "earnings_catalyst_exception": {
+        "enabled": false,
+        "near_earnings": false,
+        "days_until_earnings": 79,
+        "catalyst_source": false,
+        "catalyst_sentiment": false,
+        "buy_threshold": 0.6,
+        "size_multiplier": 0.35
+      },
+      "discovery_sources": [
+        "seed_watchlist",
+        "dynamic_watchlist",
+        "av_most_active"
+      ],
+      "skipped": "rsi 81.5 > 78.0"
+    },
+    {
+      "symbol": "ZIM",
+      "tech_score": 0.597,
+      "rsi": 70.9,
+      "overnight": {
+        "symbol": "ZIM",
+        "score": 0.66,
+        "close_strength": 0.813,
+        "late_drift": 0.997,
+        "tech_bias": 0.597,
+        "sent_bias": 0.125,
+        "market_bias": 0.289,
+        "price": 28.95,
+        "notes": [
+          "closing_near_high",
+          "late_day_strength"
+        ]
+      },
+      "intraday_chart": {
+        "current_price": 28.95,
+        "open": 26.21,
+        "day_high": 29.3,
+        "day_low": 25.55,
+        "vwap": 27.8096,
+        "prior_close": 26.07,
+        "gap_from_prior_close_pct": 0.0054,
+        "price_vs_vwap_pct": 0.041,
+        "distance_from_high_pct": -0.0119,
+        "distance_from_low_pct": 0.1331,
+        "intraday_change_pct": 0.1045,
+        "recent_trend": "rising",
+        "recent_slope_pct": 0.0312,
+        "volume_trend": "rising",
+        "volume_ratio_recent_to_prior": 8.027,
+        "twenty_day_volume_ratio": 5.752,
+        "ema5": 28.6281,
+        "ema20": 27.3737,
+        "ema_state": "bullish",
+        "price_vs_ema20_pct": 0.0576,
+        "ema20_slope_pct": 0.033,
+        "classification": "consolidating",
+        "gap_only_risk": false,
+        "session_volume": 6169600,
+        "session_bar_count": 92
+      },
+      "momentum_profile": {
+        "score": 100.0,
+        "grade": "strong_continuation",
+        "passes_new_entry_gate": true,
+        "gap_only_risk": false,
+        "min_score": 55.0,
+        "reasons": [
+          "above_vwap",
+          "ema5_above_ema20",
+          "recent_trend_rising",
+          "volume_rising"
+        ]
+      },
+      "earnings": {
+        "symbol": "ZIM",
+        "next_earnings_date": "2026-05-20",
+        "days_until_earnings": 15
+      },
+      "earnings_catalyst_exception": {
+        "enabled": false,
+        "near_earnings": false,
+        "days_until_earnings": 15,
+        "catalyst_source": true,
+        "catalyst_sentiment": true,
+        "buy_threshold": 0.6,
+        "size_multiplier": 0.35
+      },
+      "discovery_sources": [
+        "tv_breakout"
+      ]
+    },
+    {
+      "symbol": "MRVL",
+      "tech_score": 0.656,
+      "rsi": 76.9,
+      "overnight": {
+        "symbol": "MRVL",
+        "score": 0.073,
+        "close_strength": 0.186,
+        "late_drift": -0.57,
+        "tech_bias": 0.656,
+        "sent_bias": 0.0,
+        "market_bias": 0.289,
+        "price": 169.18,
+        "notes": [
+          "late_day_weakness"
+        ]
+      },
+      "intraday_chart": {
+        "current_price": 169.175,
+        "open": 163.86,
+        "day_high": 172.981,
+        "day_low": 163.63,
+        "vwap": 169.0516,
+        "prior_close": 163.66,
+        "gap_from_prior_close_pct": 0.0012,
+        "price_vs_vwap_pct": 0.0007,
+        "distance_from_high_pct": -0.022,
+        "distance_from_low_pct": 0.0339,
+        "intraday_change_pct": 0.0324,
+        "recent_trend": "falling",
+        "recent_slope_pct": -0.007,
+        "volume_trend": "rising",
+        "volume_ratio_recent_to_prior": 1.262,
+        "twenty_day_volume_ratio": 0.57,
+        "ema5": 169.6357,
+        "ema20": 170.7053,
+        "ema_state": "bearish",
+        "price_vs_ema20_pct": -0.009,
+        "ema20_slope_pct": -0.0043,
+        "classification": "fading",
+        "gap_only_risk": false,
+        "session_volume": 15975690,
+        "session_bar_count": 136
+      },
+      "momentum_profile": {
+        "score": 3.0,
+        "grade": "fading",
+        "passes_new_entry_gate": false,
+        "gap_only_risk": false,
+        "min_score": 55.0,
+        "reasons": [
+          "below_5min_ema20",
+          "recent_trend_falling",
+          "volume_rising",
+          "fading_from_intraday_high",
+          "well_off_day_high"
+        ]
+      },
+      "earnings": {
+        "symbol": "MRVL",
+        "next_earnings_date": "2026-05-27",
+        "days_until_earnings": 22
+      },
+      "earnings_catalyst_exception": {
+        "enabled": false,
+        "near_earnings": false,
+        "days_until_earnings": 22,
+        "catalyst_source": false,
+        "catalyst_sentiment": false,
+        "buy_threshold": 0.6,
+        "size_multiplier": 0.35
+      },
+      "discovery_sources": [
+        "dynamic_watchlist",
+        "peer_group"
+      ],
+      "skipped": "ov 0.07 < threshold 0.45"
+    },
+    {
+      "symbol": "GEV",
+      "tech_score": 0.655,
+      "rsi": 64.1,
+      "overnight": {
+        "symbol": "GEV",
+        "score": 0.266,
+        "close_strength": 0.389,
+        "late_drift": -0.041,
+        "tech_bias": 0.655,
+        "sent_bias": 0.0,
+        "market_bias": 0.289,
+        "price": 1100.99,
+        "notes": []
+      },
+      "intraday_chart": {
+        "current_price": 1100.99,
+        "open": 1080.6,
+        "day_high": 1109.95,
+        "day_low": 1080.6,
+        "vwap": 1100.6896,
+        "prior_close": 1073.95,
+        "gap_from_prior_close_pct": 0.0062,
+        "price_vs_vwap_pct": 0.0003,
+        "distance_from_high_pct": -0.0081,
+        "distance_from_low_pct": 0.0189,
+        "intraday_change_pct": 0.0189,
+        "recent_trend": "falling",
+        "recent_slope_pct": -0.0025,
+        "volume_trend": "rising",
+        "volume_ratio_recent_to_prior": 1.358,
+        "twenty_day_volume_ratio": 0.597,
+        "ema5": 1099.6345,
+        "ema20": 1101.3645,
+        "ema_state": "bearish",
+        "price_vs_ema20_pct": -0.0003,
+        "ema20_slope_pct": -0.0016,
+        "classification": "fading",
+        "gap_only_risk": false,
+        "session_volume": 1544819,
+        "session_bar_count": 111
+      },
+      "momentum_profile": {
+        "score": 11.0,
+        "grade": "fading",
+        "passes_new_entry_gate": false,
+        "gap_only_risk": false,
+        "min_score": 55.0,
+        "reasons": [
+          "below_5min_ema20",
+          "recent_trend_falling",
+          "volume_rising",
+          "fading_from_intraday_high"
+        ]
+      },
+      "earnings": {
+        "symbol": "GEV",
+        "next_earnings_date": "2026-07-29",
+        "days_until_earnings": 85
+      },
+      "earnings_catalyst_exception": {
+        "enabled": false,
+        "near_earnings": false,
+        "days_until_earnings": 85,
+        "catalyst_source": false,
+        "catalyst_sentiment": false,
+        "buy_threshold": 0.6,
+        "size_multiplier": 0.35
+      },
+      "discovery_sources": [
+        "seed_watchlist",
+        "dynamic_watchlist",
+        "peer_group"
+      ],
+      "skipped": "ov 0.27 < threshold 0.45"
+    },
+    {
+      "symbol": "PWR",
+      "tech_score": 0.655,
+      "rsi": 85.9,
+      "overnight": {
+        "symbol": "PWR",
+        "score": 0.164,
+        "close_strength": 0.091,
+        "late_drift": -0.094,
+        "tech_bias": 0.655,
+        "sent_bias": 0.0,
+        "market_bias": 0.289,
+        "price": 769.25,
+        "notes": []
+      },
+      "intraday_chart": {
+        "current_price": 769.25,
+        "open": 764.63,
+        "day_high": 779.97,
+        "day_low": 756.39,
+        "vwap": 769.4354,
+        "prior_close": 757.34,
+        "gap_from_prior_close_pct": 0.0096,
+        "price_vs_vwap_pct": -0.0002,
+        "distance_from_high_pct": -0.0137,
+        "distance_from_low_pct": 0.017,
+        "intraday_change_pct": 0.006,
+        "recent_trend": "flat",
+        "recent_slope_pct": 0.0008,
+        "volume_trend": "rising",
+        "volume_ratio_recent_to_prior": 1.272,
+        "twenty_day_volume_ratio": 0.891,
+        "ema5": 769.2209,
+        "ema20": 770.7222,
+        "ema_state": "bearish",
+        "price_vs_ema20_pct": -0.0019,
+        "ema20_slope_pct": -0.0014,
+        "classification": "consolidating",
+        "gap_only_risk": false,
+        "session_volume": 908087,
+        "session_bar_count": 94
+      },
+      "momentum_profile": {
+        "score": 41.0,
+        "grade": "weak_or_flat",
+        "passes_new_entry_gate": false,
+        "gap_only_risk": false,
+        "min_score": 55.0,
+        "reasons": [
+          "below_5min_ema20",
+          "recent_trend_flat",
+          "volume_rising"
+        ]
+      },
+      "earnings": {
+        "symbol": "PWR",
+        "next_earnings_date": "2026-07-30",
+        "days_until_earnings": 86
+      },
+      "earnings_catalyst_exception": {
+        "enabled": false,
+        "near_earnings": false,
+        "days_until_earnings": 86,
+        "catalyst_source": false,
+        "catalyst_sentiment": false,
+        "buy_threshold": 0.6,
+        "size_multiplier": 0.35
+      },
+      "discovery_sources": [
+        "dynamic_watchlist",
+        "peer_group"
+      ],
+      "skipped": "rsi 85.9 > 78.0"
+    },
+    {
+      "symbol": "MU",
+      "tech_score": 0.653,
+      "rsi": 81.5,
+      "overnight": {
+        "symbol": "MU",
+        "score": 0.292,
+        "close_strength": 0.618,
+        "late_drift": -0.363,
+        "tech_bias": 0.653,
+        "sent_bias": 0.25,
+        "market_bias": 0.289,
+        "price": 638.33,
+        "notes": [
+          "closing_near_high"
+        ]
+      },
+      "intraday_chart": {
+        "current_price": 638.33,
+        "open": 590.0,
+        "day_high": 651.74,
+        "day_low": 581.52,
+        "vwap": 633.5058,
+        "prior_close": 576.45,
+        "gap_from_prior_close_pct": 0.0235,
+        "price_vs_vwap_pct": 0.0076,
+        "distance_from_high_pct": -0.0206,
+        "distance_from_low_pct": 0.0977,
+        "intraday_change_pct": 0.0819,
+        "recent_trend": "falling",
+        "recent_slope_pct": -0.0095,
+        "volume_trend": "rising",
+        "volume_ratio_recent_to_prior": 1.404,
+        "twenty_day_volume_ratio": 1.4,
+        "ema5": 639.2186,
+        "ema20": 640.8153,
+        "ema_state": "bearish",
+        "price_vs_ema20_pct": -0.0039,
+        "ema20_slope_pct": -0.0023,
+        "classification": "fading",
+        "gap_only_risk": false,
+        "session_volume": 55363257,
+        "session_bar_count": 140
+      },
+      "momentum_profile": {
+        "score": 0.0,
+        "grade": "fading",
+        "passes_new_entry_gate": false,
+        "gap_only_risk": false,
+        "min_score": 55.0,
+        "reasons": [
+          "above_vwap",
+          "below_5min_ema20",
+          "recent_trend_falling",
+          "volume_rising",
+          "fading_from_intraday_high",
+          "well_off_day_high",
+          "large_move_without_fresh_push"
+        ]
+      },
+      "earnings": {
+        "symbol": "MU",
+        "next_earnings_date": "2026-06-24",
+        "days_until_earnings": 50
+      },
+      "earnings_catalyst_exception": {
+        "enabled": false,
+        "near_earnings": false,
+        "days_until_earnings": 50,
+        "catalyst_source": false,
+        "catalyst_sentiment": true,
+        "buy_threshold": 0.6,
+        "size_multiplier": 0.35
+      },
+      "discovery_sources": [
+        "seed_watchlist",
+        "dynamic_watchlist",
+        "peer_group"
+      ],
+      "skipped": "rsi 81.5 > 78.0"
+    },
+    {
+      "symbol": "SNDK",
+      "tech_score": 0.652,
+      "rsi": 80.8,
+      "overnight": {
+        "symbol": "SNDK",
+        "score": 0.339,
+        "close_strength": 0.724,
+        "late_drift": -0.451,
+        "tech_bias": 0.652,
+        "sent_bias": 0.5,
+        "market_bias": 0.289,
+        "price": 1395.05,
+        "notes": [
+          "closing_near_high"
+        ]
+      },
+      "intraday_chart": {
+        "current_price": 1395.05,
+        "open": 1255.86,
+        "day_high": 1418.88,
+        "day_low": 1246.02,
+        "vwap": 1371.4395,
+        "prior_close": 1255.86,
+        "gap_from_prior_close_pct": 0.0,
+        "price_vs_vwap_pct": 0.0172,
+        "distance_from_high_pct": -0.0168,
+        "distance_from_low_pct": 0.1196,
+        "intraday_change_pct": 0.1108,
+        "recent_trend": "falling",
+        "recent_slope_pct": -0.0061,
+        "volume_trend": "rising",
+        "volume_ratio_recent_to_prior": 1.395,
+        "twenty_day_volume_ratio": 1.13,
+        "ema5": 1397.6097,
+        "ema20": 1403.8741,
+        "ema_state": "bearish",
+        "price_vs_ema20_pct": -0.0063,
+        "ema20_slope_pct": -0.0033,
+        "classification": "fading",
+        "gap_only_risk": false,
+        "session_volume": 17727741,
+        "session_bar_count": 140
+      },
+      "momentum_profile": {
+        "score": 8.0,
+        "grade": "fading",
+        "passes_new_entry_gate": false,
+        "gap_only_risk": false,
+        "min_score": 55.0,
+        "reasons": [
+          "above_vwap",
+          "below_5min_ema20",
+          "recent_trend_falling",
+          "volume_rising",
+          "fading_from_intraday_high",
+          "large_move_without_fresh_push"
+        ]
+      },
+      "earnings": {
+        "symbol": "SNDK",
+        "next_earnings_date": "2026-08-24",
+        "days_until_earnings": 111
+      },
+      "earnings_catalyst_exception": {
+        "enabled": false,
+        "near_earnings": false,
+        "days_until_earnings": 111,
+        "catalyst_source": false,
+        "catalyst_sentiment": true,
+        "buy_threshold": 0.6,
+        "size_multiplier": 0.35
+      },
+      "discovery_sources": [
+        "seed_watchlist",
+        "dynamic_watchlist",
+        "peer_group"
+      ],
+      "skipped": "rsi 80.8 > 78.0"
+    },
+    {
+      "symbol": "FIX",
+      "tech_score": 0.651,
+      "rsi": 75.1,
+      "overnight": {
+        "symbol": "FIX",
+        "score": 0.244,
+        "close_strength": 0.464,
+        "late_drift": -0.217,
+        "tech_bias": 0.651,
+        "sent_bias": 0.0,
+        "market_bias": 0.289,
+        "price": 1977.21,
+        "notes": []
+      },
+      "intraday_chart": {
+        "current_price": 1977.21,
+        "open": 1905.0,
+        "day_high": 2003.65,
+        "day_low": 1905.0,
+        "vwap": 1973.9828,
+        "prior_close": 1891.95,
+        "gap_from_prior_close_pct": 0.0069,
+        "price_vs_vwap_pct": 0.0016,
+        "distance_from_high_pct": -0.0132,
+        "distance_from_low_pct": 0.0379,
+        "intraday_change_pct": 0.0379,
+        "recent_trend": "flat",
+        "recent_slope_pct": -0.0013,
+        "volume_trend": "fading",
+        "volume_ratio_recent_to_prior": 0.894,
+        "twenty_day_volume_ratio": 0.849,
+        "ema5": 1977.2795,
+        "ema20": 1981.5174,
+        "ema_state": "bearish",
+        "price_vs_ema20_pct": -0.0022,
+        "ema20_slope_pct": -0.0017,
+        "classification": "consolidating",
+        "gap_only_risk": false,
+        "session_volume": 343956,
+        "session_bar_count": 104
+      },
+      "momentum_profile": {
+        "score": 29.0,
+        "grade": "weak_or_flat",
+        "passes_new_entry_gate": false,
+        "gap_only_risk": false,
+        "min_score": 55.0,
+        "reasons": [
+          "above_vwap",
+          "below_5min_ema20",
+          "recent_trend_flat",
+          "volume_fading"
+        ]
+      },
+      "earnings": {
+        "symbol": "FIX",
+        "next_earnings_date": "2026-07-23",
+        "days_until_earnings": 79
+      },
+      "earnings_catalyst_exception": {
+        "enabled": false,
+        "near_earnings": false,
+        "days_until_earnings": 79,
+        "catalyst_source": false,
+        "catalyst_sentiment": false,
+        "buy_threshold": 0.6,
+        "size_multiplier": 0.35
+      },
+      "discovery_sources": [
+        "dynamic_watchlist",
+        "peer_group"
+      ],
+      "skipped": "ov 0.24 < threshold 0.45"
+    },
+    {
+      "symbol": "AMZN",
+      "tech_score": 0.649,
+      "rsi": 80.7,
+      "overnight": {
+        "symbol": "AMZN",
+        "score": -0.102,
+        "close_strength": -0.557,
+        "late_drift": -0.04,
+        "tech_bias": 0.649,
+        "sent_bias": -0.556,
+        "market_bias": 0.289,
+        "price": 273.75,
+        "notes": []
+      },
+      "intraday_chart": {
+        "current_price": 273.75,
+        "open": 273.12,
+        "day_high": 278.56,
+        "day_low": 272.38,
+        "vwap": 275.4195,
+        "prior_close": 272.05,
+        "gap_from_prior_close_pct": 0.0039,
+        "price_vs_vwap_pct": -0.0061,
+        "distance_from_high_pct": -0.0173,
+        "distance_from_low_pct": 0.005,
+        "intraday_change_pct": 0.0023,
+        "recent_trend": "flat",
+        "recent_slope_pct": -0.0012,
+        "volume_trend": "rising",
+        "volume_ratio_recent_to_prior": 1.197,
+        "twenty_day_volume_ratio": 0.654,
+        "ema5": 273.8702,
+        "ema20": 273.908,
+        "ema_state": "bearish",
+        "price_vs_ema20_pct": -0.0006,
+        "ema20_slope_pct": -0.0,
+        "classification": "consolidating",
+        "gap_only_risk": false,
+        "session_volume": 33565853,
+        "session_bar_count": 134
+      },
+      "momentum_profile": {
+        "score": 23.0,
+        "grade": "weak_or_flat",
+        "passes_new_entry_gate": false,
+        "gap_only_risk": false,
+        "min_score": 55.0,
+        "reasons": [
+          "below_vwap",
+          "below_5min_ema20",
+          "recent_trend_flat",
+          "volume_rising"
+        ]
+      },
+      "earnings": {
+        "symbol": "AMZN",
+        "next_earnings_date": "2026-07-30",
+        "days_until_earnings": 86
+      },
+      "earnings_catalyst_exception": {
+        "enabled": false,
+        "near_earnings": false,
+        "days_until_earnings": 86,
+        "catalyst_source": false,
+        "catalyst_sentiment": false,
+        "buy_threshold": 0.6,
+        "size_multiplier": 0.35
+      },
+      "discovery_sources": [
+        "seed_watchlist",
+        "dynamic_watchlist"
+      ],
+      "skipped": "rsi 80.7 > 78.0"
+    },
+    {
+      "symbol": "BAND",
+      "tech_score": 0.648,
+      "rsi": 93.7,
+      "overnight": {
+        "symbol": "BAND",
+        "score": 0.314,
+        "close_strength": 0.578,
+        "late_drift": -0.07,
+        "tech_bias": 0.648,
+        "sent_bias": 0.0,
+        "market_bias": 0.289,
+        "price": 48.02,
+        "notes": []
+      },
+      "intraday_chart": {
+        "current_price": 48.015,
+        "open": 44.7033,
+        "day_high": 48.9,
+        "day_low": 44.7033,
+        "vwap": 47.2202,
+        "prior_close": 45.02,
+        "gap_from_prior_close_pct": -0.007,
+        "price_vs_vwap_pct": 0.0168,
+        "distance_from_high_pct": -0.0181,
+        "distance_from_low_pct": 0.0741,
+        "intraday_change_pct": 0.0741,
+        "recent_trend": "falling",
+        "recent_slope_pct": -0.0019,
+        "volume_trend": "rising",
+        "volume_ratio_recent_to_prior": 1.834,
+        "twenty_day_volume_ratio": 1.349,
+        "ema5": 48.0897,
+        "ema20": 48.1079,
+        "ema_state": "bearish",
+        "price_vs_ema20_pct": -0.0019,
+        "ema20_slope_pct": -0.0001,
+        "classification": "fading",
+        "gap_only_risk": false,
+        "session_volume": 1328187,
+        "session_bar_count": 81
+      },
+      "momentum_profile": {
+        "score": 8.0,
+        "grade": "fading",
+        "passes_new_entry_gate": false,
+        "gap_only_risk": false,
+        "min_score": 55.0,
+        "reasons": [
+          "above_vwap",
+          "below_5min_ema20",
+          "recent_trend_falling",
+          "volume_rising",
+          "fading_from_intraday_high",
+          "large_move_without_fresh_push"
+        ]
+      },
+      "earnings": {
+        "symbol": "BAND",
+        "next_earnings_date": "2026-07-28",
+        "days_until_earnings": 84
+      },
+      "earnings_catalyst_exception": {
+        "enabled": false,
+        "near_earnings": false,
+        "days_until_earnings": 84,
+        "catalyst_source": false,
+        "catalyst_sentiment": false,
+        "buy_threshold": 0.6,
+        "size_multiplier": 0.35
+      },
+      "discovery_sources": [
+        "dynamic_watchlist"
+      ],
+      "skipped": "rsi 93.7 > 78.0"
+    },
+    {
+      "symbol": "WDC",
+      "tech_score": 0.646,
+      "rsi": 81.0,
+      "overnight": {
+        "symbol": "WDC",
+        "score": 0.246,
+        "close_strength": 0.24,
+        "late_drift": -0.087,
+        "tech_bias": 0.646,
+        "sent_bias": 0.25,
+        "market_bias": 0.289,
+        "price": 465.3,
+        "notes": []
+      },
+      "intraday_chart": {
+        "current_price": 465.3,
+        "open": 441.72,
+        "day_high": 480.11,
+        "day_low": 441.15,
+        "vwap": 470.2199,
+        "prior_close": 442.36,
+        "gap_from_prior_close_pct": -0.0014,
+        "price_vs_vwap_pct": -0.0105,
+        "distance_from_high_pct": -0.0308,
+        "distance_from_low_pct": 0.0547,
+        "intraday_change_pct": 0.0534,
+        "recent_trend": "falling",
+        "recent_slope_pct": -0.002,
+        "volume_trend": "rising",
+        "volume_ratio_recent_to_prior": 1.276,
+        "twenty_day_volume_ratio": 1.071,
+        "ema5": 465.1554,
+        "ema20": 466.6124,
+        "ema_state": "bearish",
+        "price_vs_ema20_pct": -0.0028,
+        "ema20_slope_pct": -0.0023,
+        "classification": "fading",
+        "gap_only_risk": false,
+        "session_volume": 8040354,
+        "session_bar_count": 138
+      },
+      "momentum_profile": {
+        "score": 0.0,
+        "grade": "fading",
+        "passes_new_entry_gate": false,
+        "gap_only_risk": false,
+        "min_score": 55.0,
+        "reasons": [
+          "below_vwap",
+          "below_5min_ema20",
+          "recent_trend_falling",
+          "volume_rising",
+          "fading_from_intraday_high",
+          "well_off_day_high",
+          "large_move_without_fresh_push"
+        ]
+      },
+      "earnings": {
+        "symbol": "WDC",
+        "next_earnings_date": "2026-07-29",
+        "days_until_earnings": 85
+      },
+      "earnings_catalyst_exception": {
+        "enabled": false,
+        "near_earnings": false,
+        "days_until_earnings": 85,
+        "catalyst_source": false,
+        "catalyst_sentiment": true,
+        "buy_threshold": 0.6,
+        "size_multiplier": 0.35
+      },
+      "discovery_sources": [
+        "seed_watchlist",
+        "dynamic_watchlist",
+        "peer_group"
+      ],
+      "skipped": "rsi 81.0 > 78.0"
+    },
+    {
+      "symbol": "MARA",
+      "tech_score": 0.642,
+      "rsi": 63.9,
+      "overnight": {
+        "symbol": "MARA",
+        "score": 0.109,
+        "close_strength": -0.275,
+        "late_drift": 0.136,
+        "tech_bias": 0.642,
+        "sent_bias": 0.0,
+        "market_bias": 0.289,
+        "price": 11.96,
+        "notes": []
+      },
+      "intraday_chart": {
+        "current_price": 11.965,
+        "open": 11.84,
+        "day_high": 12.29,
+        "day_low": 11.78,
+        "vwap": 11.9769,
+        "prior_close": 11.83,
+        "gap_from_prior_close_pct": 0.0008,
+        "price_vs_vwap_pct": -0.001,
+        "distance_from_high_pct": -0.0264,
+        "distance_from_low_pct": 0.0157,
+        "intraday_change_pct": 0.0106,
+        "recent_trend": "flat",
+        "recent_slope_pct": -0.0004,
+        "volume_trend": "rising",
+        "volume_ratio_recent_to_prior": 1.271,
+        "twenty_day_volume_ratio": 0.714,
+        "ema5": 11.9265,
+        "ema20": 11.919,
+        "ema_state": "bullish",
+        "price_vs_ema20_pct": 0.0039,
+        "ema20_slope_pct": 0.0003,
+        "classification": "consolidating",
+        "gap_only_risk": false,
+        "session_volume": 32974684,
+        "session_bar_count": 138
+      },
+      "momentum_profile": {
+        "score": 45.0,
+        "grade": "weak_or_flat",
+        "passes_new_entry_gate": false,
+        "gap_only_risk": false,
+        "min_score": 55.0,
+        "reasons": [
+          "below_vwap",
+          "ema5_above_ema20",
+          "recent_trend_flat",
+          "volume_rising",
+          "well_off_day_high"
+        ]
+      },
+      "earnings": {
+        "symbol": "MARA",
+        "next_earnings_date": "2026-05-11",
+        "days_until_earnings": 6
+      },
+      "earnings_catalyst_exception": {
+        "enabled": false,
+        "near_earnings": false,
+        "days_until_earnings": 6,
+        "catalyst_source": false,
+        "catalyst_sentiment": false,
+        "buy_threshold": 0.6,
+        "size_multiplier": 0.35
+      },
+      "discovery_sources": [
+        "dynamic_watchlist"
+      ],
+      "skipped": "ov 0.11 < threshold 0.45"
+    },
+    {
+      "symbol": "BE",
+      "tech_score": 0.634,
+      "rsi": 77.7,
+      "overnight": {
+        "symbol": "BE",
+        "score": 0.164,
+        "close_strength": -0.147,
+        "late_drift": 0.059,
+        "tech_bias": 0.634,
+        "sent_bias": 0.25,
+        "market_bias": 0.289,
+        "price": 292.35,
+        "notes": []
+      },
+      "intraday_chart": {
+        "current_price": 292.35,
+        "open": 289.38,
+        "day_high": 299.51,
+        "day_low": 287.02,
+        "vwap": 292.6755,
+        "prior_close": 288.64,
+        "gap_from_prior_close_pct": 0.0026,
+        "price_vs_vwap_pct": -0.0011,
+        "distance_from_high_pct": -0.0239,
+        "distance_from_low_pct": 0.0186,
+        "intraday_change_pct": 0.0103,
+        "recent_trend": "rising",
+        "recent_slope_pct": 0.0029,
+        "volume_trend": "rising",
+        "volume_ratio_recent_to_prior": 1.63,
+        "twenty_day_volume_ratio": 0.498,
+        "ema5": 291.0784,
+        "ema20": 292.1431,
+        "ema_state": "price_above_ema20",
+        "price_vs_ema20_pct": 0.0007,
+        "ema20_slope_pct": -0.0033,
+        "classification": "consolidating",
+        "gap_only_risk": false,
+        "session_volume": 5551089,
+        "session_bar_count": 122
+      },
+      "momentum_profile": {
+        "score": 51.0,
+        "grade": "weak_or_flat",
+        "passes_new_entry_gate": false,
+        "gap_only_risk": false,
+        "min_score": 55.0,
+        "reasons": [
+          "below_vwap",
+          "recent_trend_rising",
+          "volume_rising",
+          "well_off_day_high"
+        ]
+      },
+      "earnings": {
+        "symbol": "BE",
+        "next_earnings_date": "2026-07-30",
+        "days_until_earnings": 86
+      },
+      "earnings_catalyst_exception": {
+        "enabled": false,
+        "near_earnings": false,
+        "days_until_earnings": 86,
+        "catalyst_source": false,
+        "catalyst_sentiment": true,
+        "buy_threshold": 0.6,
+        "size_multiplier": 0.35
+      },
+      "discovery_sources": [
+        "seed_watchlist",
+        "dynamic_watchlist",
+        "peer_group"
+      ],
+      "skipped": "ov 0.16 < threshold 0.45"
+    },
+    {
+      "symbol": "TSM",
+      "tech_score": 0.573,
+      "rsi": 59.8,
+      "overnight": {
+        "symbol": "TSM",
+        "score": -0.116,
+        "close_strength": -0.836,
+        "late_drift": -0.335,
+        "tech_bias": 0.573,
+        "sent_bias": 0.5,
+        "market_bias": 0.289,
+        "price": 393.71,
+        "notes": [
+          "closing_near_low"
+        ]
+      },
+      "intraday_chart": {
+        "current_price": 393.7094,
+        "open": 399.36,
+        "day_high": 406.129,
+        "day_low": 392.6001,
+        "vwap": 397.3166,
+        "prior_close": 401.61,
+        "gap_from_prior_close_pct": -0.0056,
+        "price_vs_vwap_pct": -0.0091,
+        "distance_from_high_pct": -0.0306,
+        "distance_from_low_pct": 0.0028,
+        "intraday_change_pct": -0.0141,
+        "recent_trend": "falling",
+        "recent_slope_pct": -0.0036,
+        "volume_trend": "rising",
+        "volume_ratio_recent_to_prior": 1.474,
+        "twenty_day_volume_ratio": 0.869,
+        "ema5": 394.2217,
+        "ema20": 395.6236,
+        "ema_state": "bearish",
+        "price_vs_ema20_pct": -0.0048,
+        "ema20_slope_pct": -0.0024,
+        "classification": "near_low",
+        "gap_only_risk": false,
+        "session_volume": 11909613,
+        "session_bar_count": 140
+      },
+      "momentum_profile": {
+        "score": 0.0,
+        "grade": "fading",
+        "passes_new_entry_gate": false,
+        "gap_only_risk": false,
+        "min_score": 55.0,
+        "reasons": [
+          "below_vwap",
+          "below_5min_ema20",
+          "recent_trend_falling",
+          "volume_rising",
+          "well_off_day_high"
+        ]
+      },
+      "earnings": {
+        "symbol": "TSM",
+        "next_earnings_date": "2026-07-16",
+        "days_until_earnings": 72
+      },
+      "earnings_catalyst_exception": {
+        "enabled": false,
+        "near_earnings": false,
+        "days_until_earnings": 72,
+        "catalyst_source": false,
+        "catalyst_sentiment": true,
+        "buy_threshold": 0.6,
+        "size_multiplier": 0.35
+      },
+      "discovery_sources": [
+        "dynamic_watchlist",
+        "peer_group"
+      ],
+      "skipped": "ov -0.12 < threshold 0.45"
+    },
+    {
+      "symbol": "AAPL",
+      "tech_score": 0.474,
+      "rsi": 66.9,
+      "overnight": {
+        "symbol": "AAPL",
+        "score": 0.539,
+        "close_strength": 0.94,
+        "late_drift": 0.084,
+        "tech_bias": 0.474,
+        "sent_bias": 0.75,
+        "market_bias": 0.289,
+        "price": 284.29,
+        "notes": [
+          "closing_near_high"
+        ]
+      },
+      "intraday_chart": {
+        "current_price": 284.29,
+        "open": 276.55,
+        "day_high": 284.57,
+        "day_low": 275.22,
+        "vwap": 281.494,
+        "prior_close": 276.83,
+        "gap_from_prior_close_pct": -0.001,
+        "price_vs_vwap_pct": 0.0099,
+        "distance_from_high_pct": -0.001,
+        "distance_from_low_pct": 0.033,
+        "intraday_change_pct": 0.028,
+        "recent_trend": "flat",
+        "recent_slope_pct": 0.0005,
+        "volume_trend": "rising",
+        "volume_ratio_recent_to_prior": 1.429,
+        "twenty_day_volume_ratio": 0.681,
+        "ema5": 284.2234,
+        "ema20": 283.8515,
+        "ema_state": "bullish",
+        "price_vs_ema20_pct": 0.0015,
+        "ema20_slope_pct": 0.0009,
+        "classification": "near_high",
+        "gap_only_risk": false,
+        "session_volume": 31889939,
+        "session_bar_count": 140
+      },
+      "momentum_profile": {
+        "score": 83.0,
+        "grade": "strong_continuation",
+        "passes_new_entry_gate": true,
+        "gap_only_risk": false,
+        "min_score": 55.0,
+        "reasons": [
+          "above_vwap",
+          "ema5_above_ema20",
+          "recent_trend_flat",
+          "volume_rising"
+        ]
+      },
+      "earnings": {
+        "symbol": "AAPL",
+        "next_earnings_date": "2026-07-30",
+        "days_until_earnings": 86
+      },
+      "earnings_catalyst_exception": {
+        "enabled": false,
+        "near_earnings": false,
+        "days_until_earnings": 86,
+        "catalyst_source": false,
+        "catalyst_sentiment": true,
+        "buy_threshold": 0.6,
+        "size_multiplier": 0.35
+      },
+      "discovery_sources": [
+        "seed_watchlist",
+        "dynamic_watchlist"
+      ]
+    },
+    {
+      "symbol": "ETN",
+      "tech_score": 0.374,
+      "rsi": 55.3,
+      "overnight": {
+        "symbol": "ETN",
+        "score": 0.095,
+        "close_strength": -0.071,
+        "late_drift": 0.052,
+        "tech_bias": 0.374,
+        "sent_bias": 0.0,
+        "market_bias": 0.289,
+        "price": 409.96,
+        "notes": []
+      },
+      "intraday_chart": {
+        "current_price": 409.965,
+        "open": 427.52,
+        "day_high": 434.99,
+        "day_low": 388.26,
+        "vwap": 405.4448,
+        "prior_close": 422.44,
+        "gap_from_prior_close_pct": 0.012,
+        "price_vs_vwap_pct": 0.0111,
+        "distance_from_high_pct": -0.0575,
+        "distance_from_low_pct": 0.0559,
+        "intraday_change_pct": -0.0411,
+        "recent_trend": "rising",
+        "recent_slope_pct": 0.0044,
+        "volume_trend": "rising",
+        "volume_ratio_recent_to_prior": 1.256,
+        "twenty_day_volume_ratio": 2.398,
+        "ema5": 408.7584,
+        "ema20": 409.6763,
+        "ema_state": "price_above_ema20",
+        "price_vs_ema20_pct": 0.0007,
+        "ema20_slope_pct": -0.0021,
+        "classification": "consolidating",
+        "gap_only_risk": false,
+        "session_volume": 5710896,
+        "session_bar_count": 125
+      },
+      "momentum_profile": {
+        "score": 81.0,
+        "grade": "strong_continuation",
+        "passes_new_entry_gate": true,
+        "gap_only_risk": false,
+        "min_score": 55.0,
+        "reasons": [
+          "above_vwap",
+          "recent_trend_rising",
+          "volume_rising",
+          "well_off_day_high"
+        ]
+      },
+      "earnings": {
+        "symbol": "ETN",
+        "next_earnings_date": "2026-05-05",
+        "days_until_earnings": 0
+      },
+      "earnings_catalyst_exception": {
+        "enabled": false,
+        "near_earnings": true,
+        "days_until_earnings": 0,
+        "catalyst_source": false,
+        "catalyst_sentiment": false,
+        "buy_threshold": 0.6,
+        "size_multiplier": 0.35
+      },
+      "discovery_sources": [
+        "seed_watchlist",
+        "dynamic_watchlist",
+        "peer_group"
+      ],
+      "skipped": "near earnings without preclose catalyst exception"
+    },
+    {
+      "symbol": "BITO",
+      "tech_score": 0.298,
+      "rsi": 67.6,
+      "overnight": {
+        "symbol": "BITO",
+        "score": 0.302,
+        "close_strength": 0.687,
+        "late_drift": 0.031,
+        "tech_bias": 0.298,
+        "sent_bias": 0.0,
+        "market_bias": 0.289,
+        "price": 11.16,
+        "notes": [
+          "closing_near_high"
+        ]
+      },
+      "intraday_chart": {
+        "current_price": 11.165,
+        "open": 11.07,
+        "day_high": 11.19,
+        "day_low": 11.03,
+        "vwap": 11.1431,
+        "prior_close": 10.95,
+        "gap_from_prior_close_pct": 0.011,
+        "price_vs_vwap_pct": 0.002,
+        "distance_from_high_pct": -0.0022,
+        "distance_from_low_pct": 0.0122,
+        "intraday_change_pct": 0.0086,
+        "recent_trend": "flat",
+        "recent_slope_pct": 0.0013,
+        "volume_trend": "rising",
+        "volume_ratio_recent_to_prior": 1.251,
+        "twenty_day_volume_ratio": 1.085,
+        "ema5": 11.163,
+        "ema20": 11.1542,
+        "ema_state": "bullish",
+        "price_vs_ema20_pct": 0.001,
+        "ema20_slope_pct": 0.0006,
+        "classification": "near_high",
+        "gap_only_risk": false,
+        "session_volume": 113094960,
+        "session_bar_count": 135
+      },
+      "momentum_profile": {
+        "score": 83.0,
+        "grade": "strong_continuation",
+        "passes_new_entry_gate": true,
+        "gap_only_risk": false,
+        "min_score": 55.0,
+        "reasons": [
+          "above_vwap",
+          "ema5_above_ema20",
+          "recent_trend_flat",
+          "volume_rising"
+        ]
+      },
+      "earnings": {
+        "symbol": "BITO",
+        "next_earnings_date": null,
+        "days_until_earnings": null
+      },
+      "earnings_catalyst_exception": {
+        "enabled": false,
+        "near_earnings": false,
+        "days_until_earnings": null,
+        "catalyst_source": false,
+        "catalyst_sentiment": false,
+        "buy_threshold": 0.6,
+        "size_multiplier": 0.35
+      },
+      "discovery_sources": [
+        "dynamic_watchlist",
+        "av_most_active"
+      ],
+      "skipped": "ov 0.30 < threshold 0.45"
+    },
+    {
+      "symbol": "LLY",
+      "tech_score": 0.27,
+      "rsi": 61.5,
+      "overnight": {
+        "symbol": "LLY",
+        "score": 0.291,
+        "close_strength": 0.638,
+        "late_drift": -0.006,
+        "tech_bias": 0.27,
+        "sent_bias": 0.125,
+        "market_bias": 0.289,
+        "price": 987.66,
+        "notes": [
+          "closing_near_high"
+        ]
+      },
+      "intraday_chart": {
+        "current_price": 987.66,
+        "open": 966.0,
+        "day_high": 992.8,
+        "day_low": 964.41,
+        "vwap": 982.1223,
+        "prior_close": 967.93,
+        "gap_from_prior_close_pct": -0.002,
+        "price_vs_vwap_pct": 0.0056,
+        "distance_from_high_pct": -0.0052,
+        "distance_from_low_pct": 0.0241,
+        "intraday_change_pct": 0.0224,
+        "recent_trend": "flat",
+        "recent_slope_pct": 0.0011,
+        "volume_trend": "rising",
+        "volume_ratio_recent_to_prior": 1.743,
+        "twenty_day_volume_ratio": 0.618,
+        "ema5": 987.354,
+        "ema20": 987.8334,
+        "ema_state": "bearish",
+        "price_vs_ema20_pct": -0.0002,
+        "ema20_slope_pct": -0.0005,
+        "classification": "consolidating",
+        "gap_only_risk": false,
+        "session_volume": 2004028,
+        "session_bar_count": 98
+      },
+      "momentum_profile": {
+        "score": 53.0,
+        "grade": "weak_or_flat",
+        "passes_new_entry_gate": false,
+        "gap_only_risk": false,
+        "min_score": 55.0,
+        "reasons": [
+          "above_vwap",
+          "below_5min_ema20",
+          "recent_trend_flat",
+          "volume_rising"
+        ]
+      },
+      "earnings": {
+        "symbol": "LLY",
+        "next_earnings_date": "2026-08-05",
+        "days_until_earnings": 92
+      },
+      "earnings_catalyst_exception": {
+        "enabled": false,
+        "near_earnings": false,
+        "days_until_earnings": 92,
+        "catalyst_source": false,
+        "catalyst_sentiment": true,
+        "buy_threshold": 0.6,
+        "size_multiplier": 0.35
+      },
+      "discovery_sources": [
+        "seed_watchlist",
+        "dynamic_watchlist"
+      ],
+      "skipped": "ov 0.29 < threshold 0.45"
+    },
+    {
+      "symbol": "ASML",
+      "tech_score": 0.238,
+      "rsi": 52.5,
+      "overnight": {
+        "symbol": "ASML",
+        "score": 0.236,
+        "close_strength": 0.698,
+        "late_drift": -0.202,
+        "tech_bias": 0.238,
+        "sent_bias": 0.0,
+        "market_bias": 0.289,
+        "price": 1444.45,
+        "notes": [
+          "closing_near_high"
+        ]
+      },
+      "intraday_chart": {
+        "current_price": 1444.45,
+        "open": 1410.85,
+        "day_high": 1454.8,
+        "day_low": 1386.2,
+        "vwap": 1436.8068,
+        "prior_close": 1386.21,
+        "gap_from_prior_close_pct": 0.0178,
+        "price_vs_vwap_pct": 0.0053,
+        "distance_from_high_pct": -0.0071,
+        "distance_from_low_pct": 0.042,
+        "intraday_change_pct": 0.0238,
+        "recent_trend": "falling",
+        "recent_slope_pct": -0.0031,
+        "volume_trend": "rising",
+        "volume_ratio_recent_to_prior": 1.15,
+        "twenty_day_volume_ratio": 0.717,
+        "ema5": 1445.4499,
+        "ema20": 1447.8191,
+        "ema_state": "bearish",
+        "price_vs_ema20_pct": -0.0023,
+        "ema20_slope_pct": -0.0013,
+        "classification": "fading",
+        "gap_only_risk": false,
+        "session_volume": 1307201,
+        "session_bar_count": 140
+      },
+      "momentum_profile": {
+        "score": 23.0,
+        "grade": "fading",
+        "passes_new_entry_gate": false,
+        "gap_only_risk": false,
+        "min_score": 55.0,
+        "reasons": [
+          "above_vwap",
+          "below_5min_ema20",
+          "recent_trend_falling",
+          "volume_rising",
+          "fading_from_intraday_high"
+        ]
+      },
+      "earnings": {
+        "symbol": "ASML",
+        "next_earnings_date": "2026-07-15",
+        "days_until_earnings": 71
+      },
+      "earnings_catalyst_exception": {
+        "enabled": false,
+        "near_earnings": false,
+        "days_until_earnings": 71,
+        "catalyst_source": false,
+        "catalyst_sentiment": false,
+        "buy_threshold": 0.6,
+        "size_multiplier": 0.35
+      },
+      "discovery_sources": [
+        "dynamic_watchlist",
+        "peer_group"
+      ],
+      "skipped": "ov 0.24 < threshold 0.45"
+    }
+  ],
+  "new_executions": [],
+  "weekend_protection": null,
+  "cash_proxy": {
+    "action": "buy_proxy",
+    "symbol": "SPY",
+    "notional": 75431.38
+  },
+  "trade_learning": {
+    "start": {
+      "enabled": true,
+      "pending": 13,
+      "resolved": []
+    },
+    "end": {
+      "enabled": true,
+      "pending": 13,
+      "resolved": []
+    }
+  },
+  "thresholds": {
+    "hold": 0.0,
+    "buy": 0.45,
+    "max_new": 3,
+    "size_mult": 0.5,
+    "weekend_session": false
+  },
+  "tally": {
+    "held": 1,
+    "scored": 1,
+    "hold": 1,
+    "close": 0,
+    "no_data": 0,
+    "earnings_close": 0,
+    "earnings_trim_50": 0,
+    "earnings_hold": 0,
+    "ai_vetoed_held": 0,
+    "veto_cap_trim": 0
+  }
+}

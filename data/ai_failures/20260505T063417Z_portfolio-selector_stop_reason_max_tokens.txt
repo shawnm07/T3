@@ -1,0 +1,928 @@
+agent=portfolio-selector
+stop_reason=max_tokens
+input_tokens=72559
+output_tokens=24000
+reason=stop_reason=max_tokens
+---
+I need to analyze this carefully. Key observations:
+
+**Context:** Phase is "preclose" with minutes_to_close = 0.0. This is end-of-day. The overnight task handles overnight buys. I should be conservative about new entries at close.
+
+**Currently held:** AXTX (313 shares, ~$14,589, 14.6%), PWR (14.6949 shares, ~$11,129, 11.15%), META (15.4774 shares, ~$9,448, 9.46%), SPY (83.1384 shares, ~$59,694, 59.79%)
+
+**AXTX analysis:** Currently held. Momentum score 0 (fading), recent_trend falling, classification fading, distance_from_high -2.54%, intraday_change +11.88% but fading. Entry thesis was "breaking_out" - that thesis is now gone. Exhaustion penalty applies: large move (+11.88%), fading classification, bearish EMA, falling recent trend. candidate_priority_score only 33.09. Should EXIT.
+
+**PWR analysis:** Currently held. Strong continuation (momentum 85), above VWAP, bullish EMA, rising trend, near high, peer leader. candidate_priority_score 67.63. Volume fading but pressing day high. At preclose, this is the strongest held name. HOLD/INCREASE.
+
+**META analysis:** Currently held. Acceptable continuation (momentum 57), above VWAP, flat trend, rising volume. candidate_priority_score 46.91. Sector rank 2/2 (GOOGL is stronger at 55.73). GOOGL outranks META in same sector/theme. Should swap META for GOOGL or EXIT META.
+
+**Top new candidates by score:**
+- PWR: 67.63 (held, Industrials, ai_data_center)
+- GBTG: 65.72 (exhausted - near high, fading volume, +50% today - STRONG exhaustion penalty)
+- MU: 62.33 (IT/ai_data_center, acceptable continuation, bullish EMA, rising volume)
+- DELL: 61.99 (IT/ai_data_center, strong continuation 79, above VWAP, bullish EMA)
+- BAND: 61.26 (Other/other, acceptable continuation 71, above VWAP, bullish EMA)
+- AVLN: 57.97 (Other/other, strong continuation 95, above VWAP, bullish EMA, rising volume)
+- GOOGL: 55.73 (Communication Services, acceptable continuation 57)
+- FIX: 56.15 (Industrials/ai_data_center, acceptable continuation 55)
+- BE: 55.28 (Other/ai_data_center, acceptable continuation 65)
+
+**GBTG exhaustion:** distance_from_high -0.21%, volume fading, intraday +50.17%, recent_trend flat. MASSIVE exhaustion penalty. Score drops to ~20.
+
+**Preclose consideration:** At preclose (minutes_to_close=0), new entries are risky. The system says `preclose_overnight_task_handles_overnight_buys=true` and `intraday_new_entries_allowed=true`. I should be selective.
+
+**Diversification check:**
+- ai_data_center theme: PWR, MU, DELL, FIX, BE all in this bucket. Cap is 3 positions max.
+- If I pick PWR + MU + DELL, that's 3 ai_data_center - at cap.
+- FIX is also Industrials + ai_data_center - would breach theme cap.
+- BE is Other sector + ai_data_center - would breach theme cap.
+
+**Sector check for ai_data_center:**
+- PWR: Industrials
+- MU: Information Technology  
+- DELL: Information Technology
+- That's 2 IT + 1 Industrials - sector cap OK (max 3 per sector)
+
+**Selected positions plan:**
+1. PWR - hold/increase (Industrials, ai_data_center) - score 67.63
+2. MU - new buy (IT, ai_data_center) - score 62.33
+3. DELL - new buy (IT, ai_data_center) - score 61.99 → BUT this puts 3 in ai_data_center theme (PWR+MU+DELL) - AT cap, not over.
+4. BAND - new buy (Other, other) - score 61.26 - adds diversification
+5. GOOGL - new buy (Communication Services, communication_services) - score 55.73 - diversification
+
+Wait - DELL and MU are both IT sector. PWR is Industrials. That's 2 IT names. BAND is Other. GOOGL is Communication Services. That's fine for sector diversity.
+
+ai_data_center theme: PWR + MU + DELL = 3. At cap exactly. OK.
+
+**EXIT:** AXTX (fading, thesis gone), META (GOOGL outranks in same sector/theme)
+
+**Anti-stagnation rule:** Need at least one currently_held=false. MU, DELL, BAND, GOOGL are all new. ✓
+
+**Sizing:**
+Equity = $99,846.63
+investable = 1 - spy_target_pct - cash_target_pct
+
+Let me set spy_target_pct = 0.05 (reduce SPY significantly to fund new positions), cash_target_pct = 0.03
+
+investable = 0.92
+
+Scores: PWR=67.63, MU=62.33, DELL=61.99, BAND=61.26, GOOGL=55.73
+Sum = 308.94
+
+Weights (proportional):
+- PWR: 67.63/308.94 * 0.92 = 0.2013
+- MU: 62.33/308.94 * 0.92 = 0.1856
+- DELL: 61.99/308.94 * 0.92 = 0.1846
+- BAND: 61.26/308.94 * 0.92 = 0.1824
+- GOOGL: 55.73/308.94 * 0.92 = 0.1660
+
+Sum = 0.9199 ✓ (plus spy 0.05 + cash 0.03 = 1.00)
+
+Check max_position_pct = 0.50: all well under. ✓
+
+**New entries at preclose - starter sizing at 70%:**
+- MU: 0.1856 * 0.70 = 0.1299 → adjusted weight
+- DELL: 0.1846 * 0.70 = 0.1292
+- BAND: 0.1824 * 0.70 = 0.1277
+- GOOGL: 0.1660 * 0.70 = 0.1162
+
+PWR is held - can go to full target: 0.2013
+
+Redistribute the freed weight (30% of new entries) to SPY/cash:
+Freed = (0.1856+0.1846+0.1824+0.1660)*0.30 = 0.7186*0.30 = 0.2156
+Add to SPY: spy_target_pct = 0.05 + 0.2156 = 0.2656... 
+
+Actually, let me reconsider. The system says starter sizing means I target ~70% of desired weight. I should set the target_pct at the starter level and let the remaining go to SPY.
+
+Let me recalculate with starter sizing:
+- PWR: 0.2013 (full, held)
+- MU: 0.1299 (70% starter)
+- DELL: 0.1292 (70% starter)
+- BAND: 0.1277 (70% starter)
+- GOOGL: 0.1162 (70% starter)
+
+Sum equity positions = 0.8043
+SPY = 0.05 + remaining = need total = 1.0
+cash = 0.03
+SPY = 1.0 - 0.8043 - 0.03 = 0.1657
+
+Check: 0.8043 + 0.1657 + 0.03 = 1.00 ✓
+
+**Qty calculations:**
+Equity = $99,846.63
+
+PWR: 0.2013 * 99846.63 = $20,097.52 / $759.6776 = 26.45 → 26 shares (whole)
+delta_qty = 26 - 14.6949 = +11.3051 → round to 11 shares delta, so qty = 14.6949 + 11 = 25.6949... 
+
+Actually for INCREASE, I should specify new total qty. Let me use whole shares for the delta.
+PWR target value = 0.2013 * 99846.63 = $20,097
+PWR qty = 20097 / 759.6776 = 26.45 → 26 shares
+delta = 26 - 14.6949 ≈ +11 (round down for safety, so delta = 11, new qty = 25.6949 → let's say 26 total, delta = 26 - 14.6949 = 11.3 → delta_qty = 11, qty = 25.6949 + 0 = let me just say qty=26, delta_qty=11)
+
+Wait, current_qty = 14.6949 (fractional). New qty = 26, delta = 26 - 14.6949 = 11.3051 → delta_qty = 11 (whole share buy)... Actually the executor handles fractional. Let me set qty=26, delta_qty = 26 - 14.6949 = 11.3051 → I'll say delta_qty = 11.31 rounded.
+
+Actually let me just compute cleanly:
+
+PWR: target $20,097 / $759.6776 = 26.45 → qty = 26, entry = 759.6776, delta = 26 - 14.6949 = 11.3051
+MU: 0.1299 * 99846.63 = $12,970 / $578.00 = 22.44 → qty = 22, entry = 578.00, delta = 22
+DELL: 0.1292 * 99846.63 = $12,900 / $211.60 = 60.97 → qty = 60, entry = 211.60, delta = 60
+BAND: 0.1277 * 99846.63 = $12,750 / $45.51 = 280.2 → qty = 280, entry = 45.51, delta = 280
+GOOGL: 0.1162 * 99846.63 = $11,600 / $382.86 = 30.30 → qty = 30, entry = 382.86, delta = 30
+
+Check total deployed:
+PWR: 26 * 759.6776 = $19,752
+MU: 22 * 578 = $12,716
+DELL: 60 * 211.60 = $12,696
+BAND: 280 * 45.51 = $12,743
+GOOGL: 30 * 382.86 = $11,486
+Total equity = $69,393
+
+SPY target: 0.1657 * 99846.63 = $16,554 / $717.7622 = 23.07 → 23 shares
+SPY current = 83.1384 shares → delta = 23 - 83.1384 = -60.1384 (SELL ~60 shares)
+SPY value: 23 * 717.7622 = $16,509
+
+Cash: 0.03 * 99846.63 = $2,995
+
+Total: 69,393 + 16,509 + 2,995 = $88,897... That's only 89% of equity. Let me recalculate.
+
+The issue is I'm being too conservative with starter sizing. Let me reconsider.
+
+Actually, the total should be close to equity. Let me recalculate target weights more carefully.
+
+Let me set:
+- PWR: 0.20
+- MU: 0.18
+- DELL: 0.18
+- BAND: 0.17
+- GOOGL: 0.15
+Sum = 0.88
+SPY: 0.09
+Cash: 0.03
+Total = 1.00 ✓
+
+Qty:
+PWR: 0.20 * 99846.63 = $19,969 / 759.6776 = 26.28 → 26 shares; delta = 26 - 14.6949 = 11.31
+MU: 0.18 * 99846.63 = $17,972 / 578.00 = 31.09 → 31 shares; delta = 31
+DELL: 0.18 * 99846.63 = $17,972 / 211.60 = 84.93 → 84 shares; delta = 84
+BAND: 0.17 * 99846.63 = $16,974 / 45.51 = 372.97 → 372 shares; delta = 372
+GOOGL: 0.15 * 99846.63 = $14,977 / 382.86 = 39.12 → 39 shares; delta = 39
+
+Total equity deployed:
+PWR: 26 * 759.6776 = $19,752
+MU: 31 * 578 = $17,918
+DELL: 84 * 211.60 = $17,774
+BAND: 372 * 45.51 = $16,930
+GOOGL: 39 * 382.86 = $14,932
+Total = $87,306
+
+SPY: 0.09 * 99846.63 = $8,986 / 717.7622 = 12.52 → 12 shares; value = 12 * 717.7622 = $8,613
+Cash: 0.03 * 99846.63 = $2,995
+
+Total: 87,306 + 8,613 + 2,995 = $98,914 ≈ 99% of equity ✓
+
+Check max position: PWR = $19,752 / $99,847 = 19.8% < 50% ✓
+
+Check stop risk: max_risk_per_trade_pct = 0.005 = 0.5% of equity = $499
+For BUY with 1% stop:
+- PWR: 11 new shares * 759.6776 * 0.01 = $83.57 ✓
+- MU: 31 * 578 * 0.01 = $179.18 ✓
+- DELL: 84 * 211.60 * 0.01 = $177.74 ✓
+- BAND: 372 * 45.51 * 0.01 = $169.30 ✓
+- GOOGL: 39 * 382.86 * 0.01 = $149.32 ✓
+
+All well under $499. ✓
+
+Now let me recalculate actual target_pcts based on final quantities:
+PWR: 19752/99847 = 0.1978
+MU: 17918/99847 = 0.1795
+DELL: 17774/99847 = 0.1780
+BAND: 16930/99847 = 0.1696
+GOOGL: 14932/99847 = 0.1496
+SPY: 8613/99847 = 0.0863
+Cash: 2995/99847 = 0.0300
+
+Sum: 0.1978+0.1795+0.1780+0.1696+0.1496+0.0863+0.0300 = 0.9908... need to get to 1.00
+
+The gap is ~0.009 = ~$900. Let me add 1 more share of GOOGL (40 shares = $15,314) and 1 more share of SPY (13 shares = $9,331).
+
+Let me try:
+GOOGL: 40 shares = $15,314; target_pct = 0.1534
+SPY: 13 shares = $9,331; target_pct = 0.0935
+
+Total: 19752 + 17918 + 17774 + 16930 + 15314 + 9331 + 2995 = $100,014 ≈ 100.2% - slightly over. 
+
+Let me reduce BAND by 1: 371 * 45.51 = $16,884
+Total: 19752 + 17918 + 17774 + 16884 + 15314 + 9331 + 2995 = $99,968 ≈ 100.1% ✓
+
+Final:
+PWR: 26 shares, $19,752, 19.78%
+MU: 31 shares, $17,918, 17.95%
+DELL: 84 shares, $17,774, 17.80%
+BAND: 371 shares, $16,884, 16.91%
+GOOGL: 40 shares, $15,314, 15.34%
+SPY: 13 shares, $9,331, 9.35%
+Cash: ~$2,995, 3.00%
+
+Sum weights: 0.1978+0.1795+0.1780+0.1691+0.1534+0.0935+0.0300 = 1.0013 ≈ 1.00 ✓
+
+**EXITS:**
+AXTX: qty=0, delta=-313
+META: qty=0, delta=-15.4774 → -15 (fractional)
+
+**SPY:** current 83.1384 shares → target 13 shares, delta = 13 - 83.1384 = -70.1384
+
+Now let me compile the full per_symbol table for all candidates.
+
+For opportunity scores, I need to calibrate 0-100 reflecting remaining upside:
+- PWR: 72 (strong continuation, peer leader, near high but rising)
+- MU: 68 (acceptable continuation, sector leader, rising volume, +3.47% today with room)
+- DELL: 67 (strong continuation, above VWAP, bullish EMA)
+- BAND: 65 (acceptable continuation, above VWAP, bullish EMA, sector leader)
+- GOOGL: 60 (acceptable continuation, sector leader, comm services)
+- AVLN: 55 (strong momentum but tiny, unknown name, no tech score)
+- RBLU: 52 (strong continuation but -35% 5-day, volatile)
+- FIX: 50 (acceptable continuation but Industrials/ai_data_center - would breach theme cap)
+- BE: 48 (acceptable continuation but ai_data_center - would breach theme cap)
+- TSLA: 45 (acceptable continuation)
+- MARA: 42 (acceptable continuation but earnings in 3 days)
+- META: 38 (held, acceptable continuation but GOOGL outranks)
+- COIN: 35 (earnings in 3 days, weak momentum)
+- HCAI: 30 (well off high, below VWAP)
+- SOXS: 28 (inverse ETF, fading volume)
+- AXTX: 22 (fading, thesis gone)
+- GBTG: 18 (exhausted - +50% today, near high, fading volume)
+- AMZN: 32 (weak momentum)
+- LLY: 35 (weak momentum, below EMA)
+- UNH: 30 (near high but fading volume)
+- SMCI: 28 (earnings tomorrow)
+- SNDK: 25 (fading)
+- WDC: 22 (fading)
+- STX: 20 (weak, fading)
+- NVDA: 30 (weak, flat)
+- INTC: 15 (fading, negative)
+- AMD: 15 (fading, earnings tomorrow)
+- ASML: 12 (fading)
+- AVGO: 18 (weak)
+- ETN: 20 (earnings tomorrow, weak)
+- GEV: 22 (weak)
+- VRT: 25 (fading)
+- MRVL: 22 (weak)
+- TSM: 20 (weak)
+- QCOM: 25 (weak)
+- PLTR: 18 (weak, earnings today)
+- XNDU: 5 (loser, -61%)
+- NOK: 20 (weak)
+- BITO: 15 (weak)
+- ELPW: 20 (below VWAP, weak)
+- SOFI: 18 (weak)
+- SOFX: 15 (weak)
+- RBLX: 15 (fading)
+- RBLU: 52
+- AAPL: 25 (weak)
+- MSFT: 22 (weak)
+- AMZN: 32
+- JPM: 22 (weak)
+- F: 12 (weak)
+- V: 18 (weak)
+- CUE: 28 (well off high)
+- BHC: 10 (fading)
+- AVLN: 55
+
+Now let me check anti-stagnation: lowest selected score = GOOGL at 60. New candidates within 5 points: AVLN (55), RBLU (52)... 60-5=55. AVLN is at 55, exactly at boundary. But I already have 4 new candidates selected (MU, DELL, BAND, GOOGL). ✓
+
+Let me now write the JSON:
+
+```json
+{
+  "portfolio_thesis": "...",
+  ...
+}
+```
+
+Let me be precise about all the numbers and compile the full response.
+
+**Candidate rankings** (all 46 symbols):
+
+Rank 1: PWR - 72
+Rank 2: MU - 68
+Rank 3: DELL - 67
+Rank 4: BAND - 65
+Rank 5: GOOGL - 60
+Rank 6: AVLN - 55
+Rank 7: RBLU - 52
+Rank 8: FIX - 50
+Rank 9: BE - 48
+Rank 10: TSLA - 45
+Rank 11: MARA - 42
+Rank 12: AMZN - 38
+Rank 13: META - 38
+Rank 14: LLY - 36
+Rank 15: COIN - 35
+Rank 16: UNH - 32
+Rank 17: HCAI - 30
+Rank 18: NVDA - 30
+Rank 19: SOXS - 28
+Rank 20: CUE - 28
+Rank 21: AXTX - 22
+Rank 22: QCOM - 25
+Rank 23: VRT - 25
+Rank 24: SNDK - 25
+Rank 25: AAPL - 25
+Rank 26: GEV - 22
+Rank 27: MRVL - 22
+Rank 28: MSFT - 22
+Rank 29: JPM - 22
+Rank 30: ETN - 20
+Rank 31: TSM - 20
+Rank 32: SMCI - 20 (earnings tomorrow)
+Rank 33: NOK - 20
+Rank 34: ELPW - 20
+Rank 35: WDC - 22
+Rank 36: AMZN already ranked... 
+
+Let me just do a clean ordered list. I'll assign scores and ranks to all 46 symbols.
+
+Actually I need to cover ALL symbols in per_symbol and candidate_rankings. Let me count: GBTG, ELPW, HCAI, NVDA, INTC, SOXS, BITO, NOK, PLTR, AMD, ASML, AVGO, BE, DELL, ETN, FIX, GEV, MRVL, MU, PWR, QCOM, SMCI, SNDK, STX, TSM, VRT, WDC, XNDU, AAPL, AMZN, AVLN, AXTX, BAND, BHC, COIN, CUE, F, GOOGL, JPM, LLY, MARA, META, MSFT, RBLU, RBLX, SOFI, SOFX, TSLA, UNH, V = 50 symbols
+
+Let me compile the full JSON now.
+
+{
+  "portfolio_thesis": "With SPY in neutral macro regime and the session at preclose, we rotate out of exhausted AXTX (fading from +12% intraday high, thesis gone) and underperforming META (GOOGL outranks in same sector) to concentrate in the five highest-conviction names: PWR (ai_data_center_power peer leader with strong continuation), MU (memory sector leader with acceptable continuation and rising volume), DELL (strong continuation above VWAP), BAND (sector leader in Other with acceptable continuation), and GOOGL (Communication Services leader adding diversification). SPY is reduced to ~9% to fund new positions while maintaining a 3% cash buffer.",
+  "spy_target_pct": 0.0935,
+  "cash_target_pct": 0.03,
+  "spy_decision": {
+    "target_pct": 0.0935,
+    "action": "REDUCE",
+    "opportunity_score": 35,
+    "one_sentence_reason": "SPY is reduced from 60% to 9% to fund five high-conviction equity positions while maintaining a small buffer given neutral macro and preclose timing."
+  },
+  "spy_vs_cash_reasoning": "SPY is preferred over pure cash as a liquid parking vehicle for the residual allocation not deployed in the five selected names.",
+  "candidate_rankings": [
+    {"symbol": "PWR", "rank": 1, "opportunity_score": 72, "currently_held": true, "exhausted": false, "remaining_upside_score": 72, "one_sentence_reason": "Peer leader in ai_data_center_power with strong continuation (momentum 85), above VWAP, bullish EMA, pressing day high — best remaining upside among held names."},
+    {"symbol": "MU", "rank": 2, "opportunity_score": 68, "currently_held": false, "exhausted": false, "remaining_upside_score": 68, "one_sentence_reason": "Memory sector leader with acceptable continuation, bullish EMA, rising volume, and +3.5% intraday gain with room to extend into close."},
+    {"symbol": "DELL", "rank": 3, "opportunity_score": 67, "currently_held": false, "exhausted": false, "remaining_upside_score": 67, "one_sentence_reason": "Strong continuation (momentum 79), above VWAP, bullish EMA, rising trend — second-ranked in ai_data_center_power peer group with solid forward setup."},
+    {"symbol": "BAND", "rank": 4, "opportunity_score": 65, "currently_held": false, "exhausted": false, "remaining_upside_score": 65, "one_sentence_reason": "Sector leader in Other with acceptable continuation (momentum 71), above VWAP, bullish EMA, and high relative volume — adds theme diversification outside ai_data_center."},
+    {"symbol": "GOOGL", "rank": 5, "opportunity_score": 60, "currently_held": false, "exhausted": false, "remaining_upside_score": 60, "one_sentence_reason": "Communication Services sector leader with acceptable continuation, near VWAP, rising volume, and strong sentiment — adds sector diversification."},
+    {"symbol": "AVLN", "rank": 6, "opportunity_score": 55, "currently_held": false, "exhausted": false, "remaining_upside_score": 55, "one_sentence_reason": "Strong continuation (momentum 95) with rising volume and bullish EMA, but no tech score or 20-day volume baseline makes sizing risky at preclose — PASS this scan."},
+    {"symbol": "RBLU", "rank": 7, "opportunity_score": 52, "currently_held": false, "exhausted": false, "remaining_upside_score": 52, "one_sentence_reason": "Strong continuation with rising volume and above VWAP, but -35% five-day change and no fundamental anchor make it too speculative at preclose."},
+    {"symbol": "FIX", "rank": 8, "opportunity_score": 50, "currently_held": false, "exhausted": false, "remaining_upside_score": 50, "one_sentence_reason": "Acceptable continuation and pressing day high, but adding FIX would breach the ai_data_center theme cap (already at 3 with PWR/MU/DELL) — PASS."},
+    {"symbol": "BE", "rank": 9, "opportunity_score": 48, "currently_held": false, "exhausted": false, "remaining_upside_score": 48, "one_sentence_reason": "Acceptable continuation with rising volume, but ai_data_center theme already at cap — PASS to maintain diversification compliance."},
+    {"symbol": "TSLA", "rank": 10, "opportunity_score": 45, "currently_held": false, "exhausted": false, "remaining_upside_score": 45, "one_sentence_reason": "Acceptable continuation above VWAP with rising volume, but flat trend and weak five-day momentum limit remaining upside versus selected names."},
+    {"symbol": "MARA", "rank": 11, "opportunity_score": 42, "currently_held": false, "exhausted": false, "remaining_upside_score": 42, "one_sentence_reason": "Acceptable continuation above VWAP, but earnings in 3 days creates binary risk that disqualifies a new entry."},
+    {"symbol": "AMZN", "rank": 12, "opportunity_score": 38, "currently_held": false, "exhausted": false, "remaining_upside_score": 38, "one_sentence_reason": "Positive intraday mover but below EMA20 with flat trend and weak momentum score — does not pass new entry gate."},
+    {"symbol": "META", "rank": 13, "opportunity_score": 38, "currently_held": true, "exhausted": false, "remaining_upside_score": 38, "one_sentence_reason": "Acceptable continuation but GOOGL outranks in the same Communication Services sector and theme with a higher candidate_priority_score — EXIT to fund GOOGL."},
+    {"symbol": "LLY", "rank": 14, "opportunity_score": 36, "currently_held": false, "exhausted": false, "remaining_upside_score": 36, "one_sentence_reason": "Healthcare sector leader near VWAP with rising volume, but below EMA20 and momentum score 53 fails new entry gate."},
+    {"symbol": "COIN", "rank": 15, "opportunity_score": 35, "currently_held": false, "exhausted": false, "remaining_upside_score": 35, "one_sentence_reason": "Financials sector leader with positive intraday move, but earnings in 3 days and momentum score 53 below gate threshold — PASS."},
+    {"symbol": "UNH", "rank": 16, "opportunity_score": 32, "currently_held": false, "exhausted": false, "remaining_upside_score": 32, "one_sentence_reason": "Near day high with fading volume — exhaustion signals present and momentum score 45 fails new entry gate."},
+    {"symbol": "HCAI", "rank": 17, "opportunity_score": 30, "currently_held": false, "exhausted": false, "remaining_upside_score": 30, "one_sentence_reason": "Well off day high (-35.8%), below VWAP, and momentum score 38 fails new entry gate despite positive intraday change."},
+    {"symbol": "NVDA", "rank": 18, "opportunity_score": 30, "currently_held": false, "exhausted": false, "remaining_upside_score": 30, "one_sentence_reason": "Semiconductor peer leader but bearish EMA, flat trend, and momentum score 33 fail new entry gate — no continuation."},
+    {"symbol": "SOXS", "rank": 19, "opportunity_score": 28, "currently_held": false, "exhausted": false, "remaining_upside_score": 28, "one_sentence_reason": "Inverse semiconductor ETF with acceptable momentum but fading volume and macro regime neutral — not aligned with portfolio direction."},
+    {"symbol": "CUE", "rank": 20, "opportunity_score": 28, "currently_held": false, "exhausted": false, "remaining_upside_score": 28, "one_sentence_reason": "Well off day high (-16.6%), below VWAP, and momentum score 41 fails new entry gate."},
+    {"symbol": "QCOM", "rank": 21, "opportunity_score": 25, "currently_held": false, "exhausted": false, "remaining_upside_score": 25, "one_sentence_reason": "Below VWAP, well off day high (-7.3%), and momentum score 31 fails new entry gate — fading semiconductor name."},
+    {"symbol": "VRT", "rank": 22, "opportunity_score": 25, "currently_held": false, "exhausted": false, "remaining_upside_score": 25, "one_sentence_reason": "Fading classification with falling recent trend and bearish EMA — momentum score 23 fails new entry gate."},
+    {"symbol": "SNDK", "rank": 23, "opportunity_score": 25, "currently_held": false, "exhausted": false, "remaining_upside_score": 25, "one_sentence_reason": "Fading from intraday high with bearish EMA and falling trend — MU is the stronger memory peer with better continuation."},
+    {"symbol": "AAPL", "rank": 24, "opportunity_score": 25, "currently_held": false, "exhausted": false, "remaining_upside_score": 25, "one_sentence_reason": "Below VWAP, bearish EMA, flat trend — momentum score 23 fails new entry gate."},
+    {"symbol": "AXTX", "rank": 25, "opportunity_score": 22, "currently_held": true, "exhausted": true, "remaining_upside_score": 18, "one_sentence_reason": "Entry thesis (breaking_out) is gone — now fading with bearish EMA, falling recent trend, and momentum score 0 after +12% intraday move — EXIT."},
+    {"symbol": "GEV", "rank": 26, "opportunity_score": 22, "currently_held": false, "exhausted": false, "remaining_upside_score": 22, "one_sentence_reason": "Below VWAP, bearish EMA, flat trend, and momentum score 15 fails new entry gate — PWR is the stronger ai_data_center_power peer."},
+    {"symbol": "MRVL", "rank": 27, "opportunity_score": 22, "currently_held": false, "exhausted": false, "remaining_upside_score": 22, "one_sentence_reason": "Below VWAP, bearish EMA, near day low, and momentum score 15 fails new entry gate — NVDA is the stronger semiconductor peer."},
+    {"symbol": "MSFT", "rank": 28, "opportunity_score": 22, "currently_held": false, "exhausted": false, "remaining_upside_score": 22, "one_sentence_reason": "Below VWAP, bearish EMA, flat trend — momentum score 23 fails new entry gate."},
+    {"symbol": "JPM", "rank": 29, "opportunity_score": 22, "currently_held": false, "exhausted": false, "remaining_upside_score": 22, "one_sentence_reason": "Below EMA20, flat trend, near day low — momentum score 29 fails new entry gate."},
+    {"symbol": "WDC", "rank": 30, "opportunity_score": 22, "currently_held": false, "exhausted": false, "remaining_upside_score": 22, "one_sentence_reason": "Fading classification with falling trend, bearish EMA — MU is the stronger memory peer with far better continuation."},
+    {"symbol": "ETN", "rank": 31, "opportunity_score": 20, "currently_held": false, "exhausted": false, "remaining_upside_score": 20, "one_sentence_reason": "Earnings tomorrow, below VWAP, near day low, and momentum score 0 — PWR is the stronger Industrials peer."},
+    {"symbol": "TSM", "rank": 32, "opportunity_score": 20, "currently_held": false, "exhausted": false, "remaining_upside_score": 20, "one_sentence_reason": "Below VWAP, bearish EMA, fading volume, and momentum score 0 — NVDA is the stronger semiconductor peer."},
+    {"symbol": "SMCI", "rank": 33, "opportunity_score": 20, "currently_held": false, "exhausted": false, "remaining_upside_score": 20, "one_sentence_reason": "Earnings tomorrow creates binary risk, below EMA20, flat trend — PASS."},
+    {"symbol": "NOK", "rank": 34, "opportunity_score": 20, "currently_held": false, "exhausted": false, "remaining_upside_score": 20, "one_sentence_reason": "Below VWAP, bearish EMA, well off day high, and momentum score 23 fails new entry gate."},
+    {"symbol": "ELPW", "rank": 35, "opportunity_score": 20, "currently_held": false, "exhausted": false, "remaining_upside_score": 20, "one_sentence_reason": "Below VWAP, momentum score 24 fails new entry gate, and well off day high (-32%) with flat volume."},
+    {"symbol": "AMD", "rank": 36, "opportunity_score": 15, "currently_held": false, "exhausted": false, "remaining_upside_score": 15, "one_sentence_reason": "Fading classification with falling trend, bearish EMA, earnings tomorrow — NVDA is the stronger semiconductor peer."},
+    {"symbol": "AVGO", "rank": 37, "opportunity_score": 18, "currently_held": false, "exhausted": false, "remaining_upside_score": 18, "one_sentence_reason": "Below VWAP, bearish EMA, fading volume, momentum score 0 — NVDA is the stronger semiconductor peer."},
+    {"symbol": "INTC", "rank": 38, "opportunity_score": 15, "currently_held": false, "exhausted": false, "remaining_upside_score": 15, "one_sentence_reason": "Fading classification with falling trend, below VWAP, bearish EMA — NVDA is the stronger semiconductor peer with explicit justification required."},
+    {"symbol": "GBTG", "rank": 39, "opportunity_score": 18, "currently_held": false, "exhausted": true, "remaining_upside_score": 12, "one_sentence_reason": "Massive exhaustion penalty: +50% intraday, within 0.21% of day high, fading volume — virtually all upside already captured, do not chase."},
+    {"symbol": "PLTR", "rank": 40, "opportunity_score": 18, "currently_held": false, "exhausted": false, "remaining_upside_score": 18, "one_sentence_reason": "Earnings today, below VWAP, bearish EMA, fading volume, momentum score 0 — PASS."},
+    {"symbol": "SOFI", "rank": 41, "opportunity_score": 18, "currently_held": false, "exhausted": false, "remaining_upside_score": 18, "one_sentence_reason": "Below VWAP, flat trend, fading volume, and momentum score 21 fails new entry gate."},
+    {"symbol": "V", "rank": 42, "opportunity_score": 18, "currently_held": false, "exhausted": false, "remaining_upside_score": 18, "one_sentence_reason": "Below VWAP, bearish EMA, fading volume, near day low — momentum score 0 fails new entry gate."},
+    {"symbol": "ASML", "rank": 43, "opportunity_score": 12, "currently_held": false, "exhausted": false, "remaining_upside_score": 12, "one_sentence_reason": "Fading classification, below VWAP, bearish EMA, falling trend — worst-ranked semiconductor peer with no continuation."},
+    {"symbol": "SOFX", "rank": 44, "opportunity_score": 15, "currently_held": false, "exhausted": false, "remaining_upside_score": 15, "one_sentence_reason": "Below VWAP, well off day high, -5.6% intraday, and momentum score 31 fails new entry gate."},
+    {"symbol": "RBLX", "rank": 45, "opportunity_score": 15, "currently_held": false, "exhausted": false, "remaining_upside_score": 15, "one_sentence_reason": "Fading classification with falling trend, below VWAP, bearish EMA — no continuation signal."},
+    {"symbol": "STX", "rank": 46, "opportunity_score": 20, "currently_held": false, "exhausted": false, "remaining_upside_score": 20, "one_sentence_reason": "Below VWAP, fading volume, flat trend, momentum score 0 — MU is the stronger memory peer."},
+    {"symbol": "F", "rank": 47, "opportunity_score": 12, "currently_held": false, "exhausted": false, "remaining_upside_score": 12, "one_sentence_reason": "Below VWAP, bearish EMA, near day low, -3.7% intraday — no continuation and negative momentum."},
+    {"symbol": "BHC", "rank": 48, "opportunity_score": 10, "currently_held": false, "exhausted": false, "remaining_upside_score": 10, "one_sentence_reason": "Fading at day low, below VWAP, bearish EMA, falling trend — no entry signal."},
+    {"symbol": "XNDU", "rank": 49, "opportunity_score": 5, "currently_held": false, "exhausted": false, "remaining_upside_score": 5, "one_sentence_reason": "Loser down -61.7% intraday from day high, fading classification — avoid entirely."}
+  ],
+  ...
+}
+
+Wait, I have 50 symbols but only listed 49. Let me recount: GBTG, ELPW, HCAI, NVDA, INTC, SOXS, BITO, NOK, PLTR, AMD, ASML, AVGO, BE, DELL, ETN, FIX, GEV, MRVL, MU, PWR, QCOM, SMCI, SNDK, STX, TSM, VRT, WDC, XNDU, AAPL, AMZN, AVLN, AXTX, BAND, BHC, COIN, CUE, F, GOOGL, JPM, LLY, MARA, META, MSFT, RBLU, RBLX, SOFI, SOFX, TSLA, UNH, V = 50 symbols.
+
+I missed BITO in my rankings. Let me add it.
+
+BITO: rank 50, score 15 - below VWAP, bearish EMA, fading volume, momentum 0.
+
+Also I need to check I have all 50 in per_symbol.
+
+Now let me finalize the target_weights. The sum must be exactly in [0.99, 1.01]:
+
+target_weights:
+PWR: 0.1978
+MU: 0.1795
+DELL: 0.1780
+BAND: 0.1691
+GOOGL: 0.1534
+
+Sum equity = 0.8778
+spy: 0.0935
+cash: 0.03
+Total = 0.8778 + 0.0935 + 0.03 = 1.0013 ✓
+
+Now let me write the complete JSON. I need to be very careful about all fields.
+
+For SPY in per_symbol: it's held at 83.1384 shares, target 13 shares, delta = 13 - 83.1384 = -70.1384. Action = REDUCE.
+
+For AXTX EXIT: qty=0, delta_qty=-313, action=EXIT
+For META EXIT: qty=0, delta_qty=-15.4774 (round to -15.4774 or -15?). The executor handles fractional. delta_qty = -15.4774 → -15.4774
+
+Actually for EXIT, qty=0 and delta_qty = -current_qty = -15.4774.
+
+Let me now write the complete JSON response:
+
+{
+  "portfolio_thesis": "At preclose with neutral macro (VIX 27.7, SPY uptrend), we execute a decisive rotation: exit exhausted AXTX (fading from +12% intraday high, momentum score 0, thesis gone) and underperforming META (GOOGL outranks in same Communication Services sector) to concentrate in five high-conviction names — PWR (ai_data_center_power peer leader, strong continuation), MU (memory sector leader, rising volume), DELL (strong continuation above VWAP), BAND (Other sector leader, diversification), and GOOGL (Communication Services leader). SPY is reduced from 60% to 9% to fund these positions while maintaining 3% cash reserve.",
+  "spy_target_pct": 0.0935,
+  "cash_target_pct": 0.03,
+  "spy_decision": {
+    "target_pct": 0.0935,
+    "action": "REDUCE",
+    "opportunity_score": 35,
+    "one_sentence_reason": "SPY is reduced from 60% to 9% to fund five high-conviction equity positions while retaining a small liquid buffer given neutral macro and preclose timing."
+  },
+  "spy_vs_cash_reasoning": "SPY is preferred over pure cash as a liquid parking vehicle for the residual allocation not deployed in the five selected equity names.",
+  "candidate_rankings": [...all 50...],
+  "selected_positions": ["PWR", "MU", "DELL", "BAND", "GOOGL"],
+  "target_weights": {
+    "PWR": 0.1978,
+    "MU": 0.1795,
+    "DELL": 0.1780,
+    "BAND": 0.1691,
+    "GOOGL": 0.1534
+  },
+  "per_symbol": {
+    "PWR": {target_pct: 0.1978, qty: 26, delta_qty: 11.31, entry_price: 759.6776, stop_loss: null, take_profit: null, action: "INCREASE", confidence: 0.82, opportunity_score: 72, one_sentence_reason: "...", exhaustion_penalty: false, remaining_upside_score: 72},
+    "MU": {target_pct: 0.1795, qty: 31, delta_qty: 31, entry_price: 578.00, stop_loss: null, take_profit: null, action: "BUY", confidence: 0.75, opportunity_score: 68, one_sentence_reason: "...", exhaustion_penalty: false, remaining_upside_score: 68},
+    "DELL": {target_pct: 0.1780, qty: 84, delta_qty: 84, entry_price: 211.60, stop_loss: null, take_profit: null, action: "BUY", confidence: 0.74, opportunity_score: 67, one_sentence_reason: "...", exhaustion_penalty: false, remaining_upside_score: 67},
+    "BAND": {target_pct: 0.1691, qty: 371, delta_qty: 371, entry_price: 45.51, stop_loss: null, take_profit: null, action: "BUY", confidence: 0.72, opportunity_score: 65, one_sentence_reason: "...", exhaustion_penalty: false, remaining_upside_score: 65},
+    "GOOGL": {target_pct: 0.1534, qty: 40, delta_qty: 40, entry_price: 382.86, stop_loss: null, take_profit: null, action: "BUY", confidence: 0.68, opportunity_score: 60, one_sentence_reason: "...", exhaustion_penalty: false, remaining_upside_score: 60},
+    "AXTX": {target_pct: 0, qty: 0, delta_qty: -313, entry_price: 46.05, stop_loss: null, take_profit: null, action: "EXIT", confidence: 0.90, opportunity_score: 22, one_sentence_reason: "...", exhaustion_penalty: true, remaining_upside_score: 18},
+    "META": {target_pct: 0, qty: 0, delta_qty: -15.4774, entry_price: 609.70, stop_loss: null, take_profit: null, action: "EXIT", confidence: 0.78, opportunity_score: 38, one_sentence_reason: "...", exhaustion_penalty: false, remaining_upside_score: 38},
+    ... all others as PASS ...
+  }
+}
+
+Let me now check the delta_qty for PWR more carefully:
+current_qty = 14.6949
+target qty = 26
+delta = 26 - 14.6949 = 11.3051
+
+For the BUY order, the executor will buy 11.3051 shares. Since fractional shares are supported for entry orders, this should be fine. But the note says "prefer whole-share qty / positive delta_qty" for protected buys. Let me round delta to 11 and set qty = 14.6949 + 11 = 25.6949 ≈ 26. Actually let me just say qty=26, delta_qty=11.31 (the executor will handle the fractional).
+
+Actually re-reading: "For BUY / INCREASE protected buys, prefer whole-share qty / positive delta_qty; the broker rejects fractional protected bracket orders." But the execution_constraints say "fractional_shares_supported_for_entry_orders: true" and "buy_entry_order_class: simple" with no attached bracket. The stop is submitted separately. So fractional should be OK for the entry. But to be safe, let me use whole shares for delta.
+
+delta_qty for PWR = 11 (whole), qty = 14.6949 + 11 = 25.6949. I'll report qty as 26 (rounding) and delta_qty as 11.
+
+Actually the instructions say qty is "total target share count to hold AFTER this scan." So qty=26, delta_qty = 26 - 14.6949 = 11.3051. I'll round delta to 11 for the whole-share preference.
+
+Hmm, but if qty=26 and delta=11, then 14.6949 + 11 = 25.6949 ≠ 26. There's a small inconsistency. Let me just use qty=26, delta_qty=11.31 (the exact difference). The executor will handle it.
+
+OK let me just write the final JSON now. I'll be precise.
+
+One more check - the `time_context.phase = "preclose"` and `minutes_to_close = 0.0`. This means we're at market close. New entries at close will be executed as day orders. The `preclose_overnight_task_handles_overnight_buys = true` suggests the overnight task will handle any buys that don't fill today. So new entries are fine.
+
+Also checking: `intraday_new_entries_allowed = true` ✓
+
+Let me verify sector/theme caps one more time:
+Selected: PWR (Industrials, ai_data_center), MU (IT, ai_data_center), DELL (IT, ai_data_center), BAND (Other, other), GOOGL (Communication Services, communication_services)
+
+Sectors: Industrials(1), IT(2), Other(1), Communication Services(1) - max 3 per sector ✓
+Themes: ai_data_center(3: PWR+MU+DELL), other(1: BAND), communication_services(1: GOOGL) - max 3 per theme ✓
+ai_data_center weight: 0.1978+0.1795+0.1780 = 0.5553 > 50%! 
+
+This violates the 50% theme weight cap! I need to fix this.
+
+I need to reduce ai_data_center weight to ≤50%. Options:
+1. Drop one of PWR/MU/DELL and replace with something from a different theme
+2. Reduce weights of ai_data_center names
+
+The rule says "Total weight in any single theme bucket may not exceed 50%." So I need ai_data_center ≤ 0.50.
+
+Options:
+- Drop DELL (score 67) and replace with BAND (already in) or add another non-ai_data_center name
+- Or reduce all three ai_data_center weights proportionally
+
+If I drop DELL:
+ai_data_center = PWR(0.1978) + MU(0.1795) = 0.3773 < 50% ✓
+
+Then I have 4 positions: PWR, MU, BAND, GOOGL. Need at least 3, have 4. But I should try to get 5 for better diversification.
+
+What's the next best non-ai_data_center candidate?
+- AVLN: score 55, Other/other, strong continuation 95 - but no tech score, no 20-day volume baseline, very new
+- RBLU: score 52, Other/other, strong continuation 81 - but -35% 5-day, speculative
+- TSLA: score 45, Consumer Discretionary/consumer_discretionary, acceptable continuation 69
+- MARA: score 42, Other/other, earnings in 3 days - risky
+- AMZN: score 38, Consumer Discretionary/consumer_discretionary, weak momentum
+
+Actually, I could keep DELL but reduce the ai_data_center weights so total ≤ 50%.
+
+If ai_data_center = 0.50 max:
+PWR + MU + DELL ≤ 0.50
+With score-weighted sizing: PWR(72), MU(68), DELL(67) → relative weights 72:68:67 = 207 total
+PWR: 72/207 * 0.50 = 0.1739
+MU: 68/207 * 0.50 = 0.1643
+DELL: 67/207 * 0.50 = 0.1618
+
+Then BAND + GOOGL + SPY + cash = 0.50
+BAND(65) + GOOGL(60) → relative 65:60 = 125
+BAND: 65/125 * (0.50 - spy - cash)
+If spy=0.09, cash=0.03: remaining for BAND+GOOGL = 0.50 - 0.09 - 0.03 = 0.38
+BAND: 65/125 * 0.38 = 0.1976
+GOOGL: 60/125 * 0.38 = 0.1824
+
+Total: 0.1739+0.1643+0.1618+0.1976+0.1824+0.09+0.03 = 1.000 ✓
+
+But wait - BAND at 19.76% and GOOGL at 18.24% are now larger than the ai_data_center names. That seems odd given their lower scores. The score-weighted sizing rule says weight ∝ opportunity_score. But the theme cap is a hard constraint that overrides.
+
+Actually, the rule says to clip and redistribute. Let me think about this differently.
+
+The theme cap is a hard constraint. I need to ensure ai_data_center ≤ 50%. 
+
+Option A: Keep 5 positions (PWR, MU, DELL, BAND, GOOGL) but cap ai_data_center at 50%.
+Option B: Drop DELL, keep 4 positions (PWR, MU, BAND, GOOGL) + add a 5th non-ai_data_center.
+
+For Option B, the 5th non-ai_data_center candidate:
+- AVLN (55): strong momentum but no baseline data - risky at preclose
+- RBLU (52): strong momentum but very volatile
+- TSLA (45): acceptable continuation, Consumer Discretionary
+
+Actually TSLA has acceptable continuation (69), above VWAP, rising volume. It's a legitimate candidate. Let me consider TSLA as the 5th.
+
+Option B: PWR(72), MU(68), BAND(65), GOOGL(60), TSLA(45)
+Sectors: Industrials(1), IT(1), Other(1), Comm Services(1), Consumer Disc(1) - perfect diversification
+Themes: ai_data_center(2: PWR+MU), other(1: BAND), communication_services(1: GOOGL), consumer_discretionary(1: TSLA)
+ai_data_center weight: PWR+MU = 2/5 of investable ≈ 40% - well under cap ✓
+
+Score sum = 72+68+65+60+45 = 310
+investable = 1 - 0.09 - 0.03 = 0.88
+
+PWR: 72/310 * 0.88 = 0.2043
+MU: 68/310 * 0.88 = 0.1930
+BAND: 65/310 * 0.88 = 0.1845
+GOOGL: 60/310 * 0.88 = 0.1703
+TSLA: 45/310 * 0.88 = 0.1277
+
+Sum = 0.8798 ≈ 0.88 ✓
+ai_data_center: 0.2043+0.1930 = 0.3973 < 50% ✓
+
+But TSLA has score 45 vs DELL at 67. That's a significant drop. However, the theme cap is a hard constraint. The rule says "you MUST drop the lowest-scoring offender and replace it with the highest-scoring out-of-sector / out-of-theme candidate, even at a 5-10 point opportunity-score discount."
+
+DELL (67) vs TSLA (45) is a 22-point discount, which is more than 5-10 points. But the alternative is Option A where I keep DELL but cap the weights.
+
+Actually re-reading the rule: "Total weight in any single theme bucket may not exceed 50%." This is about weight, not count. So I CAN keep PWR+MU+DELL if their combined weight ≤ 50%.
+
+Let me go with Option A: Keep all 5 (PWR, MU, DELL, BAND, GOOGL) but ensure ai_data_center weight ≤ 50%.
+
+With score-weighted sizing and the 50% cap:
+Total scores = 72+68+67+65+60 = 332
+investable = 0.88
+
+Uncapped weights:
+PWR: 72/332 * 0.88 = 0.1908
+MU: 68/332 * 0.88 = 0.1802
+DELL: 67/332 * 0.88 = 0.1776
+BAND: 65/332 * 0.88 = 0.1723
+GOOGL: 60/332 * 0.88 = 0.1590
+
+ai_data_center (PWR+MU+DELL) = 0.1908+0.1802+0.1776 = 0.5486 > 0.50
+
+Need to reduce by 0.0486. Redistribute to BAND and GOOGL proportionally.
+BAND gets: 65/(65+60) * 0.0486 = 0.0253
+GOOGL gets: 60/(65+60) * 0.0486 = 0.0233
+
+Adjusted weights:
+PWR: 0.1908 * (0.50/0.5486) = 0.1908 * 0.9114 = 0.1739
+MU: 0.1802 * (0.50/0.5486) = 0.1802 * 0.9114 = 0.1642
+DELL: 0.1776 * (0.50/0.5486) = 0.1776 * 0.9114 = 0.1618
+BAND: 0.1723 + 0.0253 = 0.1976
+GOOGL: 0.1590 + 0.0233 = 0.1823
+
+Check: 0.1739+0.1642+0.1618+0.1976+0.1823 = 0.8798
+ai_data_center: 0.1739+0.1642+0.1618 = 0.4999 ≈ 0.50 ✓
+
+Total: 0.8798 + 0.09 + 0.03 = 0.9998 ≈ 1.00 ✓
+
+Now compute quantities:
+Equity = $99,846.63
+
+PWR: 0.1739 * 99846.63 = $17,362 / 759.6776 = 22.85 → 23 shares; delta = 23 - 14.6949 = 8.31 → delta_qty = 8.31
+MU: 0.1642 * 99846.63 = $16,393 / 578.00 = 28.36 → 28 shares; delta = 28
+DELL: 0.1618 * 99846.63 = $16,153 / 211.60 = 76.34 → 76 shares; delta = 76
+BAND: 0.1976 * 99846.63 = $19,731 / 45.51 = 433.55 → 433 shares; delta = 433
+GOOGL: 0.1823 * 99846.63 = $18,200 / 382.86 = 47.54 → 47 shares; delta = 47
+
+Verify deployed:
+PWR: 23 * 759.6776 = $17,473
+MU: 28 * 578 = $16,184
+DELL: 76 * 211.60 = $16,082
+BAND: 433 * 45.51 = $19,706
+GOOGL: 47 * 382.86 = $17,994
+Total equity = $87,439
+
+SPY: 0.09 * 99846.63 = $8,986 / 717.7622 = 12.52 → 12 shares = $8,613
+Cash: 0.03 * 99846.63 = $2,995
+
+Total: 87,439 + 8,613 + 2,995 = $99,047 ≈ 99.2% of equity
+
+Hmm, slightly under. Let me add 1 more share of GOOGL:
+GOOGL: 48 shares = $18,377; delta = 48
+
+Total equity: 17473 + 16184 + 16082 + 19706 + 18377 = $87,822
++ SPY 8613 + cash 2995 = $99,430 ≈ 99.6% ✓
+
+Or add 1 more SPY share: 13 * 717.7622 = $9,331
+Total: 87,822 + 9,331 + 2,995 = $100,148 ≈ 100.3% - slightly over
+
+Let me try: GOOGL 48 shares, SPY 12 shares:
+87,822 + 8,613 + 2,995 = $99,430 ≈ 99.6% ✓ (within [0.99, 1.01])
+
+Actually 99.6% is within [0.99, 1.01] ✓
+
+Let me recalculate actual target_pcts:
+PWR: 17473/99847 = 0.1750
+MU: 16184/99847 = 0.1621
+DELL: 16082/99847 = 0.1610
+BAND: 19706/99847 = 0.1974
+GOOGL: 18377/99847 = 0.1840
+SPY: 8613/99847 = 0.0863
+Cash: 2995/99847 = 0.0300
+
+Sum: 0.1750+0.1621+0.1610+0.1974+0.1840+0.0863+0.0300 = 0.9958 ≈ 1.00 ✓
+
+ai_data_center: 0.1750+0.1621+0.1610 = 0.4981 < 50% ✓
+
+Check max position: BAND at 19.74% < 50% ✓
+
+Check stop risk for new buys (1% stop):
+- MU: 28 * 578 * 0.01 = $161.84 < $499 ✓
+- DELL: 76 * 211.60 * 0.01 = $160.82 ✓
+- BAND: 433 * 45.51 * 0.01 = $197.06 ✓
+- GOOGL: 48 * 382.86 * 0.01 = $183.77 ✓
+- PWR increase: 8.31 new shares * 759.6776 * 0.01 = $63.13 ✓
+
+All good!
+
+Now for the delta_qty of PWR: 23 - 14.6949 = 8.3051. I'll report delta_qty = 8.31.
+
+Let me now write the complete final JSON. I need all 50 symbols in per_symbol and candidate_rankings.
+
+Let me also reconsider DELL's starter sizing. DELL is a new entry. At 70% starter: 0.1610 * 0.70 = 0.1127. But I've already applied the theme cap which reduced DELL's weight. The starter sizing was meant to be applied before the theme cap adjustment. Actually, the theme cap is a hard constraint that takes precedence. The starter sizing is a guideline. Given the theme cap already reduced ai_data_center weights, I'll keep the current weights as-is (they're already reduced from the uncapped levels).
+
+Actually wait - the starter sizing rule says "For a newly entered symbol, target roughly 70% of the desired full position this scan." The "desired full position" would be the uncapped weight. But since the theme cap forces a reduction anyway, the actual weight is already below the "desired" level. So I'll treat the current weights as the starter positions.
+
+OK, I think the analysis is solid. Let me write the JSON now.
+
+One more thing - for the SPY per_symbol entry: current qty = 83.1384, target qty = 12, delta = 12 - 83.1384 = -71.1384. Action = REDUCE.
+
+For AXTX EXIT: qty=0, delta_qty=-313, action=EXIT
+For META EXIT: qty=0, delta_qty=-15.4774, action=EXIT
+
+Now writing the complete JSON:
+
+{
+  "portfolio_thesis": "At preclose with neutral macro (VIX 27.7, SPY uptrend, 69% breadth), we execute a decisive rotation: exit exhausted AXTX (momentum 0, fading from +12% intraday, thesis gone) and underperforming META (GOOGL outranks in same Communication Services sector) while reducing SPY from 60% to 9% to fund five high-conviction names — PWR (ai_data_center_power peer leader, strong continuation), MU (memory sector leader, rising volume), DELL (strong continuation above VWAP), BAND (Other sector leader adding theme diversification), and GOOGL (Communication Services leader). The ai_data_center theme weight is capped at 49.8% across PWR/MU/DELL to comply with the 50% theme cap.",
+  
+  "spy_target_pct": 0.0863,
+  "cash_target_pct": 0.03,
+  
+  "spy_decision": {
+    "target_pct": 0.0863,
+    "action": "REDUCE",
+    "opportunity_score": 35,
+    "one_sentence_reason": "SPY is reduced from 60% to 9% to fund five high-conviction equity positions while retaining a small liquid buffer at preclose."
+  },
+  
+  "spy_vs_cash_reasoning": "SPY is preferred over pure cash as a liquid parking vehicle for the residual allocation not deployed in the five selected equity names.",
+  
+  "candidate_rankings": [
+    {"symbol": "PWR", "rank": 1, "opportunity_score": 72, "currently_held": true, "exhausted": false, "remaining_upside_score": 72, "one_sentence_reason": "Peer leader in ai_data_center_power with strong continuation (momentum 85), above VWAP, bullish EMA, pressing day high — best remaining upside in the pool."},
+    {"symbol": "MU", "rank": 2, "opportunity_score": 68, "currently_held": false, "exhausted": false, "remaining_upside_score": 68, "one_sentence_reason": "Memory sector leader with acceptable continuation, bullish EMA, rising volume, and +3.5% intraday with room to extend."},
+    {"symbol": "DELL", "rank": 3, "opportunity_score": 67, "currently_held": false, "exhausted": false, "remaining_upside_score": 67, "one_sentence_reason": "Strong continuation (momentum 79), above VWAP, bullish EMA, rising trend — second-ranked in ai_data_center_power peer group."},
+    {"symbol": "BAND", "rank": 4, "opportunity_score": 65, "currently_held": false, "exhausted": false, "remaining_upside_score": 65, "one_sentence_reason": "Sector leader in Other with acceptable continuation (momentum 71), above VWAP, bullish EMA, high relative volume — adds theme diversification."},
+    {"symbol": "GOOGL", "rank": 5, "opportunity_score": 60, "currently_held": false, "exhausted": false, "remaining_upside_score": 60, "one_sentence_reason": "Communication Services sector leader with acceptable continuation, near VWAP, rising volume, and strong sentiment score."},
+    {"symbol": "AVLN", "rank": 6, "opportunity_score": 55, "currently_held": false, "exhausted": false, "remaining_upside_score": 55, "one_sentence_reason": "Strong continuation (momentum 95) with rising volume, but no tech score or 20-day volume baseline makes sizing risky at preclose — PASS this scan."},
+    {"symbol": "RBLU", "rank": 7, "opportunity_score": 52, "currently_held": false, "exhausted": false, "remaining_upside_score": 52, "one_sentence_reason": "Strong continuation with rising volume and above VWAP, but -35% five-day change and no fundamental anchor make it too speculative at preclose."},
+    {"symbol": "FIX", "rank": 8, "opportunity_score": 50, "currently_held": false, "exhausted": false, "remaining_upside_score": 50, "one_sentence_reason": "Acceptable continuation pressing day high, but adding FIX would breach the ai_data_center theme cap already at 3 names — PASS."},
+    {"symbol": "BE", "rank": 9, "opportunity_score": 48, "currently_held": false, "exhausted": false, "remaining_upside_score": 48, "one_sentence_reason": "Acceptable continuation with rising volume, but ai_data_center theme already at cap with PWR/MU/DELL — PASS."},
+    {"symbol": "TSLA", "rank": 10, "opportunity_score": 45, "currently_held": false, "exhausted": false, "remaining_upside_score": 45, "one_sentence_reason": "Acceptable continuation above VWAP with rising volume, but flat trend and weak five-day momentum limit remaining upside versus selected names."},
+    {"symbol": "MARA", "rank": 11, "opportunity_score": 42, "currently_held": false, "exhausted": false, "remaining_upside_score": 42, "one_sentence_reason": "Acceptable continuation above VWAP, but earnings in 3 days creates binary risk that disqualifies a new entry."},
+    {"symbol": "AMZN", "rank": 12, "opportunity_score": 38, "currently_held": false, "exhausted": false, "remaining_upside_score": 38, "one_sentence_reason": "Positive intraday mover but below EMA20 with flat trend and momentum score 29 failing new entry gate."},
+    {"symbol": "META", "rank": 13, "opportunity_score": 38, "currently_held": true, "exhausted": false, "remaining_upside_score": 38, "one_sentence_reason": "Acceptable continuation but GOOGL outranks in the same Communication Services sector and theme with higher candidate_priority_score — EXIT to fund GOOGL."},
+    {"symbol": "LLY", "rank": 14, "opportunity_score": 36, "currently_held": false, "exhausted": false, "remaining_upside_score": 36, "one_sentence_reason": "Healthcare sector leader near VWAP with rising volume, but below EMA20 and momentum score 53 fails new entry gate."},
+    {"symbol": "COIN", "rank": 15, "opportunity_score": 35, "currently_held": false, "exhausted": false, "remaining_upside_score": 35, "one_sentence_reason": "Financials sector leader with positive intraday move, but earnings in 3 days and momentum score 53 below gate threshold — PASS."},
+    {"symbol": "UNH", "rank": 16, "opportunity_score": 32, "currently_held": false, "exhausted": true, "remaining_upside_score": 28, "one_sentence_reason": "Near day high with fading volume — exhaustion signals present and momentum score 45 fails new entry gate."},
+    {"symbol": "HCAI", "rank": 17, "opportunity_score": 30, "currently_held": false, "exhausted": false, "remaining_upside_score": 30, "one_sentence_reason": "Well off day high (-35.8%), below VWAP, and momentum score 38 fails new entry gate despite positive intraday change."},
+    {"symbol": "NVDA", "rank": 18, "opportunity_score": 30, "currently_held": false, "exhausted": false, "remaining_upside_score": 30, "one_sentence_reason": "Semiconductor peer leader but bearish EMA, flat trend, and momentum score 33 fail new entry gate — no continuation."},
+    {"symbol": "SOXS", "rank": 19, "opportunity_score": 28, "currently_held": false, "exhausted": false, "remaining_upside_score": 28, "one_sentence_reason": "Inverse semiconductor ETF with acceptable momentum but fading volume and macro regime neutral — not aligned with portfolio direction."},
+    {"symbol": "CUE", "rank": 20, "opportunity_score": 28, "currently_held": false, "exhausted": false, "remaining_upside_score": 28, "one_sentence_reason": "Well off day high (-16.6%), below VWAP, and momentum score 41 fails new entry gate."},
+    {"symbol": "QCOM", "rank": 21, "opportunity_score": 25, "currently_held": false, "exhausted": false, "remaining_upside_score": 25, "one_sentence_reason": "Below VWAP, well off day high (-7.3%), and momentum score 31 fails new entry gate — fading semiconductor name."},
+    {"symbol": "VRT", "rank": 22, "opportunity_score": 25, "currently_held": false, "exhausted": false, "remaining_upside_score": 25, "one_sentence_reason": "Fading classification with falling recent trend and bearish EMA — momentum score 23 fails new entry gate."},
+    {"symbol": "SNDK", "rank": 23, "opportunity_score": 25, "currently_held": false, "exhausted": false, "remaining_upside_score": 25, "one_sentence_reason": "Fading from intraday high with bearish EMA and falling trend — MU is the stronger memory peer with far better continuation."},
+    {"symbol": "AAPL", "rank": 24, "opportunity_score": 25, "currently_held": false, "exhausted": false, "remaining_upside_score": 25, "one_sentence_reason": "Below VWAP, bearish EMA, flat trend — momentum score 23 fails new entry gate."},
+    {"symbol": "AXTX", "rank": 25, "opportunity_score": 22, "currently_held": true, "exhausted": true, "remaining_upside_score": 18, "one_sentence_reason": "Entry thesis (breaking_out) is gone — now fading with bearish EMA, falling recent trend, and momentum score 0 after +12% intraday move — EXIT."},
+    {"symbol": "GEV", "rank": 26, "opportunity_score": 22, "currently_held": false, "exhausted": false, "remaining_upside_score": 22, "one_sentence_reason": "Below VWAP, bearish EMA, flat trend, and momentum score 15 fails new entry gate — PWR is the stronger ai_data_center_power peer."},
+    {"symbol": "MRVL", "rank": 27, "opportunity_score": 22, "currently_held": false, "exhausted": false, "remaining_upside_score": 22, "one_sentence_reason": "Below VWAP, bearish EMA, near day low, and momentum score 15 fails new entry gate — NVDA is the stronger semiconductor peer."},
+    {"symbol": "MSFT", "rank": 28, "opportunity_score": 22, "currently_held": false, "exhausted": false, "remaining_upside_score": 22, "one_sentence_reason": "Below VWAP, bearish EMA, flat trend — momentum score 23 fails new entry gate."},
+    {"symbol": "JPM", "rank": 29, "opportunity_score": 22, "currently_held": false, "exhausted": false, "remaining_upside_score": 22, "one_sentence_reason": "Below EMA20, flat trend, near day low — momentum score 29 fails new entry gate."},
+    {"symbol": "WDC", "rank": 30, "opportunity_score": 22, "currently_held": false, "exhausted": false, "remaining_upside_score": 22, "one_sentence_reason": "Fading classification with falling trend, bearish EMA — MU is the stronger memory peer with far better continuation."},
+    {"symbol": "STX", "rank": 31, "opportunity_score": 20, "currently_held": false, "exhausted": false, "remaining_upside_score": 20, "one_sentence_reason": "Below VWAP, fading volume, flat trend, momentum score 0 — MU is the stronger memory peer."},
+    {"symbol": "ETN", "rank": 32, "opportunity_score": 20, "currently_held": false, "exhausted": false, "remaining_upside_score": 20, "one_sentence_reason": "Earnings tomorrow, below VWAP, near day low, and momentum score 0 — PWR is the stronger Industrials peer."},
+    {"symbol": "TSM", "rank": 33, "opportunity_score": 20, "currently_held": false, "exhausted": false, "remaining_upside_score": 20, "one_sentence_reason": "Below VWAP, bearish EMA, fading volume, and momentum score 0 — NVDA is the stronger semiconductor peer."},
+    {"symbol": "SMCI", "rank": 34, "opportunity_score": 20, "currently_held": false, "exhausted": false, "remaining_upside_score": 20, "one_sentence_reason": "Earnings tomorrow creates binary risk, below EMA20, flat trend — PASS."},
+    {"symbol": "NOK", "rank": 35, "opportunity_score": 20, "currently_held": false, "exhausted": false, "remaining_upside_score": 20, "one_sentence_reason": "Below VWAP, bearish EMA, well off day high, and momentum score 23 fails new entry gate."},
+    {"symbol": "ELPW", "rank": 36, "opportunity_score": 20, "currently_held": false, "exhausted": false, "remaining_upside_score": 20, "one_sentence_reason": "Below VWAP, momentum score 24 fails new entry gate, and well off day high (-32%) with flat volume."},
+    {"symbol": "AMD", "rank": 37, "opportunity_score": 15, "currently_held": false, "exhausted": false, "remaining_upside_score": 15, "one_sentence_reason": "Fading classification with falling trend, bearish EMA, earnings tomorrow — NVDA is the stronger semiconductor peer."},
+    {"symbol": "AVGO", "rank": 38, "opportunity_score": 18, "currently_held": false, "exhausted": false, "remaining_upside_score": 18, "one_sentence_reason": "Below VWAP, bearish EMA, fading volume, momentum score 0 — NVDA is the stronger semiconductor peer."},
+    {"symbol": "INTC", "rank": 39, "opportunity_score": 15, "currently_held": false, "exhausted": false, "remaining_upside_score": 15, "one_sentence_reason": "Fading classification with falling trend, below VWAP, bearish EMA — NVDA is the stronger semiconductor peer with explicit justification required."},
+    {"symbol": "GBTG", "rank": 40, "opportunity_score": 18, "currently_held": false, "exhausted": true, "remaining_upside_score": 12, "one_sentence_reason": "Massive exhaustion penalty: +50% intraday, within 0.21% of day high, fading volume — virtually all upside already captured, do not chase."},
+    {"symbol": "PLTR", "rank": 41, "opportunity_score": 18, "currently_held": false, "exhausted": false, "remaining_upside_score": 18, "one_sentence_reason": "Earnings today, below VWAP, bearish EMA, fading volume, momentum score 0 — PASS."},
+    {"symbol": "SOFI", "rank": 42, "opportunity_score": 18, "currently_held": false, "exhausted": false, "remaining_upside_score": 18, "one_sentence_reason": "Below VWAP, flat trend, fading volume, and momentum score 21 fails new entry gate."},
+    {"symbol": "V", "rank": 43, "opportunity_score": 18, "currently_held": false, "exhausted": false, "remaining_upside_score": 18, "one_sentence_reason": "Below VWAP, bearish EMA, fading volume, near day low — momentum score 0 fails new entry gate."},
+    {"symbol": "ASML", "rank": 44, "opportunity_score": 12, "currently_held": false, "exhausted": false, "remaining_upside_score": 12, "one_sentence_reason": "Fading classification, below VWAP, bearish EMA, falling trend — worst-ranked semiconductor peer with no continuation."},
+    {"symbol": "SOFX", "rank": 45, "opportunity_score": 15, "currently_held": false, "exhausted": false, "remaining_upside_score": 15, "one_sentence_reason": "Below VWAP, well off day high, -5.6% intraday, and momentum score 31 fails new entry gate."},
+    {"symbol": "RBLX", "rank": 46, "opportunity_score": 15, "currently_held": false, "exhausted": false, "remaining_upside_score": 15, "one_sentence_reason": "Fading classification with falling trend, below VWAP, bearish EMA — no continuation signal."},
+    {"symbol": "BITO", "rank": 47, "opportunity_score": 15, "currently_held": false, "exhausted": false, "remaining_upside_score": 15, "one_sentence_reason": "Below VWAP, bearish EMA, fading volume, momentum score 0 — no continuation."},
+    {"symbol": "F", "rank": 48, "opportunity_score": 12, "currently_held": false, "exhausted": false, "remaining_upside_score": 12, "one_sentence_reason": "Below VWAP, bearish EMA, near day low, -3.7% intraday — no continuation and negative momentum."},
+    {"symbol": "BHC", "rank": 49, "opportunity_score": 10, "currently_held": false, "exhausted": false, "remaining_upside_score": 10, "one_sentence_reason": "Fading at day low, below VWAP, bearish EMA, falling trend — no entry signal."},
+    {"symbol": "XNDU", "rank": 50, "opportunity_score": 5, "currently_held": false, "exhausted": false, "remaining_upside_score": 5, "one_sentence_reason": "Loser down -61.7% intraday from day high, fading classification — avoid entirely."}
+  ],
+  
+  "selected_positions": ["PWR", "MU", "DELL", "BAND", "GOOGL"],
+  
+  "target_weights": {
+    "PWR": 0.1750,
+    "MU": 0.1621,
+    "DELL": 0.1610,
+    "BAND": 0.1974,
+    "GOOGL": 0.1840
+  },
+  
+  "per_symbol": {
+    "PWR": {
+      "target_pct": 0.1750,
+      "qty": 23,
+      "delta_qty": 8.31,
+      "entry_price": 759.6776,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "INCREASE",
+      "confidence": 0.82,
+      "opportunity_score": 72,
+      "one_sentence_reason": "Peer leader in ai_data_center_power with strong continuation (momentum 85), above VWAP, bullish EMA, pressing day high — increase to full target weight.",
+      "exhaustion_penalty": false,
+      "remaining_upside_score": 72
+    },
+    "MU": {
+      "target_pct": 0.1621,
+      "qty": 28,
+      "delta_qty": 28,
+      "entry_price": 578.00,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "BUY",
+      "confidence": 0.75,
+      "opportunity_score": 68,
+      "one_sentence_reason": "Memory sector leader with acceptable continuation, bullish EMA, rising volume, and +3.5% intraday — starter entry at theme-capped weight.",
+      "exhaustion_penalty": false,
+      "remaining_upside_score": 68
+    },
+    "DELL": {
+      "target_pct": 0.1610,
+      "qty": 76,
+      "delta_qty": 76,
+      "entry_price": 211.60,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "BUY",
+      "confidence": 0.74,
+      "opportunity_score": 67,
+      "one_sentence_reason": "Strong continuation (momentum 79), above VWAP, bullish EMA, rising trend — starter entry at theme-capped weight.",
+      "exhaustion_penalty": false,
+      "remaining_upside_score": 67
+    },
+    "BAND": {
+      "target_pct": 0.1974,
+      "qty": 433,
+      "delta_qty": 433,
+      "entry_price": 45.51,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "BUY",
+      "confidence": 0.72,
+      "opportunity_score": 65,
+      "one_sentence_reason": "Sector leader in Other with acceptable continuation, above VWAP, bullish EMA, high relative volume — adds theme diversification outside ai_data_center.",
+      "exhaustion_penalty": false,
+      "remaining_upside_score": 65
+    },
+    "GOOGL": {
+      "target_pct": 0.1840,
+      "qty": 48,
+      "delta_qty": 48,
+      "entry_price": 382.86,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "BUY",
+      "confidence": 0.68,
+      "opportunity_score": 60,
+      "one_sentence_reason": "Communication Services sector leader with acceptable continuation, near VWAP, rising volume, and strong sentiment — adds sector diversification.",
+      "exhaustion_penalty": false,
+      "remaining_upside_score": 60
+    },
+    "AXTX": {
+      "target_pct": 0.0,
+      "qty": 0,
+      "delta_qty": -313,
+      "entry_price": 46.05,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "EXIT",
+      "confidence": 0.90,
+      "opportunity_score": 22,
+      "one_sentence_reason": "Entry thesis (breaking_out) is gone — fading with bearish EMA, falling recent trend, momentum score 0 after +12% intraday move — EXIT immediately.",
+      "exhaustion_penalty": true,
+      "remaining_upside_score": 18
+    },
+    "META": {
+      "target_pct": 0.0,
+      "qty": 0,
+      "delta_qty": -15.4774,
+      "entry_price": 609.70,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "EXIT",
+      "confidence": 0.78,
+      "opportunity_score": 38,
+      "one_sentence_reason": "GOOGL outranks META in the same Communication Services sector and theme with higher candidate_priority_score (55.73 vs 46.91) — EXIT to fund GOOGL.",
+      "exhaustion_penalty": false,
+      "remaining_upside_score": 38
+    },
+    ... all other symbols as PASS ...
+  }
+}
+
+Wait, I need to double-check the GOOGL target_pct and qty:
+GOOGL: 48 * 382.86 = $18,377; 18377/99847 = 0.1840
+
+But my target_weights has GOOGL at 0.1840. Let me verify the sum:
+0.1750 + 0.1621 + 0.1610 + 0.1974 + 0.1840 = 0.8795
++ spy 0.0863 + cash 0.03 = 1.0 - wait:
+0.8795 + 0.0863 + 0.03 = 0.9958
+
+Hmm, that's 99.58%. The runtime can normalize tiny drift. But let me check if it's within [0.99, 1.01]: 0.9958 is within [0.99, 1.01] ✓
+
+Actually wait - the cash_target_pct is 0.03 but the actual cash balance is $4,986.91 which is already 4.99% of equity. The cash_target_pct represents the desired cash level. If I set it to 0.03, the system will need to deploy some of the existing cash. But the cash is already there - the SPY reduction will generate cash. Let me not overthink this - the rebalancer handles it.
+
+Actually, I realize I should double-check: the total deployed capital formula is:
+sum(qty[s] * entry_price[s]) + spy_target_pct*equity + cash_target_pct*equity
+
+PWR: 23 * 759.6776 = 17,472.59
+MU: 28 * 578.00 = 16,184.00
+DELL: 76 * 211.60 = 16,081.60
+BAND: 433 * 45.51 = 19,705.83
+GOOGL: 48 * 382.86 = 18,377.28
+Total equity = 87,821.30
+
+SPY: 0.0863 * 99,846.63 = 8,616.76
+Cash: 0.03 * 99,846.63 = 2,995.40
+
+Total = 87,821.30 + 8,616.76 + 2,995.40 = 99,433.46
+
+99,433.46 / 99,846.63 = 0.9959 ≈ 99.6% ✓ (within [0.99, 1.01])
+
+Good. Now let me write the final complete JSON. I'll be careful to include all 50 symbols in both candidate_rankings and per_symbol.
+
+Actually, I realize I should reconsider the GOOGL weight. The target_weights should sum with spy and cash to [0.99, 1.01]. Let me recalculate:
+
+target_weights sum = 0.1750 + 0.1621 + 0.1610 + 0.1974 + 0.1840 = 0.8795
+spy = 0.0863
+cash = 0.03
+Total = 0.9958
+
+This is within [0.99, 1.01] ✓. The runtime will normalize the tiny drift.
+
+But actually, I want to be more precise. Let me adjust GOOGL slightly:
+If I use GOOGL target_pct = 0.1842 (48 shares = $18,377 / $99,847 = 0.18405):
+Sum = 0.1750 + 0.1621 + 0.1610 + 0.1974 + 0.1842 = 0.8797
++ 0.0863 + 0.03 = 0.9960
+
+Still 99.6%. Fine.
+
+Let me just use the actual computed values from the share quantities:
+PWR: 17,472.59 / 99,846.63 = 0.17499 ≈ 0.1750
+MU: 16,184.00 / 99,846.63 = 0.16208 ≈ 0.1621
+DELL: 16,081.60 / 99,846.63 = 0.16106 ≈ 0.1611
+BAND:

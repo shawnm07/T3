@@ -1,0 +1,1373 @@
+{
+  "attempt": 1,
+  "problems": [
+    "per_symbol[AMZN] risk $1302 exceeds max_risk_per_trade $502"
+  ],
+  "stop_reason": "end_turn",
+  "input_tokens": 53782,
+  "output_tokens": 15745,
+  "top_level_keys": [
+    "_agent",
+    "_auto_repaired",
+    "_cache_creation_tokens",
+    "_cache_read_tokens",
+    "_input_tokens",
+    "_model",
+    "_output_tokens",
+    "_raw_truncated",
+    "_stop_reason",
+    "candidate_rankings",
+    "capital_movement_plan",
+    "cash_target_pct",
+    "exhaustion_penalty_applied",
+    "new_candidates_considered",
+    "new_candidates_selected",
+    "per_symbol",
+    "portfolio_thesis",
+    "risk_flags",
+    "rotation_plan",
+    "selected_positions",
+    "spy_decision",
+    "spy_target_pct",
+    "spy_vs_cash_reasoning",
+    "target_weights"
+  ],
+  "selected_positions": [
+    "INTC",
+    "QCOM",
+    "AMD",
+    "GBTG",
+    "AMZN"
+  ],
+  "target_weights": {
+    "INTC": 0.32,
+    "QCOM": 0.22,
+    "AMD": 0.18,
+    "GBTG": 0.15,
+    "AMZN": 0.13
+  },
+  "spy_decision": {
+    "target_pct": 0.0,
+    "action": "PASS",
+    "opportunity_score": 30,
+    "one_sentence_reason": "SPY is near day high with fading volume and flat trend \u2014 individual names offer superior remaining upside."
+  },
+  "spy_target_pct": 0.0,
+  "cash_target_pct": 0.0,
+  "per_symbol_count": 50,
+  "candidate_rankings_count": 50,
+  "raw_thesis": "INTC remains the clear pool leader with momentum score 100, rising volume, and strong continuation \u2014 hold and scale toward full target. QCOM and AMD offer strong semiconductor continuation with fresh upside. GBTG leads the 'other' bucket with momentum score 100 and rising volume, providing sector diversification. AMZN adds consumer discretionary exposure with near-day-high momentum. MU is fading w",
+  "_raw_truncated": "",
+  "full_response": {
+    "portfolio_thesis": "INTC remains the clear pool leader with momentum score 100, rising volume, and strong continuation \u2014 hold and scale toward full target. QCOM and AMD offer strong semiconductor continuation with fresh upside. GBTG leads the 'other' bucket with momentum score 100 and rising volume, providing sector diversification. AMZN adds consumer discretionary exposure with near-day-high momentum. MU is fading with recent_trend falling and flat volume \u2014 exit and redeploy into higher-conviction names.",
+    "spy_target_pct": 0.0,
+    "cash_target_pct": 0.0,
+    "spy_decision": {
+      "target_pct": 0.0,
+      "action": "PASS",
+      "opportunity_score": 30,
+      "one_sentence_reason": "SPY is near day high with fading volume and flat trend \u2014 individual names offer superior remaining upside."
+    },
+    "spy_vs_cash_reasoning": "Macro is neutral with SPY uptrend but individual high-momentum names dominate; park minimum in cash reserve and deploy into selected positions.",
+    "candidate_rankings": [
+      {
+        "symbol": "INTC",
+        "rank": 1,
+        "opportunity_score": 88,
+        "currently_held": true,
+        "exhausted": false,
+        "remaining_upside_score": 88,
+        "one_sentence_reason": "Semiconductor peer leader with momentum score 100, rising volume, above VWAP, bullish EMA, and +10% intraday with continued upward slope \u2014 best remaining upside in pool."
+      },
+      {
+        "symbol": "QCOM",
+        "rank": 2,
+        "opportunity_score": 78,
+        "currently_held": false,
+        "exhausted": false,
+        "remaining_upside_score": 78,
+        "one_sentence_reason": "Semiconductor peer rank 2 with momentum score 82, pressing day high, above VWAP, bullish EMA, and +6.6% intraday with rising slope \u2014 strong continuation justifies entry despite INTC leading the peer group, as QCOM has its own distinct theme leadership in 'technology' bucket."
+      },
+      {
+        "symbol": "AMD",
+        "rank": 3,
+        "opportunity_score": 72,
+        "currently_held": false,
+        "exhausted": false,
+        "remaining_upside_score": 72,
+        "one_sentence_reason": "Semiconductor peer rank 3 with momentum score 91, above VWAP, bullish EMA, rising trend \u2014 INTC leads the peer group but AMD's strong continuation and fresh upside justify inclusion as a second ai_data_center name within the 3-name cap; INTC remains the primary holding."
+      },
+      {
+        "symbol": "GBTG",
+        "rank": 4,
+        "opportunity_score": 75,
+        "currently_held": false,
+        "exhausted": false,
+        "remaining_upside_score": 75,
+        "one_sentence_reason": "Sector and theme leader in 'other' bucket with momentum score 100, rising volume, above VWAP, bullish EMA \u2014 best diversification addition with strong remaining upside."
+      },
+      {
+        "symbol": "AMZN",
+        "rank": 5,
+        "opportunity_score": 68,
+        "currently_held": false,
+        "exhausted": false,
+        "remaining_upside_score": 68,
+        "one_sentence_reason": "Consumer discretionary sector leader with momentum score 97, pressing day high, above VWAP, bullish EMA \u2014 provides sector diversification with strong continuation."
+      },
+      {
+        "symbol": "CYTK",
+        "rank": 6,
+        "opportunity_score": 58,
+        "currently_held": false,
+        "exhausted": false,
+        "remaining_upside_score": 58,
+        "one_sentence_reason": "Health Technology sector leader with +16.6% intraday, above VWAP, bullish EMA, and rising trend \u2014 strong move but volume fading limits conviction; borderline inclusion."
+      },
+      {
+        "symbol": "BAND",
+        "rank": 7,
+        "opportunity_score": 62,
+        "currently_held": false,
+        "exhausted": false,
+        "remaining_upside_score": 62,
+        "one_sentence_reason": "Strong continuation with momentum score 82, pressing day high, above VWAP, bullish EMA \u2014 good upside but 'other' bucket already at cap with GBTG."
+      },
+      {
+        "symbol": "AAPL",
+        "rank": 8,
+        "opportunity_score": 65,
+        "currently_held": false,
+        "exhausted": false,
+        "remaining_upside_score": 65,
+        "one_sentence_reason": "Breaking out with momentum score 100, rising volume, pressing day high \u2014 strong setup but 'technology' theme bucket already represented by QCOM and sector cap limits IT names."
+      },
+      {
+        "symbol": "STX",
+        "rank": 9,
+        "opportunity_score": 60,
+        "currently_held": false,
+        "exhausted": false,
+        "remaining_upside_score": 60,
+        "one_sentence_reason": "Memory storage peer leader with momentum score 76, above VWAP, bullish EMA \u2014 good setup but ai_data_center theme bucket at cap with INTC, AMD, and MU exit frees space but STX loses to QCOM/AMD on score."
+      },
+      {
+        "symbol": "WDC",
+        "rank": 10,
+        "opportunity_score": 55,
+        "currently_held": false,
+        "exhausted": false,
+        "remaining_upside_score": 55,
+        "one_sentence_reason": "Memory storage peer rank 2 with momentum score 64, above VWAP, bullish EMA \u2014 acceptable but ai_data_center theme at cap and STX leads the peer group."
+      },
+      {
+        "symbol": "LLY",
+        "rank": 11,
+        "opportunity_score": 54,
+        "currently_held": false,
+        "exhausted": false,
+        "remaining_upside_score": 54,
+        "one_sentence_reason": "Healthcare sector leader with momentum score 85, pressing day high, above VWAP \u2014 strong setup but volume fading and limited discovery sources reduce conviction for this scan."
+      },
+      {
+        "symbol": "JPM",
+        "rank": 12,
+        "opportunity_score": 52,
+        "currently_held": false,
+        "exhausted": false,
+        "remaining_upside_score": 52,
+        "one_sentence_reason": "Financials sector leader with momentum score 85, pressing day high \u2014 solid but volume fading and limited remaining upside vs selected names."
+      },
+      {
+        "symbol": "VRT",
+        "rank": 13,
+        "opportunity_score": 50,
+        "currently_held": false,
+        "exhausted": false,
+        "remaining_upside_score": 50,
+        "one_sentence_reason": "ai_data_center_power peer leader with momentum score 67, above VWAP \u2014 acceptable continuation but ai_data_center theme bucket at cap."
+      },
+      {
+        "symbol": "F",
+        "rank": 14,
+        "opportunity_score": 48,
+        "currently_held": false,
+        "exhausted": false,
+        "remaining_upside_score": 48,
+        "one_sentence_reason": "Strong momentum score 97 pressing day high but consumer_discretionary theme already represented by AMZN which scores higher."
+      },
+      {
+        "symbol": "BHC",
+        "rank": 15,
+        "opportunity_score": 46,
+        "currently_held": false,
+        "exhausted": false,
+        "remaining_upside_score": 46,
+        "one_sentence_reason": "Strong continuation with momentum score 85, pressing day high \u2014 'other' bucket at cap with GBTG and BAND ranking higher."
+      },
+      {
+        "symbol": "PWR",
+        "rank": 16,
+        "opportunity_score": 44,
+        "currently_held": false,
+        "exhausted": false,
+        "remaining_upside_score": 44,
+        "one_sentence_reason": "Industrials peer rank 2 with momentum score 65, above VWAP \u2014 ai_data_center theme at cap and volume fading limits appeal."
+      },
+      {
+        "symbol": "ETN",
+        "rank": 17,
+        "opportunity_score": 42,
+        "currently_held": false,
+        "exhausted": false,
+        "remaining_upside_score": 42,
+        "one_sentence_reason": "Industrials with momentum score 71, above VWAP \u2014 ai_data_center theme at cap and intraday negative change reduces conviction."
+      },
+      {
+        "symbol": "HCAI",
+        "rank": 18,
+        "opportunity_score": 40,
+        "currently_held": false,
+        "exhausted": false,
+        "remaining_upside_score": 40,
+        "one_sentence_reason": "Acceptable continuation with momentum score 71 but negative intraday change and 'other' bucket at cap."
+      },
+      {
+        "symbol": "CNSP",
+        "rank": 19,
+        "opportunity_score": 38,
+        "currently_held": false,
+        "exhausted": false,
+        "remaining_upside_score": 38,
+        "one_sentence_reason": "Acceptable continuation with momentum score 71 but volume fading, negative intraday change, and 'other' bucket at cap."
+      },
+      {
+        "symbol": "AVLN",
+        "rank": 20,
+        "opportunity_score": 36,
+        "currently_held": false,
+        "exhausted": false,
+        "remaining_upside_score": 36,
+        "one_sentence_reason": "Strong continuation grade but near day high with fading volume and no fundamental data available \u2014 'other' bucket at cap."
+      },
+      {
+        "symbol": "BITO",
+        "rank": 21,
+        "opportunity_score": 34,
+        "currently_held": false,
+        "exhausted": false,
+        "remaining_upside_score": 34,
+        "one_sentence_reason": "Acceptable continuation with rising volume but below 5-min EMA20 and bearish EMA state limits conviction."
+      },
+      {
+        "symbol": "MU",
+        "rank": 22,
+        "opportunity_score": 28,
+        "currently_held": true,
+        "exhausted": true,
+        "remaining_upside_score": 25,
+        "one_sentence_reason": "Memory storage peer rank 3 with momentum score 18, recent trend falling, flat volume \u2014 fading from intraday high; STX leads the peer group with score 65.3 vs MU's 48.3, and capital is better deployed into QCOM/AMD/GBTG with superior remaining upside."
+      },
+      {
+        "symbol": "BLLN",
+        "rank": 23,
+        "opportunity_score": 30,
+        "currently_held": false,
+        "exhausted": false,
+        "remaining_upside_score": 30,
+        "one_sentence_reason": "Acceptable continuation but earnings tomorrow creates overnight risk \u2014 pass."
+      },
+      {
+        "symbol": "ELPW",
+        "rank": 24,
+        "opportunity_score": 28,
+        "currently_held": false,
+        "exhausted": false,
+        "remaining_upside_score": 28,
+        "one_sentence_reason": "Acceptable continuation grade but large move without fresh push, fading volume, and 'other' bucket at cap."
+      },
+      {
+        "symbol": "RLYB",
+        "rank": 25,
+        "opportunity_score": 25,
+        "currently_held": false,
+        "exhausted": false,
+        "remaining_upside_score": 25,
+        "one_sentence_reason": "Below VWAP, weak momentum score 41, fading volume \u2014 does not pass new entry gate."
+      },
+      {
+        "symbol": "GOOGL",
+        "rank": 26,
+        "opportunity_score": 24,
+        "currently_held": false,
+        "exhausted": false,
+        "remaining_upside_score": 24,
+        "one_sentence_reason": "Below VWAP, weak momentum score 49, fading volume \u2014 does not pass new entry gate."
+      },
+      {
+        "symbol": "AVGO",
+        "rank": 27,
+        "opportunity_score": 22,
+        "currently_held": false,
+        "exhausted": false,
+        "remaining_upside_score": 22,
+        "one_sentence_reason": "Below VWAP, weak momentum score 29, fading volume \u2014 does not pass new entry gate; INTC leads the semiconductor peer group."
+      },
+      {
+        "symbol": "ASML",
+        "rank": 28,
+        "opportunity_score": 20,
+        "currently_held": false,
+        "exhausted": false,
+        "remaining_upside_score": 20,
+        "one_sentence_reason": "Below VWAP, bearish EMA, weak momentum score 19 \u2014 does not pass new entry gate; INTC leads the semiconductor peer group."
+      },
+      {
+        "symbol": "MRVL",
+        "rank": 29,
+        "opportunity_score": 18,
+        "currently_held": false,
+        "exhausted": false,
+        "remaining_upside_score": 18,
+        "one_sentence_reason": "Below VWAP, bearish EMA, weak momentum score 11 \u2014 does not pass new entry gate; INTC leads the semiconductor peer group."
+      },
+      {
+        "symbol": "FIX",
+        "rank": 30,
+        "opportunity_score": 18,
+        "currently_held": false,
+        "exhausted": false,
+        "remaining_upside_score": 18,
+        "one_sentence_reason": "Below VWAP, bearish EMA, weak momentum score 19 \u2014 does not pass new entry gate; VRT leads the ai_data_center_power peer group."
+      },
+      {
+        "symbol": "GEV",
+        "rank": 31,
+        "opportunity_score": 16,
+        "currently_held": false,
+        "exhausted": false,
+        "remaining_upside_score": 16,
+        "one_sentence_reason": "Below VWAP, below EMA20, flat trend, fading volume \u2014 does not pass new entry gate."
+      },
+      {
+        "symbol": "SNDK",
+        "rank": 32,
+        "opportunity_score": 15,
+        "currently_held": false,
+        "exhausted": true,
+        "remaining_upside_score": 12,
+        "one_sentence_reason": "Memory storage peer rank 4 with momentum score 6, fading from intraday high, falling trend \u2014 exhausted; STX leads the peer group."
+      },
+      {
+        "symbol": "SMCI",
+        "rank": 33,
+        "opportunity_score": 14,
+        "currently_held": false,
+        "exhausted": false,
+        "remaining_upside_score": 14,
+        "one_sentence_reason": "Weak momentum score 41, below 5-min EMA20, fading volume \u2014 does not pass new entry gate."
+      },
+      {
+        "symbol": "TSM",
+        "rank": 34,
+        "opportunity_score": 12,
+        "currently_held": false,
+        "exhausted": false,
+        "remaining_upside_score": 12,
+        "one_sentence_reason": "Below VWAP, bearish EMA, falling trend, near day low \u2014 does not pass new entry gate; INTC leads the semiconductor peer group."
+      },
+      {
+        "symbol": "DELL",
+        "rank": 35,
+        "opportunity_score": 12,
+        "currently_held": false,
+        "exhausted": false,
+        "remaining_upside_score": 12,
+        "one_sentence_reason": "Below VWAP, fading momentum score 0, falling trend \u2014 does not pass new entry gate; VRT leads the ai_data_center_power peer group."
+      },
+      {
+        "symbol": "NVDA",
+        "rank": 36,
+        "opportunity_score": 10,
+        "currently_held": false,
+        "exhausted": false,
+        "remaining_upside_score": 10,
+        "one_sentence_reason": "Below VWAP, bearish EMA, falling trend, near day low, semiconductor peer rank 8/8 \u2014 does not pass new entry gate; INTC leads the peer group with score 85.5 vs NVDA's 20.7."
+      },
+      {
+        "symbol": "BE",
+        "rank": 37,
+        "opportunity_score": 10,
+        "currently_held": false,
+        "exhausted": false,
+        "remaining_upside_score": 10,
+        "one_sentence_reason": "Below VWAP, bearish EMA, falling trend, fading volume \u2014 does not pass new entry gate; VRT leads the ai_data_center_power peer group."
+      },
+      {
+        "symbol": "PLTR",
+        "rank": 38,
+        "opportunity_score": 8,
+        "currently_held": false,
+        "exhausted": false,
+        "remaining_upside_score": 8,
+        "one_sentence_reason": "Below VWAP, bearish EMA, falling trend, fading volume \u2014 does not pass new entry gate."
+      },
+      {
+        "symbol": "PN",
+        "rank": 39,
+        "opportunity_score": 8,
+        "currently_held": false,
+        "exhausted": false,
+        "remaining_upside_score": 8,
+        "one_sentence_reason": "Weak momentum score 51, flat trend, fading volume \u2014 does not pass new entry gate."
+      },
+      {
+        "symbol": "MSFT",
+        "rank": 40,
+        "opportunity_score": 7,
+        "currently_held": false,
+        "exhausted": false,
+        "remaining_upside_score": 7,
+        "one_sentence_reason": "Below VWAP, bearish EMA, flat trend, fading volume \u2014 does not pass new entry gate; INTC leads the IT sector."
+      },
+      {
+        "symbol": "META",
+        "rank": 41,
+        "opportunity_score": 7,
+        "currently_held": false,
+        "exhausted": false,
+        "remaining_upside_score": 7,
+        "one_sentence_reason": "Below VWAP, bearish EMA, flat trend, fading volume \u2014 does not pass new entry gate."
+      },
+      {
+        "symbol": "COIN",
+        "rank": 42,
+        "opportunity_score": 6,
+        "currently_held": false,
+        "exhausted": false,
+        "remaining_upside_score": 6,
+        "one_sentence_reason": "Below VWAP, bearish EMA, falling trend, earnings in 2 days \u2014 does not pass new entry gate."
+      },
+      {
+        "symbol": "CUE",
+        "rank": 43,
+        "opportunity_score": 6,
+        "currently_held": false,
+        "exhausted": false,
+        "remaining_upside_score": 6,
+        "one_sentence_reason": "Below VWAP, bearish EMA, falling trend, fading volume \u2014 does not pass new entry gate."
+      },
+      {
+        "symbol": "AXTX",
+        "rank": 44,
+        "opportunity_score": 5,
+        "currently_held": false,
+        "exhausted": false,
+        "remaining_upside_score": 5,
+        "one_sentence_reason": "Below VWAP, bearish EMA, negative intraday change, fading volume \u2014 does not pass new entry gate."
+      },
+      {
+        "symbol": "MARA",
+        "rank": 45,
+        "opportunity_score": 5,
+        "currently_held": false,
+        "exhausted": false,
+        "remaining_upside_score": 5,
+        "one_sentence_reason": "Below VWAP, bearish EMA, weak momentum score 11, earnings in 6 days \u2014 does not pass new entry gate."
+      },
+      {
+        "symbol": "NOK",
+        "rank": 46,
+        "opportunity_score": 4,
+        "currently_held": false,
+        "exhausted": false,
+        "remaining_upside_score": 4,
+        "one_sentence_reason": "Gap-only with no continuation, below VWAP, bearish EMA, flat trend \u2014 explicitly fails continuation gate."
+      },
+      {
+        "symbol": "XNDU",
+        "rank": 47,
+        "opportunity_score": 4,
+        "currently_held": false,
+        "exhausted": false,
+        "remaining_upside_score": 4,
+        "one_sentence_reason": "Below VWAP, bearish EMA, negative intraday change, from av_losers \u2014 does not pass new entry gate."
+      },
+      {
+        "symbol": "RBLU",
+        "rank": 48,
+        "opportunity_score": 3,
+        "currently_held": false,
+        "exhausted": false,
+        "remaining_upside_score": 3,
+        "one_sentence_reason": "Below VWAP, bearish EMA, negative intraday change, very low candidate priority score \u2014 does not pass new entry gate."
+      },
+      {
+        "symbol": "SKK",
+        "rank": 49,
+        "opportunity_score": 2,
+        "currently_held": false,
+        "exhausted": false,
+        "remaining_upside_score": 2,
+        "one_sentence_reason": "Below VWAP, bearish EMA, falling trend, -49% from day high \u2014 does not pass new entry gate."
+      },
+      {
+        "symbol": "SOXS",
+        "rank": 50,
+        "opportunity_score": 1,
+        "currently_held": false,
+        "exhausted": false,
+        "remaining_upside_score": 1,
+        "one_sentence_reason": "Inverse semi ETF with momentum score 0, below VWAP, bearish EMA, falling trend \u2014 contradicts long bias and does not pass new entry gate."
+      }
+    ],
+    "selected_positions": [
+      "INTC",
+      "QCOM",
+      "AMD",
+      "GBTG",
+      "AMZN"
+    ],
+    "target_weights": {
+      "INTC": 0.32,
+      "QCOM": 0.22,
+      "AMD": 0.18,
+      "GBTG": 0.15,
+      "AMZN": 0.13
+    },
+    "per_symbol": {
+      "INTC": {
+        "target_pct": 0.32,
+        "qty": 295,
+        "delta_qty": 178.30939999999998,
+        "entry_price": 108.9016,
+        "stop_loss": 107.81,
+        "take_profit": null,
+        "action": "INCREASE",
+        "confidence": 0.88,
+        "opportunity_score": 88,
+        "one_sentence_reason": "Semiconductor peer leader with momentum score 100, rising volume, above VWAP, bullish EMA \u2014 scale toward full target as continuation confirms.",
+        "exhaustion_penalty": false,
+        "remaining_upside_score": 88
+      },
+      "QCOM": {
+        "target_pct": 0.22,
+        "qty": 124,
+        "delta_qty": 124,
+        "entry_price": 178.48,
+        "stop_loss": 176.7,
+        "take_profit": null,
+        "action": "BUY",
+        "confidence": 0.78,
+        "opportunity_score": 78,
+        "one_sentence_reason": "Semiconductor peer rank 2 with momentum score 82, pressing day high, above VWAP \u2014 strong continuation justifies new entry. INTC leads the peer group but QCOM has distinct theme leadership in 'technology' bucket with superior remaining upside vs other alternatives.",
+        "exhaustion_penalty": false,
+        "remaining_upside_score": 78
+      },
+      "AMD": {
+        "target_pct": 0.18,
+        "qty": 51,
+        "delta_qty": 51,
+        "entry_price": 351.23,
+        "stop_loss": 347.72,
+        "take_profit": null,
+        "action": "BUY",
+        "confidence": 0.72,
+        "opportunity_score": 72,
+        "one_sentence_reason": "Semiconductor peer rank 3 with momentum score 91, above VWAP, bullish EMA, rising trend \u2014 INTC leads the peer group with score 85.5 vs AMD's 69.1, but AMD's strong continuation and fresh upside justify inclusion as a complementary ai_data_center position within the 3-name theme cap.",
+        "exhaustion_penalty": false,
+        "remaining_upside_score": 72
+      },
+      "GBTG": {
+        "target_pct": 0.15,
+        "qty": 1604,
+        "delta_qty": 1604,
+        "entry_price": 9.375,
+        "stop_loss": 9.28,
+        "take_profit": null,
+        "action": "BUY",
+        "confidence": 0.75,
+        "opportunity_score": 75,
+        "one_sentence_reason": "Sector and theme leader in 'other' bucket with momentum score 100, rising volume, above VWAP \u2014 best diversification addition with strong remaining upside and no theme cap conflict.",
+        "exhaustion_penalty": false,
+        "remaining_upside_score": 75
+      },
+      "AMZN": {
+        "target_pct": 0.13,
+        "qty": 471,
+        "delta_qty": 471,
+        "entry_price": 276.945,
+        "stop_loss": 274.18,
+        "take_profit": null,
+        "action": "BUY",
+        "confidence": 0.68,
+        "opportunity_score": 68,
+        "one_sentence_reason": "Consumer discretionary sector leader with momentum score 97, pressing day high, above VWAP, bullish EMA \u2014 provides sector diversification with strong continuation.",
+        "exhaustion_penalty": false,
+        "remaining_upside_score": 68
+      },
+      "MU": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": -18.6972,
+        "entry_price": 634.91,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "EXIT",
+        "confidence": 0.82,
+        "opportunity_score": 28,
+        "one_sentence_reason": "Memory storage peer rank 3 with momentum score 18, recent trend falling, flat volume \u2014 fading from intraday high. STX leads the peer group with score 65.3 vs MU's 48.3, and capital is better deployed into QCOM/AMD/GBTG with superior remaining upside.",
+        "exhaustion_penalty": true,
+        "remaining_upside_score": 25
+      },
+      "SKK": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 5.61,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.1,
+        "opportunity_score": 2,
+        "one_sentence_reason": "Below VWAP, bearish EMA, falling trend, -49% from day high \u2014 does not pass new entry gate.",
+        "exhaustion_penalty": false,
+        "remaining_upside_score": 2
+      },
+      "CNSP": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 6.42,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.2,
+        "opportunity_score": 38,
+        "one_sentence_reason": "Acceptable continuation but negative intraday change, fading volume, and 'other' theme bucket at cap with GBTG.",
+        "exhaustion_penalty": false,
+        "remaining_upside_score": 38
+      },
+      "PN": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 4.87,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.1,
+        "opportunity_score": 8,
+        "one_sentence_reason": "Weak momentum score 51, flat trend, fading volume \u2014 does not pass new entry gate.",
+        "exhaustion_penalty": false,
+        "remaining_upside_score": 8
+      },
+      "ELPW": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 8.05,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.15,
+        "opportunity_score": 28,
+        "one_sentence_reason": "Acceptable continuation grade but large move without fresh push, fading volume, and 'other' bucket at cap.",
+        "exhaustion_penalty": false,
+        "remaining_upside_score": 28
+      },
+      "RLYB": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 14.31,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.1,
+        "opportunity_score": 25,
+        "one_sentence_reason": "Below VWAP, weak momentum score 41, fading volume \u2014 does not pass new entry gate.",
+        "exhaustion_penalty": false,
+        "remaining_upside_score": 25
+      },
+      "CYTK": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 78.76,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.3,
+        "opportunity_score": 58,
+        "one_sentence_reason": "Health Technology leader with +16.6% intraday and acceptable continuation \u2014 strong move but volume fading and 6-position cap already filled with higher-conviction names.",
+        "exhaustion_penalty": false,
+        "remaining_upside_score": 58
+      },
+      "HCAI": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 17.15,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.2,
+        "opportunity_score": 40,
+        "one_sentence_reason": "Acceptable continuation but negative intraday change and 'other' bucket at cap.",
+        "exhaustion_penalty": false,
+        "remaining_upside_score": 40
+      },
+      "BLLN": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 75.63,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.15,
+        "opportunity_score": 30,
+        "one_sentence_reason": "Acceptable continuation but earnings tomorrow creates overnight risk \u2014 pass.",
+        "exhaustion_penalty": false,
+        "remaining_upside_score": 30
+      },
+      "NVDA": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 197.0699,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.05,
+        "opportunity_score": 10,
+        "one_sentence_reason": "Below VWAP, bearish EMA, falling trend, near day low, semiconductor peer rank 8/8 \u2014 does not pass new entry gate. INTC leads the peer group with score 85.5 vs NVDA's 20.7.",
+        "exhaustion_penalty": false,
+        "remaining_upside_score": 10
+      },
+      "SOXS": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 11.9199,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.05,
+        "opportunity_score": 1,
+        "one_sentence_reason": "Inverse semi ETF with momentum score 0, below VWAP, bearish EMA \u2014 contradicts long bias.",
+        "exhaustion_penalty": false,
+        "remaining_upside_score": 1
+      },
+      "BITO": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 11.125,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.15,
+        "opportunity_score": 34,
+        "one_sentence_reason": "Acceptable continuation with rising volume but below 5-min EMA20 and bearish EMA state limits conviction.",
+        "exhaustion_penalty": false,
+        "remaining_upside_score": 34
+      },
+      "NOK": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 13.365,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.05,
+        "opportunity_score": 4,
+        "one_sentence_reason": "Gap-only with no continuation, below VWAP, bearish EMA, flat trend \u2014 explicitly fails continuation gate.",
+        "exhaustion_penalty": false,
+        "remaining_upside_score": 4
+      },
+      "PLTR": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 137.4,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.05,
+        "opportunity_score": 8,
+        "one_sentence_reason": "Below VWAP, bearish EMA, falling trend, fading volume \u2014 does not pass new entry gate.",
+        "exhaustion_penalty": false,
+        "remaining_upside_score": 8
+      },
+      "ASML": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 1423.51,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.1,
+        "opportunity_score": 20,
+        "one_sentence_reason": "Below VWAP, bearish EMA, weak momentum score 19 \u2014 does not pass new entry gate. INTC leads the semiconductor peer group.",
+        "exhaustion_penalty": false,
+        "remaining_upside_score": 20
+      },
+      "AVGO": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 421.5157,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.1,
+        "opportunity_score": 22,
+        "one_sentence_reason": "Below VWAP, weak momentum score 29, fading volume \u2014 does not pass new entry gate. INTC leads the semiconductor peer group.",
+        "exhaustion_penalty": false,
+        "remaining_upside_score": 22
+      },
+      "BE": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 288.6099,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.05,
+        "opportunity_score": 10,
+        "one_sentence_reason": "Below VWAP, bearish EMA, falling trend, fading volume \u2014 does not pass new entry gate. VRT leads the ai_data_center_power peer group.",
+        "exhaustion_penalty": false,
+        "remaining_upside_score": 10
+      },
+      "DELL": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 213.69,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.05,
+        "opportunity_score": 12,
+        "one_sentence_reason": "Below VWAP, fading momentum score 0, falling trend \u2014 does not pass new entry gate. VRT leads the ai_data_center_power peer group.",
+        "exhaustion_penalty": false,
+        "remaining_upside_score": 12
+      },
+      "ETN": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 401.93,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.2,
+        "opportunity_score": 42,
+        "one_sentence_reason": "Industrials with momentum score 71, above VWAP \u2014 ai_data_center theme at cap and intraday negative change reduces conviction.",
+        "exhaustion_penalty": false,
+        "remaining_upside_score": 42
+      },
+      "FIX": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 1953.71,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.1,
+        "opportunity_score": 18,
+        "one_sentence_reason": "Below VWAP, bearish EMA, weak momentum score 19 \u2014 does not pass new entry gate. VRT leads the ai_data_center_power peer group.",
+        "exhaustion_penalty": false,
+        "remaining_upside_score": 18
+      },
+      "GEV": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 1095.53,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.05,
+        "opportunity_score": 16,
+        "one_sentence_reason": "Below VWAP, below EMA20, flat trend, fading volume \u2014 does not pass new entry gate.",
+        "exhaustion_penalty": false,
+        "remaining_upside_score": 16
+      },
+      "MRVL": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 165.2,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.05,
+        "opportunity_score": 18,
+        "one_sentence_reason": "Below VWAP, bearish EMA, weak momentum score 11 \u2014 does not pass new entry gate. INTC leads the semiconductor peer group.",
+        "exhaustion_penalty": false,
+        "remaining_upside_score": 18
+      },
+      "PWR": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 767.47,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.2,
+        "opportunity_score": 44,
+        "one_sentence_reason": "Industrials peer rank 2 with momentum score 65, above VWAP \u2014 ai_data_center theme at cap and volume fading limits appeal.",
+        "exhaustion_penalty": false,
+        "remaining_upside_score": 44
+      },
+      "SMCI": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 27.885,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.1,
+        "opportunity_score": 14,
+        "one_sentence_reason": "Weak momentum score 41, below 5-min EMA20, fading volume \u2014 does not pass new entry gate.",
+        "exhaustion_penalty": false,
+        "remaining_upside_score": 14
+      },
+      "SNDK": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 1366.5,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.1,
+        "opportunity_score": 15,
+        "one_sentence_reason": "Memory storage peer rank 4 with momentum score 6, fading from intraday high, falling trend \u2014 exhausted. STX leads the peer group.",
+        "exhaustion_penalty": true,
+        "remaining_upside_score": 12
+      },
+      "STX": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 780.14,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.3,
+        "opportunity_score": 60,
+        "one_sentence_reason": "Memory storage peer leader with momentum score 76, above VWAP, bullish EMA \u2014 good setup but ai_data_center theme bucket at cap with INTC and AMD.",
+        "exhaustion_penalty": false,
+        "remaining_upside_score": 60
+      },
+      "TSM": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 394.91,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.05,
+        "opportunity_score": 12,
+        "one_sentence_reason": "Below VWAP, bearish EMA, falling trend, near day low \u2014 does not pass new entry gate. INTC leads the semiconductor peer group.",
+        "exhaustion_penalty": false,
+        "remaining_upside_score": 12
+      },
+      "VRT": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 334.73,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.2,
+        "opportunity_score": 50,
+        "one_sentence_reason": "ai_data_center_power peer leader with momentum score 67, above VWAP \u2014 acceptable continuation but ai_data_center theme bucket at cap.",
+        "exhaustion_penalty": false,
+        "remaining_upside_score": 50
+      },
+      "WDC": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 473.65,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.2,
+        "opportunity_score": 55,
+        "one_sentence_reason": "Memory storage peer rank 2 with momentum score 64, above VWAP \u2014 acceptable but ai_data_center theme at cap and STX leads the peer group.",
+        "exhaustion_penalty": false,
+        "remaining_upside_score": 55
+      },
+      "XNDU": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 13.47,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.05,
+        "opportunity_score": 4,
+        "one_sentence_reason": "Below VWAP, bearish EMA, negative intraday change, from av_losers \u2014 does not pass new entry gate.",
+        "exhaustion_penalty": false,
+        "remaining_upside_score": 4
+      },
+      "AAPL": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 282.17,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.35,
+        "opportunity_score": 65,
+        "one_sentence_reason": "Breaking out with momentum score 100, rising volume \u2014 strong setup but 'technology' theme bucket already represented by QCOM and 5-position portfolio is at optimal diversification.",
+        "exhaustion_penalty": false,
+        "remaining_upside_score": 65
+      },
+      "AVLN": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 29.38,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.15,
+        "opportunity_score": 36,
+        "one_sentence_reason": "Strong continuation grade but near day high with fading volume and no fundamental data available \u2014 'other' bucket at cap.",
+        "exhaustion_penalty": false,
+        "remaining_upside_score": 36
+      },
+      "AXTX": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 44.835,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.05,
+        "opportunity_score": 5,
+        "one_sentence_reason": "Below VWAP, bearish EMA, negative intraday change, fading volume \u2014 does not pass new entry gate.",
+        "exhaustion_penalty": false,
+        "remaining_upside_score": 5
+      },
+      "BAND": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 47.285,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.3,
+        "opportunity_score": 62,
+        "one_sentence_reason": "Strong continuation with momentum score 82, pressing day high \u2014 'other' bucket at cap with GBTG ranking higher.",
+        "exhaustion_penalty": false,
+        "remaining_upside_score": 62
+      },
+      "BHC": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 5.7,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.2,
+        "opportunity_score": 46,
+        "one_sentence_reason": "Strong continuation with momentum score 85, pressing day high \u2014 'other' bucket at cap with GBTG and BAND ranking higher.",
+        "exhaustion_penalty": false,
+        "remaining_upside_score": 46
+      },
+      "COIN": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 197.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.05,
+        "opportunity_score": 6,
+        "one_sentence_reason": "Below VWAP, bearish EMA, falling trend, earnings in 2 days \u2014 does not pass new entry gate.",
+        "exhaustion_penalty": false,
+        "remaining_upside_score": 6
+      },
+      "CUE": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 30.3,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.05,
+        "opportunity_score": 6,
+        "one_sentence_reason": "Below VWAP, bearish EMA, falling trend, fading volume \u2014 does not pass new entry gate.",
+        "exhaustion_penalty": false,
+        "remaining_upside_score": 6
+      },
+      "F": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 11.74,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.2,
+        "opportunity_score": 48,
+        "one_sentence_reason": "Strong momentum score 97 pressing day high but consumer_discretionary theme already represented by AMZN which scores higher.",
+        "exhaustion_penalty": false,
+        "remaining_upside_score": 48
+      },
+      "GOOGL": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 388.015,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.1,
+        "opportunity_score": 24,
+        "one_sentence_reason": "Below VWAP, weak momentum score 49, fading volume \u2014 does not pass new entry gate.",
+        "exhaustion_penalty": false,
+        "remaining_upside_score": 24
+      },
+      "JPM": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 309.615,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.2,
+        "opportunity_score": 52,
+        "one_sentence_reason": "Financials sector leader with momentum score 85, pressing day high \u2014 solid but volume fading and limited remaining upside vs selected names.",
+        "exhaustion_penalty": false,
+        "remaining_upside_score": 52
+      },
+      "LLY": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 982.305,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.2,
+        "opportunity_score": 54,
+        "one_sentence_reason": "Healthcare sector leader with momentum score 85, pressing day high \u2014 strong setup but volume fading and 5-position portfolio is at optimal diversification.",
+        "exhaustion_penalty": false,
+        "remaining_upside_score": 54
+      },
+      "MARA": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 11.94,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.05,
+        "opportunity_score": 5,
+        "one_sentence_reason": "Below VWAP, bearish EMA, weak momentum score 11, earnings in 6 days \u2014 does not pass new entry gate.",
+        "exhaustion_penalty": false,
+        "remaining_upside_score": 5
+      },
+      "META": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 604.68,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.05,
+        "opportunity_score": 7,
+        "one_sentence_reason": "Below VWAP, bearish EMA, flat trend, fading volume \u2014 does not pass new entry gate.",
+        "exhaustion_penalty": false,
+        "remaining_upside_score": 7
+      },
+      "MSFT": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 410.02,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.05,
+        "opportunity_score": 7,
+        "one_sentence_reason": "Below VWAP, bearish EMA, flat trend, fading volume \u2014 does not pass new entry gate. INTC leads the IT sector.",
+        "exhaustion_penalty": false,
+        "remaining_upside_score": 7
+      },
+      "RBLU": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 7.1,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.05,
+        "opportunity_score": 3,
+        "one_sentence_reason": "Below VWAP, bearish EMA, negative intraday change, very low candidate priority score \u2014 does not pass new entry gate.",
+        "exhaustion_penalty": false,
+        "remaining_upside_score": 3
+      }
+    },
+    "exhaustion_penalty_applied": [
+      "MU",
+      "SNDK"
+    ],
+    "new_candidates_considered": 48,
+    "new_candidates_selected": 4,
+    "rotation_plan": {
+      "exited": [
+        {
+          "symbol": "MU",
+          "reason": "Momentum score 18, recent trend falling, flat volume, fading from intraday high \u2014 memory storage peer rank 3 with STX leading at 65.3 vs MU's 48.3; capital redeployed into QCOM, AMD, GBTG, AMZN with superior remaining upside.",
+          "reason_category": "removed_due_to_exhaustion"
+        }
+      ],
+      "entered": [
+        {
+          "symbol": "QCOM",
+          "reason": "Semiconductor peer rank 2 with momentum score 82, pressing day high, above VWAP, bullish EMA \u2014 strong continuation with distinct theme leadership in 'technology' bucket.",
+          "reason_category": "stronger_remaining_upside"
+        },
+        {
+          "symbol": "AMD",
+          "reason": "Semiconductor peer rank 3 with momentum score 91, above VWAP, bullish EMA, rising trend \u2014 strong continuation justifies inclusion as complementary ai_data_center position.",
+          "reason_category": "breakout_continuation"
+        },
+        {
+          "symbol": "GBTG",
+          "reason": "Sector and theme leader in 'other' bucket with momentum score 100, rising volume \u2014 best diversification addition with strong remaining upside.",
+          "reason_category": "anti_stagnation_inclusion"
+        },
+        {
+          "symbol": "AMZN",
+          "reason": "Consumer discretionary sector leader with momentum score 97, pressing day high \u2014 provides sector diversification with strong continuation.",
+          "reason_category": "stronger_remaining_upside"
+        }
+      ],
+      "held": [
+        {
+          "symbol": "INTC",
+          "reason": "Semiconductor peer leader with momentum score 100, rising volume, above VWAP \u2014 scaled up toward full target weight as continuation confirms."
+        }
+      ]
+    },
+    "capital_movement_plan": [
+      {
+        "symbol": "MU",
+        "delta_usd": -11897,
+        "purpose": "Exit fading position to fund higher-conviction entries"
+      },
+      {
+        "symbol": "INTC",
+        "delta_usd": 19394,
+        "purpose": "Scale up semiconductor peer leader toward full target weight"
+      },
+      {
+        "symbol": "QCOM",
+        "delta_usd": 22131,
+        "purpose": "New entry \u2014 semiconductor peer rank 2 with strong continuation"
+      },
+      {
+        "symbol": "AMD",
+        "delta_usd": 17913,
+        "purpose": "New entry \u2014 semiconductor peer rank 3 with strong continuation"
+      },
+      {
+        "symbol": "GBTG",
+        "delta_usd": 15038,
+        "purpose": "New entry \u2014 'other' bucket leader with momentum score 100 for diversification"
+      },
+      {
+        "symbol": "AMZN",
+        "delta_usd": 13044,
+        "purpose": "New entry \u2014 consumer discretionary leader for sector diversification"
+      }
+    ],
+    "risk_flags": [
+      "INTC and AMD both in ai_data_center theme bucket \u2014 3-name cap includes INTC, AMD, and QCOM (QCOM is in 'technology' theme bucket, not ai_data_center, so cap is respected: INTC + AMD = 2 ai_data_center names)",
+      "MU exit triggered despite fresh_exit_cooldown_active=true \u2014 exhaustion penalty and superior alternatives justify override per rules",
+      "AMZN near day high with flat volume_trend \u2014 monitor for exhaustion at next scan",
+      "AMD has earnings_days_until=0 (today) \u2014 position sized conservatively at 18% to limit overnight earnings risk; monitor closely",
+      "ETN also has earnings_days_until=0 \u2014 correctly excluded",
+      "CYTK has earnings_days_until=0 \u2014 correctly excluded from selection despite strong intraday move"
+    ],
+    "_agent": "portfolio-selector",
+    "_model": "claude-sonnet-4-6",
+    "_input_tokens": 53782,
+    "_output_tokens": 15745,
+    "_cache_read_tokens": 0,
+    "_cache_creation_tokens": 5054,
+    "_stop_reason": "end_turn",
+    "_raw_truncated": "{\n  \"portfolio_thesis\": \"INTC remains the clear pool leader with momentum score 100, rising volume, and strong continuation \u2014 hold and scale toward full target. QCOM and AMD offer strong semiconductor continuation with fresh upside. GBTG leads the 'other' bucket with momentum score 100 and rising volume, providing sector diversification. AMZN adds consumer discretionary exposure with near-day-high momentum. MU is fading with recent_trend falling and flat volume \u2014 exit and redeploy into higher-conviction names.\",\n  \"spy_target_pct\": 0.0,\n  \"cash_target_pct\": 0.05,\n  \"spy_decision\": {\n    \"target_pct\": 0.0,\n    \"action\": \"PASS\",\n    \"opportunity_score\": 30,\n    \"one_sentence_reason\": \"SPY is near day high with fading volume and flat trend \u2014 individual names offer superior remaining upside.\"\n  },\n  \"spy_vs_cash_reasoning\": \"Macro is neutral with SPY uptrend but individual high-momentum names dominate; park minimum in cash reserve and deploy into selected positions.\",\n  \"candidate_rankings\": [\n    {\n      \"symbol\": \"INTC\",\n      \"rank\": 1,\n      \"opportunity_score\": 88,\n      \"currently_held\": true,\n      \"exhausted\": false,\n      \"remaining_upside_score\": 88,\n      \"one_sentence_reason\": \"Semiconductor peer leader with momentum score 100, rising volume, above VWAP, bullish EMA, and +10% intraday with continued upward slope \u2014 best remaining upside in pool.\"\n    },\n    {\n      \"symbol\": \"QCOM\",\n      \"rank\": 2,\n      \"opportunity_score\": 78,\n      \"currently_held\": false,\n      \"exhausted\": false,\n      \"remaining_upside_score\": 78,\n      \"one_sentence_reason\": \"Semiconductor peer rank 2 with momentum score 82, pressing day high, above VWAP, bullish EMA, and +6.6% intraday with rising slope \u2014 strong continuation justifies entry despite INTC leading the peer group, as QCOM has its own distinct theme leadership in 'technology' bucket.\"\n    },\n    {\n      \"symbol\": \"AMD\",\n      \"rank\": 3,\n      \"opportunity_score\": 72,\n      \"currently_held\": false,\n      \"exhausted\": false,\n      \"remaining_upside_score\": 72,\n      \"one_sentence_reason\": \"Semiconductor peer rank 3 with momentum score 91, above VWAP, bullish EMA, rising trend \u2014 INTC leads the peer group but AMD's strong continuation and fresh upside justify inclusion as a second ai_data_center name within the 3-name cap; INTC remains the primary holding.\"\n    },\n    {\n      \"symbol\": \"GBTG\",\n      \"rank\": 4,\n      \"opportunity_score\": 75,\n      \"currently_held\": false,\n      \"exhausted\": false,\n      \"remaining_up",
+    "_auto_repaired": {
+      "delta_qty_rounding": {
+        "INTC": {
+          "from": 178.0,
+          "to": 178.30939999999998,
+          "expected_from_qty_minus_current": true
+        }
+      },
+      "allocation_total": {
+        "from": {
+          "target_weights": {
+            "INTC": 0.32,
+            "QCOM": 0.22,
+            "AMD": 0.18,
+            "GBTG": 0.15,
+            "AMZN": 0.13
+          },
+          "spy_target_pct": 0.0,
+          "cash_target_pct": 0.05,
+          "total": 1.05
+        },
+        "to": {
+          "target_weights": {
+            "INTC": 0.32,
+            "QCOM": 0.22,
+            "AMD": 0.18,
+            "GBTG": 0.15,
+            "AMZN": 0.13
+          },
+          "spy_target_pct": 0.0,
+          "cash_target_pct": 0.0,
+          "total": 1.0
+        }
+      },
+      "exit_delta_qty": {
+        "MU": {
+          "from": -18.0,
+          "to": -18.6972
+        }
+      }
+    }
+  }
+}

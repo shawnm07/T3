@@ -1,0 +1,1101 @@
+agent=portfolio-selector
+stop_reason=max_tokens
+input_tokens=38746
+output_tokens=18000
+reason=stop_reason=max_tokens
+---
+I need to analyze this candidate pool carefully and select 3-6 positions.
+
+**Key observations:**
+
+1. **Currently held**: GBTG (score 71.3, strong_continuation, rising volume, breaking_out, near high, RSI 86.5 - slight exhaustion concern but volume rising)
+
+2. **Top candidates by score:**
+   - TSM: 68.96 - strong_continuation, passes gate, bullish EMA, rising trend, peer leader
+   - DELL: 67.86 - strong_continuation, passes gate, bullish EMA, rising trend, sector leader
+   - HUT: 67.18 - acceptable_continuation, passes gate, +31.57% intraday, RSI 82, earnings today (earnings_days_until=0 - BLACKOUT RISK)
+   - GBTG: 71.3 (held, +3 bonus = effectively 74.3)
+   - BAND: 60.43 - strong_continuation, passes gate, RSI 93.7 (very overbought)
+   - AVLN: 60.29 - strong_continuation, passes gate, rising volume, rising trend
+   - META: 59.86 - strong_continuation, passes gate, breaking_out, rising volume
+   - LLY: 58.21 - strong_continuation, passes gate, near high
+   - VRT: 57.68 - acceptable_continuation, passes gate
+   - AMZN: 57.56 - strong_continuation, passes gate
+
+3. **HUT**: earnings_days_until=0 means earnings TODAY - this is a blackout risk. Avoid.
+
+4. **BAND**: RSI 93.7 is extreme. Exhaustion penalty applies (near high -2.9%, volume flat). Score adjusted down.
+
+5. **AVLN**: Missing many fields (no tech_score, rsi, atr, sent_score, earnings data). twenty_day_volume_ratio=0.104 (very thin). Risky.
+
+6. **Diversification check:**
+   - DELL: Information Technology / ai_data_center
+   - TSM: Other / ai_data_center
+   - GBTG: unknown / other
+   - META: Communication Services / communication_services
+   - LLY: Health Care / healthcare
+   - AMZN: Consumer Discretionary / consumer_discretionary
+   - VRT: Industrials / ai_data_center
+
+   ai_data_center theme: DELL, TSM, VRT = 3 max allowed. Theme weight cap 50%.
+
+7. **Anti-stagnation**: GBTG is held. Fresh candidates TSM (68.96) and DELL (67.86) score above GBTG's base score. Need fresh names.
+
+**Selected positions**: GBTG, TSM, DELL, META, LLY, AMZN (6 positions)
+
+**Sector check:**
+- Information Technology: DELL (1) ✓
+- Other: TSM (1), GBTG (1) = 2 ✓
+- Communication Services: META (1) ✓
+- Health Care: LLY (1) ✓
+- Consumer Discretionary: AMZN (1) ✓
+
+**Theme check:**
+- ai_data_center: DELL, TSM = 2 ✓ (under 3)
+- other: GBTG = 1 ✓
+- communication_services: META = 1 ✓
+- healthcare: LLY = 1 ✓
+- consumer_discretionary: AMZN = 1 ✓
+
+**Exhaustion penalties**: BAND (RSI 93.7, flat volume, near high), GBTG (RSI 86.5, near high -0.42%, but volume rising - borderline, keep)
+
+**Opportunity scores (my assessment):**
+- GBTG: 74 (71.3 + 3 incumbent bonus, strong continuation, rising volume)
+- TSM: 78 (strong continuation, peer leader, passes gate)
+- DELL: 76 (strong continuation, sector leader, passes gate)
+- META: 68 (strong continuation, breaking out, rising volume)
+- LLY: 65 (strong continuation, near high, passes gate)
+- AMZN: 63 (strong continuation, passes gate)
+
+**Sizing:**
+- equity = 101,198.88
+- investable = 1 - 0 (spy) - 0.02 (cash) = 0.98... but I need to figure SPY target.
+- Currently SPY is 75.44%. I'm deploying into 6 positions, so SPY should be reduced significantly.
+- spy_target_pct: I'll set to 0.02 (minimal, just parking), cash_target_pct: 0.02
+
+Wait - let me reconsider. With 6 positions and max 50% each, I need to fit within equity. Let me compute weights:
+
+Sum of scores: 74+78+76+68+65+63 = 424
+- GBTG: 74/424 * 0.96 = 0.1675
+- TSM: 78/424 * 0.96 = 0.1766
+- DELL: 76/424 * 0.96 = 0.1721
+- META: 68/424 * 0.96 = 0.1540
+- LLY: 65/424 * 0.96 = 0.1472
+- AMZN: 63/424 * 0.96 = 0.1427
+
+Sum = ~0.96 ✓ (with spy=0.02, cash=0.02)
+
+Check max_position_pct (50%): all under 50% ✓
+
+**Qty calculations** (at 70% starter for new entries):
+- GBTG: currently held 1054.5 shares @ $9.43. Target = 0.1675 * 101198.88 = $16,950.76 / $9.43 = 1797.5 shares. Delta = +743 shares. But this is a large increase - let me apply 70% starter: target qty = 0.70 * 1797.5 = 1258 shares. Actually GBTG is already held, so it's not a new entry. I'll target full weight.
+  - Full target: 1797 shares. Current: 1054.5. Delta: +742.5 → +742 shares (whole shares)
+  - Cost check: 1797 * 9.43 = $16,945 < 50% of equity ($50,599) ✓
+  - Risk check: stop at 2.5% = $0.2358/share. Risk = 742 * 0.2358 = $175. Max risk = 101198.88 * 0.005 = $505.99 ✓
+
+- TSM: 0.1766 * 101198.88 = $17,871.73 / $413.00 = 43.27 → 43 shares (new entry, 70%: 30 shares)
+  - 30 * 413 = $12,390
+  - Risk: stop at 2.5% = $10.325/share. 30 * 10.325 = $309.75 < $505.99 ✓
+
+- DELL: 0.1721 * 101198.88 = $17,416.37 / $226.59 = 76.87 → 76 shares (new entry, 70%: 53 shares)
+  - 53 * 226.59 = $12,009.27
+  - Risk: stop at 2.5% = $5.6648/share. 53 * 5.6648 = $300.23 < $505.99 ✓
+
+- META: 0.1540 * 101198.88 = $15,584.63 / $618.715 = 25.19 → 25 shares (new entry, 70%: 17 shares)
+  - 17 * 618.715 = $10,518.16
+  - Risk: stop at 2.5% = $15.468/share. 17 * 15.468 = $262.96 < $505.99 ✓
+
+- LLY: 0.1472 * 101198.88 = $14,896.47 / $994.94 = 14.97 → 14 shares (new entry, 70%: 9 shares)
+  - 9 * 994.94 = $8,954.46
+  - Risk: stop at 2.5% = $24.874/share. 9 * 24.874 = $223.86 < $505.99 ✓
+
+- AMZN: 0.1427 * 101198.88 = $14,441.10 / $274.915 = 52.56 → 52 shares (new entry, 70%: 36 shares)
+  - 36 * 274.915 = $9,896.94
+  - Risk: stop at 2.5% = $6.873/share. 36 * 6.873 = $247.43 < $505.99 ✓
+
+**Total deployed:**
+- GBTG: 1797 * 9.43 = $16,945.71 (but I should use current qty + delta)
+  - Actually let me recalculate. GBTG target qty = 1797, entry_price = 9.43
+  - But wait - applying 70% starter rule to new entries only. GBTG is held, so full target.
+  - Let me reconsider GBTG target. Full weight = 1797 shares. But that's a big increase. Let me keep it at full since it's a held position with strong continuation.
+
+Actually, let me recalculate total to ensure sum constraint:
+
+SPY target: 0.02 * 101198.88 = $2,023.98 (keep some SPY)
+Cash target: 0.02 * 101198.88 = $2,023.98
+
+Investable = 0.96 * 101198.88 = $97,150.92
+
+Actual deployed:
+- GBTG: 1797 * 9.43 = $16,945.71 → weight = 16945.71/101198.88 = 0.1675
+- TSM: 30 * 413 = $12,390 → weight = 0.1224
+- DELL: 53 * 226.59 = $12,009.27 → weight = 0.1187
+- META: 17 * 618.715 = $10,518.16 → weight = 0.1040
+- LLY: 9 * 994.94 = $8,954.46 → weight = 0.0885
+- AMZN: 36 * 274.915 = $9,896.94 → weight = 0.0978
+
+Total equity deployed: $70,714.54 → weight = 0.6990
+SPY: 0.02 * 101198.88 = $2,023.98
+Cash: 0.02 * 101198.88 = $2,023.98
+Remaining: 101198.88 - 70714.54 - 2023.98 - 2023.98 = $26,436.38 unaccounted
+
+This doesn't work. The 70% starter sizing leaves too much undeployed. I need to either increase qty or increase SPY.
+
+Let me use SPY as the buffer. SPY_target_pct should absorb the rest.
+
+Total from positions: $70,714.54 / $101,198.88 = 0.6990
+Cash: 0.02
+SPY: 1 - 0.6990 - 0.02 = 0.281
+
+That means SPY target = 0.281 * 101198.88 = $28,436.88 / $731.24 = 38.88 → 38.88 shares
+Current SPY = 104.272 shares. Delta = 38.88 - 104.272 = -65.39 shares (REDUCE)
+
+Let me verify sum: 0.6990 + 0.02 + 0.281 = 1.000 ✓
+
+But wait - the target_weights must sum with spy and cash to [0.99, 1.01]. Let me set exact weights:
+
+target_weights (sum must + spy + cash = 1.00):
+- GBTG: 0.1675
+- TSM: 0.1224
+- DELL: 0.1187
+- META: 0.1040
+- LLY: 0.0885
+- AMZN: 0.0978
+Sum = 0.6989
+
+spy_target_pct = 0.2811
+cash_target_pct = 0.02
+
+Total = 0.6989 + 0.2811 + 0.02 = 1.0000 ✓
+
+Now let me verify per-symbol target_pct matches:
+- GBTG: 1797 * 9.43 / 101198.88 = 16,945.71 / 101198.88 = 0.1675 ✓
+- TSM: 30 * 413 / 101198.88 = 12390 / 101198.88 = 0.1224 ✓
+- DELL: 53 * 226.59 / 101198.88 = 12009.27 / 101198.88 = 0.1187 ✓
+- META: 17 * 618.715 / 101198.88 = 10518.16 / 101198.88 = 0.1040 ✓
+- LLY: 9 * 994.94 / 101198.88 = 8954.46 / 101198.88 = 0.0885 ✓
+- AMZN: 36 * 274.915 / 101198.88 = 9896.94 / 101198.88 = 0.0978 ✓
+
+All look good. Now let me check the exhaustion penalty for GBTG:
+- distance_from_high_pct = -0.0042 (very close to high)
+- volume_trend = "rising" (NOT fading - so exhaustion rule doesn't apply)
+- RSI = 86.5 (high but volume rising)
+- recent_trend = "rising"
+No exhaustion penalty for GBTG.
+
+BAND: RSI 93.7, distance_from_high -2.9%, volume flat → exhaustion penalty applied. Not selected.
+
+Now let me finalize the JSON:
+
+For GBTG delta_qty: 1797 - 1054.5 = 742.5 → 742 (round down for whole shares, but GBTG is fractional eligible since price < $10). Actually the instructions say "Whole shares for protected entries (the broker rejects fractional bracket orders); allow one decimal for sub-$10 names if natural." GBTG is $9.43 < $10, so allow one decimal. 742.5 is fine. But let me use 742 to be safe.
+
+Actually: target qty = 1797 (whole), current = 1054.5, delta = 742.5. I'll use 742 for delta and 1796.5 for qty (1054.5 + 742 = 1796.5). Let me just use 742 delta → qty = 1796.5.
+
+Hmm, let me simplify: qty = 1797, delta = 742 (rounding). 1054.5 + 742 = 1796.5 ≈ 1797. Close enough.
+
+Let me use qty=1797, delta_qty=742 (since 1054.5 + 742 = 1796.5, close to 1797).
+
+Actually for fractional: delta = 742.5, qty = 1797.0. Fine.
+
+Stop losses:
+- GBTG: ATR=0.413, 0.5*ATR/price = 0.5*0.413/9.43 = 0.0219 (2.19%) < 2.5% cap. Stop = 9.43 * (1-0.0219) = 9.224
+- TSM: ATR=13.974, 0.5*13.974/413 = 0.0169 (1.69%). Stop = 413*(1-0.0169) = 406.02
+- DELL: ATR=8.894, 0.5*8.894/226.59 = 0.0196 (1.96%). Stop = 226.59*(1-0.0196) = 222.15
+- META: ATR=19.924, 0.5*19.924/618.715 = 0.0161 (1.61%). Stop = 618.715*(1-0.0161) = 608.75
+- LLY: ATR=30.447, 0.5*30.447/994.94 = 0.0153 (1.53%). Stop = 994.94*(1-0.0153) = 979.71
+- AMZN: ATR=7.137, 0.5*7.137/274.915 = 0.0130 (1.30%). Stop = 274.915*(1-0.0130) = 271.34
+
+Now for all non-selected symbols, I need PASS or EXIT entries. GBTG is held and selected (INCREASE). No other held positions.
+
+Let me compile the full per_symbol for all pool members.
+
+For the rotation plan:
+- Exited: none (GBTG is the only held position and it's being kept)
+- Entered: TSM, DELL, META, LLY, AMZN
+- Held: GBTG (INCREASE actually)
+
+Wait - GBTG action should be INCREASE since delta_qty > 0.
+
+Let me now write the complete JSON. I need to include ALL pool symbols in per_symbol.
+
+Pool symbols: INTC, BLZE, EVER, HUT, STRL, SMCI, AMD, DGXX, NVDA, BITO, SOXS, ASML, AVGO, BE, DELL, ETN, FIX, GEV, MRVL, MU, PWR, QCOM, SNDK, STX, TSM, VRT, WDC, SKK, WGS, BRBR, AVNW, AAPL, AMZN, AVLN, AXTX, BAND, BHC, CNSP, COIN, CUE, CYTK, ELPW, F, GBTG, GOOGL, HCAI, JPM, LLY, MARA, META
+
+That's 50 symbols. All need per_symbol entries.
+
+Selected: GBTG, TSM, DELL, META, LLY, AMZN
+
+All others get PASS with target_pct=0, opportunity_score, action=PASS.
+
+Let me assign opportunity scores to all:
+
+Top tier (selected):
+- GBTG: 74
+- TSM: 78
+- DELL: 76
+- META: 68
+- LLY: 65
+- AMZN: 63
+
+Others (not selected, scored for reference):
+- HUT: 55 (earnings today = blackout)
+- BAND: 45 (exhaustion - RSI 93.7, flat volume)
+- AVLN: 52 (missing data, thin volume)
+- VRT: 55 (acceptable continuation, passes gate, but ai_data_center cap already at 2 with DELL+TSM... wait VRT is Industrials sector but ai_data_center theme. If I add VRT, ai_data_center theme = DELL+TSM+VRT = 3, which is the max. But I'm not selecting VRT.)
+- BRBR: 48 (strong continuation but negative tech score, from losers list)
+- WGS: 46 (strong continuation but negative tech score)
+- META: 68 (selected)
+- LLY: 65 (selected)
+- AMZN: 63 (selected)
+- BLZE: 42 (acceptable continuation, fading volume, RSI 88.2)
+- BITO: 40 (acceptable continuation, bearish EMA)
+- SOXS: 35 (inverse ETF, not appropriate for long bull thesis)
+- GEV: 45 (acceptable continuation, peer pressure must_justify)
+- NVDA: 38 (fading, near high, must_justify TSM)
+- AAPL: 32 (fading, must pass gate)
+- SKK: 35 (weak_or_flat, doesn't pass gate)
+- AVNW: 38 (acceptable continuation, near high, negative tech score)
+- BHC: 30 (acceptable continuation, very thin volume)
+- QCOM: 25 (weak_or_flat, must_justify TSM)
+- STX: 22 (weak_or_flat, negative mover)
+- AMD: 28 (fading, must_justify TSM)
+- ASML: 30 (weak_or_flat, must_justify TSM)
+- SMCI: 22 (fading, must_justify DELL)
+- INTC: 18 (fading, must_justify TSM, negative mover)
+- AVGO: 15 (fading, must_justify TSM)
+- BE: 18 (weak_or_flat, must_justify DELL)
+- ETN: 16 (weak_or_flat, must_justify DELL)
+- FIX: 14 (fading, must_justify DELL)
+- PWR: 15 (fading, must_justify DELL)
+- MU: 18 (weak_or_flat, negative mover)
+- SNDK: 16 (weak_or_flat, negative mover)
+- WDC: 12 (fading, negative mover)
+- MRVL: 12 (fading, must_justify TSM)
+- STRL: 22 (fading, doesn't pass gate)
+- DGXX: 20 (fading, earnings in 8 days)
+- EVER: 10 (fading, -12.87% intraday)
+- COIN: 12 (weak_or_flat, earnings in 1 day)
+- GOOGL: 10 (gap_only risk)
+- HCAI: 18 (fading)
+- JPM: 20 (weak_or_flat)
+- MARA: 18 (weak_or_flat, earnings in 5 days)
+- CUE: 22 (weak_or_flat, doesn't pass gate)
+- CNSP: 18 (fading)
+- CYTK: 12 (fading, near low)
+- ELPW: 5 (fading, -25% intraday)
+- F: 18 (weak_or_flat, doesn't pass gate)
+- AXTX: 8 (fading, -28.74% intraday)
+- BHC: 28
+
+Now let me write the JSON. This will be long but complete.
+
+For the capital_movement_plan:
+- GBTG: +742 * 9.43 = +$6,997.06 (BUY more)
+- TSM: +30 * 413 = +$12,390 (BUY)
+- DELL: +53 * 226.59 = +$12,009.27 (BUY)
+- META: +17 * 618.715 = +$10,518.16 (BUY)
+- LLY: +9 * 994.94 = +$8,954.46 (BUY)
+- AMZN: +36 * 274.915 = +$9,896.94 (BUY)
+- SPY: reduce from 104.272 to ~38.88 shares. Delta = -65.39 shares * 731.24 = -$47,826.47
+
+Total buys: 6997.06 + 12390 + 12009.27 + 10518.16 + 8954.46 + 9896.94 = $60,765.89
+SPY sale: $47,826.47
+Net: -60765.89 + 47826.47 = -$12,939.42 (net cash outflow, funded by SPY reduction + existing cash)
+
+Cash available: $14,926.30
+After buys funded by cash: 14926.30 - 12939.42 = $1,986.88 remaining cash ≈ 0.02 * 101198.88 = $2,023.98 ✓ (close enough)
+
+Wait, let me recalculate more carefully:
+- Cash in: SPY sale = 65.39 * 731.24 = $47,826.47 (approximate, SPY qty to sell)
+- Cash out: all buys = $60,765.89
+- Net cash change: 47826.47 - 60765.89 = -$12,939.42
+- Starting cash: $14,926.30
+- Ending cash: 14926.30 - 12939.42 = $1,986.88
+
+Target cash = 0.02 * 101198.88 = $2,023.98. Close enough (within rounding).
+
+SPY target qty: (0.2811 * 101198.88) / 731.24 = 28,447.08 / 731.24 = 38.90 shares
+SPY delta: 38.90 - 104.272 = -65.37 shares
+
+Let me now write the complete JSON response:
+
+```json
+{
+  "portfolio_thesis": "Deploy into 6 high-conviction names spanning Technology, Communication Services, Healthcare, and Consumer Discretionary while maintaining diversification. TSM and DELL lead their respective peer groups with strong continuation signals and pass the new-entry gate; GBTG (held) shows breaking-out classification with rising volume; META, LLY, and AMZN add sector diversification with strong momentum profiles. SPY is reduced from ~75% to ~28% to fund new positions, with minimal cash reserve.",
+  "spy_target_pct": 0.2811,
+  "cash_target_pct": 0.02,
+  "spy_decision": {
+    "target_pct": 0.2811,
+    "action": "REDUCE",
+    "opportunity_score": 52,
+    "one_sentence_reason": "SPY is near its day high with flat volume and a neutral macro regime; reducing from 75% to 28% to fund higher-conviction individual names while retaining a meaningful buffer."
+  },
+  "spy_vs_cash_reasoning": "SPY is liquid and earns market beta while idle; cash_target_pct is kept at 2% minimum reserve with SPY absorbing the remainder of undeployed capital.",
+  "selected_positions": ["GBTG", "TSM", "DELL", "META", "LLY", "AMZN"],
+  "target_weights": {
+    "GBTG": 0.1675,
+    "TSM": 0.1224,
+    "DELL": 0.1187,
+    "META": 0.1040,
+    "LLY": 0.0885,
+    "AMZN": 0.0978
+  },
+  "per_symbol": {
+    "GBTG": {
+      "target_pct": 0.1675,
+      "qty": 1797,
+      "delta_qty": 742,
+      "entry_price": 9.43,
+      "stop_loss": 9.22,
+      "take_profit": null,
+      "action": "INCREASE",
+      "confidence": 0.82,
+      "opportunity_score": 74,
+      "one_sentence_reason": "Breaking-out classification with rising volume, strong_continuation momentum, and rising recent trend confirm thesis continuation; increasing to full target weight."
+    },
+    "TSM": {
+      "target_pct": 0.1224,
+      "qty": 30,
+      "delta_qty": 30,
+      "entry_price": 413.0,
+      "stop_loss": 406.02,
+      "take_profit": null,
+      "action": "BUY",
+      "confidence": 0.80,
+      "opportunity_score": 78,
+      "one_sentence_reason": "Semiconductor peer leader with strong_continuation grade, passes new-entry gate, bullish EMA, rising trend, and positive sentiment score of 0.75 — best remaining upside in the ai_data_center theme."
+    },
+    "DELL": {
+      "target_pct": 0.1187,
+      "qty": 53,
+      "delta_qty": 53,
+      "entry_price": 226.59,
+      "stop_loss": 222.15,
+      "take_profit": null,
+      "action": "BUY",
+      "confidence": 0.78,
+      "opportunity_score": 76,
+      "one_sentence_reason": "Sector leader in Information Technology with strong_continuation momentum, bullish EMA, rising trend at +2.95% intraday, and passes new-entry gate with price above VWAP."
+    },
+    "META": {
+      "target_pct": 0.1040,
+      "qty": 17,
+      "delta_qty": 17,
+      "entry_price": 618.715,
+      "stop_loss": 608.75,
+      "take_profit": null,
+      "action": "BUY",
+      "confidence": 0.74,
+      "opportunity_score": 68,
+      "one_sentence_reason": "Breaking-out classification with strong_continuation momentum, rising volume, bullish EMA, and price above VWAP — Communication Services sector leader with clear intraday continuation."
+    },
+    "LLY": {
+      "target_pct": 0.0885,
+      "qty": 9,
+      "delta_qty": 9,
+      "entry_price": 994.94,
+      "stop_loss": 979.71,
+      "take_profit": null,
+      "action": "BUY",
+      "confidence": 0.72,
+      "opportunity_score": 65,
+      "one_sentence_reason": "Healthcare sector leader with strong_continuation momentum, passes new-entry gate, near all-time high with rising trend and bullish EMA — adds defensive diversification to the portfolio."
+    },
+    "AMZN": {
+      "target_pct": 0.0978,
+      "qty": 36,
+      "delta_qty": 36,
+      "entry_price": 274.915,
+      "stop_loss": 271.34,
+      "take_profit": null,
+      "action": "BUY",
+      "confidence": 0.71,
+      "opportunity_score": 63,
+      "one_sentence_reason": "Consumer Discretionary sector leader with strong_continuation momentum, passes new-entry gate, bullish EMA, and price above VWAP — diversifies away from tech concentration."
+    },
+    "INTC": {
+      "target_pct": 0.0,
+      "qty": 0,
+      "delta_qty": 0,
+      "entry_price": 108.955,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "PASS",
+      "confidence": 0.1,
+      "opportunity_score": 18,
+      "one_sentence_reason": null,
+      "reason_code": "peer_outranked"
+    },
+    "BLZE": {
+      "target_pct": 0.0,
+      "qty": 0,
+      "delta_qty": 0,
+      "entry_price": 7.49,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "PASS",
+      "confidence": 0.2,
+      "opportunity_score": 42,
+      "one_sentence_reason": null,
+      "reason_code": "score_below_floor"
+    },
+    "EVER": {
+      "target_pct": 0.0,
+      "qty": 0,
+      "delta_qty": 0,
+      "entry_price": 20.72,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "PASS",
+      "confidence": 0.05,
+      "opportunity_score": 10,
+      "one_sentence_reason": null,
+      "reason_code": "exhausted"
+    },
+    "HUT": {
+      "target_pct": 0.0,
+      "qty": 0,
+      "delta_qty": 0,
+      "entry_price": 105.7283,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "PASS",
+      "confidence": 0.15,
+      "opportunity_score": 30,
+      "one_sentence_reason": null,
+      "reason_code": "earnings_blackout"
+    },
+    "STRL": {
+      "target_pct": 0.0,
+      "qty": 0,
+      "delta_qty": 0,
+      "entry_price": 834.7261,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "PASS",
+      "confidence": 0.1,
+      "opportunity_score": 22,
+      "one_sentence_reason": null,
+      "reason_code": "score_below_floor"
+    },
+    "SMCI": {
+      "target_pct": 0.0,
+      "qty": 0,
+      "delta_qty": 0,
+      "entry_price": 32.33,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "PASS",
+      "confidence": 0.1,
+      "opportunity_score": 22,
+      "one_sentence_reason": null,
+      "reason_code": "peer_outranked"
+    },
+    "AMD": {
+      "target_pct": 0.0,
+      "qty": 0,
+      "delta_qty": 0,
+      "entry_price": 409.91,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "PASS",
+      "confidence": 0.12,
+      "opportunity_score": 28,
+      "one_sentence_reason": null,
+      "reason_code": "peer_outranked"
+    },
+    "DGXX": {
+      "target_pct": 0.0,
+      "qty": 0,
+      "delta_qty": 0,
+      "entry_price": 5.665,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "PASS",
+      "confidence": 0.1,
+      "opportunity_score": 20,
+      "one_sentence_reason": null,
+      "reason_code": "score_below_floor"
+    },
+    "NVDA": {
+      "target_pct": 0.0,
+      "qty": 0,
+      "delta_qty": 0,
+      "entry_price": 204.795,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "PASS",
+      "confidence": 0.2,
+      "opportunity_score": 38,
+      "one_sentence_reason": null,
+      "reason_code": "peer_outranked"
+    },
+    "BITO": {
+      "target_pct": 0.0,
+      "qty": 0,
+      "delta_qty": 0,
+      "entry_price": 11.181,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "PASS",
+      "confidence": 0.2,
+      "opportunity_score": 40,
+      "one_sentence_reason": null,
+      "reason_code": "score_below_floor"
+    },
+    "SOXS": {
+      "target_pct": 0.0,
+      "qty": 0,
+      "delta_qty": 0,
+      "entry_price": 10.7301,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "PASS",
+      "confidence": 0.05,
+      "opportunity_score": 15,
+      "one_sentence_reason": null,
+      "reason_code": "score_below_floor"
+    },
+    "ASML": {
+      "target_pct": 0.0,
+      "qty": 0,
+      "delta_qty": 0,
+      "entry_price": 1514.29,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "PASS",
+      "confidence": 0.15,
+      "opportunity_score": 30,
+      "one_sentence_reason": null,
+      "reason_code": "peer_outranked"
+    },
+    "AVGO": {
+      "target_pct": 0.0,
+      "qty": 0,
+      "delta_qty": 0,
+      "entry_price": 421.865,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "PASS",
+      "confidence": 0.08,
+      "opportunity_score": 15,
+      "one_sentence_reason": null,
+      "reason_code": "peer_outranked"
+    },
+    "BE": {
+      "target_pct": 0.0,
+      "qty": 0,
+      "delta_qty": 0,
+      "entry_price": 285.67,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "PASS",
+      "confidence": 0.1,
+      "opportunity_score": 18,
+      "one_sentence_reason": null,
+      "reason_code": "peer_outranked"
+    },
+    "DELL": {
+      "target_pct": 0.1187,
+      "qty": 53,
+      "delta_qty": 53,
+      "entry_price": 226.59,
+      "stop_loss": 222.15,
+      "take_profit": null,
+      "action": "BUY",
+      "confidence": 0.78,
+      "opportunity_score": 76,
+      "one_sentence_reason": "Sector leader in Information Technology with strong_continuation momentum, bullish EMA, rising trend at +2.95% intraday, and passes new-entry gate with price above VWAP."
+    },
+    "ETN": {
+      "target_pct": 0.0,
+      "qty": 0,
+      "delta_qty": 0,
+      "entry_price": 413.24,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "PASS",
+      "confidence": 0.08,
+      "opportunity_score": 16,
+      "one_sentence_reason": null,
+      "reason_code": "peer_outranked"
+    },
+    "FIX": {
+      "target_pct": 0.0,
+      "qty": 0,
+      "delta_qty": 0,
+      "entry_price": 1946.94,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "PASS",
+      "confidence": 0.07,
+      "opportunity_score": 14,
+      "one_sentence_reason": null,
+      "reason_code": "peer_outranked"
+    },
+    "GEV": {
+      "target_pct": 0.0,
+      "qty": 0,
+      "delta_qty": 0,
+      "entry_price": 1093.21,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "PASS",
+      "confidence": 0.2,
+      "opportunity_score": 45,
+      "one_sentence_reason": null,
+      "reason_code": "peer_outranked"
+    },
+    "MRVL": {
+      "target_pct": 0.0,
+      "qty": 0,
+      "delta_qty": 0,
+      "entry_price": 166.3,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "PASS",
+      "confidence": 0.07,
+      "opportunity_score": 12,
+      "one_sentence_reason": null,
+      "reason_code": "peer_outranked"
+    },
+    "MU": {
+      "target_pct": 0.0,
+      "qty": 0,
+      "delta_qty": 0,
+      "entry_price": 642.895,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "PASS",
+      "confidence": 0.1,
+      "opportunity_score": 18,
+      "one_sentence_reason": null,
+      "reason_code": "score_below_floor"
+    },
+    "PWR": {
+      "target_pct": 0.0,
+      "qty": 0,
+      "delta_qty": 0,
+      "entry_price": 765.47,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "PASS",
+      "confidence": 0.08,
+      "opportunity_score": 15,
+      "one_sentence_reason": null,
+      "reason_code": "peer_outranked"
+    },
+    "QCOM": {
+      "target_pct": 0.0,
+      "qty": 0,
+      "delta_qty": 0,
+      "entry_price": 189.53,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "PASS",
+      "confidence": 0.1,
+      "opportunity_score": 25,
+      "one_sentence_reason": null,
+      "reason_code": "peer_outranked"
+    },
+    "SNDK": {
+      "target_pct": 0.0,
+      "qty": 0,
+      "delta_qty": 0,
+      "entry_price": 1377.0105,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "PASS",
+      "confidence": 0.08,
+      "opportunity_score": 16,
+      "one_sentence_reason": null,
+      "reason_code": "score_below_floor"
+    },
+    "STX": {
+      "target_pct": 0.0,
+      "qty": 0,
+      "delta_qty": 0,
+      "entry_price": 766.305,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "PASS",
+      "confidence": 0.1,
+      "opportunity_score": 22,
+      "one_sentence_reason": null,
+      "reason_code": "score_below_floor"
+    },
+    "TSM": {
+      "target_pct": 0.1224,
+      "qty": 30,
+      "delta_qty": 30,
+      "entry_price": 413.0,
+      "stop_loss": 406.02,
+      "take_profit": null,
+      "action": "BUY",
+      "confidence": 0.80,
+      "opportunity_score": 78,
+      "one_sentence_reason": "Semiconductor peer leader with strong_continuation grade, passes new-entry gate, bullish EMA, rising trend, and positive sentiment score of 0.75 — best remaining upside in the ai_data_center theme."
+    },
+    "VRT": {
+      "target_pct": 0.0,
+      "qty": 0,
+      "delta_qty": 0,
+      "entry_price": 349.06,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "PASS",
+      "confidence": 0.25,
+      "opportunity_score": 55,
+      "one_sentence_reason": null,
+      "reason_code": "score_below_floor"
+    },
+    "WDC": {
+      "target_pct": 0.0,
+      "qty": 0,
+      "delta_qty": 0,
+      "entry_price": 458.615,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "PASS",
+      "confidence": 0.07,
+      "opportunity_score": 12,
+      "one_sentence_reason": null,
+      "reason_code": "score_below_floor"
+    },
+    "SKK": {
+      "target_pct": 0.0,
+      "qty": 0,
+      "delta_qty": 0,
+      "entry_price": 6.2,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "PASS",
+      "confidence": 0.15,
+      "opportunity_score": 35,
+      "one_sentence_reason": null,
+      "reason_code": "score_below_floor"
+    },
+    "WGS": {
+      "target_pct": 0.0,
+      "qty": 0,
+      "delta_qty": 0,
+      "entry_price": 35.7672,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "PASS",
+      "confidence": 0.2,
+      "opportunity_score": 46,
+      "one_sentence_reason": null,
+      "reason_code": "score_below_floor"
+    },
+    "BRBR": {
+      "target_pct": 0.0,
+      "qty": 0,
+      "delta_qty": 0,
+      "entry_price": 10.84,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "PASS",
+      "confidence": 0.2,
+      "opportunity_score": 48,
+      "one_sentence_reason": null,
+      "reason_code": "score_below_floor"
+    },
+    "AVNW": {
+      "target_pct": 0.0,
+      "qty": 0,
+      "delta_qty": 0,
+      "entry_price": 16.1,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "PASS",
+      "confidence": 0.18,
+      "opportunity_score": 38,
+      "one_sentence_reason": null,
+      "reason_code": "score_below_floor"
+    },
+    "AAPL": {
+      "target_pct": 0.0,
+      "qty": 0,
+      "delta_qty": 0,
+      "entry_price": 285.24,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "PASS",
+      "confidence": 0.15,
+      "opportunity_score": 32,
+      "one_sentence_reason": null,
+      "reason_code": "score_below_floor"
+    },
+    "AMZN": {
+      "target_pct": 0.0978,
+      "qty": 36,
+      "delta_qty": 36,
+      "entry_price": 274.915,
+      "stop_loss": 271.34,
+      "take_profit": null,
+      "action": "BUY",
+      "confidence": 0.71,
+      "opportunity_score": 63,
+      "one_sentence_reason": "Consumer Discretionary sector leader with strong_continuation momentum, passes new-entry gate, bullish EMA, and price above VWAP — diversifies away from tech concentration."
+    },
+    "AVLN": {
+      "target_pct": 0.0,
+      "qty": 0,
+      "delta_qty": 0,
+      "entry_price": 27.0,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "PASS",
+      "confidence": 0.2,
+      "opportunity_score": 52,
+      "one_sentence_reason": null,
+      "reason_code": "score_below_floor"
+    },
+    "AXTX": {
+      "target_pct": 0.0,
+      "qty": 0,
+      "delta_qty": 0,
+      "entry_price": 35.39,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "PASS",
+      "confidence": 0.03,
+      "opportunity_score": 8,
+      "one_sentence_reason": null,
+      "reason_code": "exhausted"
+    },
+    "BAND": {
+      "target_pct": 0.0,
+      "qty": 0,
+      "delta_qty": 0,
+      "entry_price": 47.57,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "PASS",
+      "confidence": 0.15,
+      "opportunity_score": 35,
+      "one_sentence_reason": null,
+      "reason_code": "exhausted"
+    },
+    "BHC": {
+      "target_pct": 0.0,
+      "qty": 0,
+      "delta_qty": 0,
+      "entry_price": 5.655,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "PASS",
+      "confidence": 0.15,
+      "opportunity_score": 28,
+      "one_sentence_reason": null,
+      "reason_code": "score_below_floor"
+    },
+    "CNSP": {
+      "target_pct": 0.0,
+      "qty": 0,
+      "delta_qty": 0,
+      "entry_price": 7.3,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "PASS",
+      "confidence": 0.1,
+      "opportunity_score": 18,
+      "one_sentence_reason": null,
+      "reason_code": "score_below_floor"
+    },
+    "COIN": {
+      "target_pct": 0.0,
+      "qty": 0,
+      "delta_qty": 0,
+      "entry_price": 195.945,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "PASS",
+      "confidence": 0.08,
+      "opportunity_score": 12,
+      "one_sentence_reason": null,
+      "reason_code": "earnings_blackout"
+    },
+    "CUE": {
+      "target_pct": 0.0,
+      "qty": 0,
+      "delta_qty": 0,
+      "entry_price": 37.485,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "PASS",
+      "confidence": 0.12,
+      "opportunity_score": 22,
+      "one_sentence_reason": null,
+      "reason_code": "score_below_floor"
+    },
+    "CYTK": {
+      "target_pct": 0.0,
+      "qty": 0,
+      "delta_qty": 0,
+      "entry_price": 73.2,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "PASS",
+      "confidence": 0.05,
+      "opportunity_score": 12,
+      "one_sentence_reason": null,
+      "reason_code": "exhausted"
+    },
+    "ELPW": {
+      "target_pct": 0.0,
+      "qty": 0,
+      "delta_qty": 0,
+      "entry_price": 5.1,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "PASS",
+      "confidence": 0.02,
+      "opportunity_score": 5,
+      "one_sentence_reason": null,
+      "reason_code": "exhausted"
+    },
+    "F": {
+      "target_pct": 0.0,
+      "qty": 0,
+      "delta_qty": 0,
+      "entry_price": 12.065,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "PASS",
+      "confidence": 0.1,
+      "opportunity_score": 18,
+      "one_sentence_reason": null,
+      "reason_code": "score_below_floor"
+    },
+    "GOOGL": {
+      "target_pct": 0.0,
+      "qty": 0,
+      "delta_qty": 0,
+      "entry_price": 395.65,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "PASS",
+      "confidence": 0.05,
+      "opportunity_score": 10,
+      "one_sentence_reason": null,
+      "reason_code": "score_below_floor"
+    },
+    "HCAI": {
+      "target_pct": 0.0,
+      "qty": 0,
+      "delta_qty": 0,
+      "entry_price": 15.89,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "PASS",
+      "confidence": 0.08,
+      "opportunity_score": 18,
+      "one_sentence_reason": null,
+      "reason_code": "score_below_floor"
+    },
+    "JPM": {
+      "target_pct": 0.0,
+      "qty": 0,
+      "delta_qty": 0,
+      "entry_price": 313.92,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "PASS",
+      "confidence": 0.12,
+      "opportunity_score": 20,
+      "one_sentence_reason": null,
+      "reason_code": "score_below_floor"
+    },
+    "LLY": {
+      "target_pct": 0.0885,
+      "qty": 9,
+      "delta_qty": 9,
+      "entry_price": 994.94,
+      "stop_loss": 979.71,
+      "take_profit": null,
+      "action": "BUY",
+      "confidence": 0.72,
+      "opportunity_score": 65,
+      "one_sentence_reason": "Healthcare sector leader with strong_continuation momentum, passes new-entry gate, near all-time high with rising trend and bullish EMA — adds defensive diversification to the portfolio."
+    },
+    "MARA": {
+      "target_pct": 0.0,
+      "qty": 0,
+      "delta_qty": 0,
+      "entry_price": 12.39,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "PASS",
+      "confidence": 0.1,
+      "opportunity_score": 18,
+      "one_sentence_reason": null,
+      "reason_code": "earnings_blackout"
+    },
+    "META": {
+      "target_pct": 0.1040,
+      "qty": 17,
+      "delta_qty": 17,
+      "entry_price": 618.715,
+      "stop_loss": 608.75,
+      "take_profit": null,
+      "action": "BUY",
+      "confidence": 0.74,
+      "opportunity_score": 68,
+      "one_sentence_reason": "Breaking-out classification with strong_continuation momentum, rising volume, bullish EMA, and price above VWAP — Communication Services sector leader with clear intraday continuation."
+    }
+  },
+  "exhaustion_penalty_applied": ["BAND", "EVER", "ELPW", "AXTX"],
+  "rotation_plan": {
+    "exited": [],
+    "entered": [
+      {"symbol": "TSM", "reason": "Semiconductor peer leader with strong_continuation, passes new-entry gate, bullish EMA, rising trend, best ai_data_center upside", "reason_category": "stronger_remaining_upside"},
+      {"symbol": "DELL", "reason": "IT sector leader with strong_continuation, passes gate, price above VWAP, rising trend at +2.95% intraday", "reason_category": "breakout_continuation"},
+      {"symbol": "META", "reason": "Communication Services leader breaking out with rising volume, strong_continuation, bullish EMA", "reason_category": "breakout_continuation"},
+      {"symbol": "LLY", "reason": "Healthcare sector leader with strong_continuation, passes gate, near all-time high, adds diversification", "reason_category": "stronger_remaining_upside"},
+      {"symbol": "AMZN", "reason": "Consumer Discretionary leader with strong_continuation, passes gate, bullish EMA, sector diversification", "reason_category": "anti_stagnation_inclusion"}
+    ],
+    "held": [
+      {"symbol": "GBTG", "reason": "Breaking-out with rising volume, strong_continuation momentum, increasing position to full target weight"}
+    ]
+  },
+  "capital_movement_plan": [
+    {"symbol": "SPY", "delta_usd": -47826.0, "purpose": "Reduce SPY from 75% to 28% to fund new equity positions"},
+    {"symbol": "GBTG", "delta_usd": 6997.0, "purpose": "Increase held position to full target weight on confirmed continuation"},
+    {"symbol": "TSM", "delta_usd": 12390.0, "purpose": "New entry — semiconductor peer leader with strong continuation"},
+    {"symbol": "DELL", "delta_usd": 12009.0, "purpose": "New entry — IT sector leader with strong continuation"},
+    {"symbol": "META", "delta_usd": 10518.0, "purpose": "New entry — Communication Services leader breaking out"},
+    {"symbol": "LLY", "delta_usd": 8954.0, "purpose": "New entry — Healthcare leader with strong continuation"},
+    {"symbol": "AMZN", "delta_usd": 9897.0, "purpose": "New entry — Consumer Discretionary leader with strong continuation"}
+  ],
+  "risk_flags": [
+    "HUT has earnings_days_until=0 — avoided due to earnings blackout risk",
+    "COIN has earnings in 1 day — avoided",
+    "MARA has earnings in 5 days — avoided",
+    "BAND RSI=93.7 with flat volume — exhaustion penalty applied, not selected",
+    "GBTG RSI=86.5 near day high — monitor for exhaustion next scan",
+    "LLY distance_from_high=-0.12% — very near high, tight stop applied",
+    "META negative sentiment score (-0.5) partially offsets strong momentum — monitor",
+    "VIX at 26.92 elevated — position sizes kept conservative via 70% starter sizing for new entries"
+  ]
+}
+```
+
+Wait - I have a duplicate key issue in my per_symbol. DELL appears twice (once in the non-selected section and once in selected). Same for TSM, AMZN, LLY, META. JSON doesn't allow duplicate keys. I need to only include each symbol once. Let me restructure - each symbol appears exactly once in per_symbol.
+
+Also I need to double-check: sum of target_weights + spy + cash = 0.1675 + 0.1224 + 0.1187 + 0.1040 + 0.0885 + 0.0978 + 0.2811 + 0.02 = 1.0000 ✓
+
+{
+  "portfolio_thesis": "Deploy into 6 high-conviction names spanning Technology, Communication Services, Healthcare, and Consumer Discretionary while maintaining diversification. TSM and DELL lead their respective peer groups with strong_continuation signals and pass the new-entry gate; GBTG (held) shows breaking-out classification with rising volume; META, LLY, and AMZN add sector diversification with strong momentum profiles. SPY is reduced from ~75% to ~28% to fund new positions.",
+  "spy_target_pct": 0.2811,
+  "cash_target_pct": 0.02,
+  "spy_decision": {"target_pct": 0.2811, "action": "REDUCE", "opportunity_score": 52, "one_sentence_reason": "SPY is near its day high with flat volume and neutral macro; reducing from 75% to 28% to fund higher-conviction individual names while retaining a meaningful buffer."},
+  "spy_vs_cash_reasoning": "SPY is liquid and earns market beta while idle; cash_target_pct is kept at 2% minimum reserve with SPY absorbing the remainder of undeployed capital.",
+  "selected_positions": ["GBTG", "TSM", "DELL", "META", "LLY", "AMZN"],
+  "target_weights": {"GBTG": 0.1675, "TSM": 0.1224, "DELL": 0.1187, "META": 0.1040, "LLY": 0.0885, "AMZN": 0.0978},
+  ...all per_symbol with no duplicates...
+}
+
+Let me write the final clean JSON now:
+
+{"portfolio_thesis":"Deploy into 6 high-conviction names spanning Information Technology, Communication Services, Healthcare, and Consumer Discretionary. TSM and DELL lead their peer groups with strong_continuation momentum and pass the new-entry gate; GBTG (held) shows breaking-out classification with rising volume warranting an increase; META breaks out with rising volume; LLY and AMZN add sector diversification. SPY is reduced from 75% to 28% to fund positions while VIX at 26.92 keeps starter sizing conservative.","spy_target_pct":0.2811,"cash_target_pct":0.02,"spy_decision":{"target_pct":0.2811,"action":"REDUCE","opportunity_score":52,"one_sentence_reason":"SPY is near its day high with flat volume and neutral macro regime; reducing from 75% to 28% to fund higher-conviction individual names while retaining a meaningful buffer."},"spy_vs_cash_reasoning":"SPY is liquid and earns market beta while idle; cash_target_pct is kept at 2% minimum reserve with SPY absorbing the remainder of undeployed capital.","selected_positions":["GBTG","TSM","DELL","META","LLY","AMZN"],"target_weights":{"GBTG":0.1675,"TSM":0.1224,"DELL":0.1187,"META":0.1040,"LLY":0.0885,"AMZN":0.0978},"per_symbol":{"GBTG":{"target_pct":0.1675,"qty":1797,"delta_qty":742,"entry_price":9.43,"stop_loss":9.22,"take_profit":null,"action":"INCREASE","confidence":0.82,"opportunity_score":74,"one_sentence_reason":"Breaking-out classification with rising volume and strong_continuation momentum confirms thesis; increasing from 1054.5 to 1797 shares to reach full target weight."},"TSM":{"target_pct":0.1224,"qty":30,"delta_qty":30,"entry_price":413.0,"stop_loss":406.02,"take_profit":null,"action":"BUY","confidence":0.80,"opportunity_score":78,"one_sentence_reason":"Semiconductor peer leader with strong_continuation grade, passes new-entry gate, bullish EMA, rising trend, and sentiment score 0.75 — best remaining upside in the ai_data_center theme."},"DELL":{"target_pct":0.1187,"qty":53,"delta_qty":53,"entry_price":226.59,"stop_loss":222.15,"take_profit":null,"action":"BUY","confidence":0.78,"opportunity_score":76,"one_sentence_reason":"IT sector leader with strong_continuation momentum, bullish EMA, rising trend at +2.95% intraday, and passes new-entry gate with price above VWAP."},"META":{"target_pct":0.1040,"qty":17,"delta_qty":17,"entry_price":618.715,"stop_loss":608.75,"take_profit":null,"action":"BUY","confidence":0.74,"opportunity_score":68,"one_sentence_reason":"Breaking-out with strong_continuation momentum, rising volume, bullish EMA, and price above VWAP — Communication Services sector leader with clear intraday continuation."},"LLY":{"target_pct":0.0885,"qty":9,"delta_qty":9,"entry_price":994.94,"stop_loss":979.71,"take_profit":null,"action":"BUY","confidence":0.72,"opportunity_score":65,"one_sentence_reason":"Healthcare sector leader with strong_continuation momentum, passes new-entry gate, near all-time high with rising trend and bullish EMA — adds defensive sector diversification."},"AMZN":{"target_pct":0.0978,"qty":36,"delta_qty":36,"entry_price":274.915,"stop_loss":271.34,"take_profit":null,"action":"BUY","confidence":0.71,"opportunity_score":63,"one_sentence_reason":"Consumer Discretionary sector leader with strong_continuation momentum, passes new-entry gate, bullish EMA, and price above VWAP — diversifies away from tech concentration."},"INTC":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":108.955,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.1,"opportunity_score":18,"one_sentence_reason":null,"reason_code":"peer_outranked"},"BLZE":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":7.49,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.2,"opportunity_score":42,"one_sentence_reason":null,"reason_code":"score_below_floor"},"EVER":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":20.72,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.05,"opportunity_score":10,"one_sentence_reason":null,"reason_code":"exhausted"},"HUT":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":105.7283,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.15,"opportunity_score":30,"one_sentence_reason":null,"reason_code":"earnings_blackout"},"STRL":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":834.7261,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.1,"opportunity_score":22,"one_sentence_reason":null,"reason_code":"score_below_floor"},"SMCI":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":32.33,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.1,"opportunity_score":22,"one_sentence_reason":null,"reason_code":"peer_outranked"},"AMD":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":409.91,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.12,"opportunity_score":28,"one_sentence_reason":null,"reason_code":"peer_outranked"},"DGXX":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":5.665,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.1,"opportunity_score":20,"one_sentence_reason":null,"reason_code":"score_below_floor"},"NVDA":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":204.795,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.2,"opportunity_score":38,"one_sentence_reason":null,"reason_code":"peer_outranked"},"BITO":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":11.181,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.2,"opportunity_score":40,"one_sentence_reason":null,"reason_code":"score_below_floor"},"SOXS":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":10.7301,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.05,"opportunity_score":15,"one_sentence_reason":null,"reason_code":"score_below_floor"},"ASML":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":1514.29,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.15,"opportunity_score":30,"one_sentence_reason":null,"reason_code":"peer_outranked"},"AVGO":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":421.865,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.08,"opportunity_score":15,"one_sentence_reason":null,"reason_code":"peer_outranked"},"BE":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":285.67,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.1,"opportunity_score":18,"one_sentence_reason":null,"reason_code":"peer_outranked"},"ETN":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":413.24,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.08,"opportunity_score":16,"one_sentence_reason":null,"reason_code":"peer_outranked"},"FIX":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":1946.94,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.07,"opportunity_score":14,"one_sentence_reason":null,"reason_code":"peer_outranked"},"GEV":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":1093.21,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.2,"opportunity_score":45,"one_sentence_reason":null,"reason_code":"peer_outranked"},"MRVL":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":166.3,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.07,"opportunity_score":12,"one_sentence_reason":null,"reason_code":"peer_outranked"},"MU":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":642.895,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.1,"opportunity_score":18,"one_sentence_reason":null,"reason_code":"score_below_floor"},"PWR":{"target_pct":0.0,"qty":0

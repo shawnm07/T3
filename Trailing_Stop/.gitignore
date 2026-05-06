@@ -1,0 +1,4 @@
+state/*.json
+logs/*.log
+logs/*.log.*
+__pycache__/

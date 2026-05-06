@@ -36,7 +36,9 @@ def _floor_qty(value: float, places: int = 6) -> float:
     return float(Decimal(str(value)).quantize(quantum, rounding=ROUND_FLOOR))
 
 
-_BASE_PRICE_RE = re.compile(r'"base_price"\s*:\s*"?(?P<price>[0-9]+(?:\.[0-9]+)?)"?')
+_BASE_PRICE_RE = re.compile(
+    r'"(?:base_price|market_price)"\s*:\s*"?(?P<price>[0-9]+(?:\.[0-9]+)?)"?'
+)
 _WASH_TRADE_CODE = 40310000
 
 
@@ -82,29 +84,84 @@ class TradeExecutor:
         self.fill_timeout = float(config.get("execution", "fill_timeout_s", default=30))
         self.fill_poll = float(config.get("execution", "fill_poll_s", default=1.0))
         self.hard_stop_loss_pct = float(config.get("risk", "hard_stop_loss_pct", default=0.01))
+        self.stop_loss_model = str(config.get("risk", "stop_loss_model", default="fixed") or "fixed").lower()
+        self.max_stop_loss_pct = float(config.get(
+            "risk", "max_stop_loss_pct", default=self.hard_stop_loss_pct,
+        ) or self.hard_stop_loss_pct)
+        # Phase 3: ATR-aware hard stop. floor = hard_stop_loss_pct (1%);
+        # widened up to ceiling (2.5%) when 0.5*ATR/price exceeds the floor.
+        # AMZN/WDC in the 2026-05-05 review got stopped on 1% intraday wicks
+        # despite carrying ~2-2.5% daily ATR; this widens for those names
+        # while leaving low-vol names untouched.
+        self.hard_stop_loss_atr_mult = float(config.get(
+            "risk", "hard_stop_loss_atr_mult", default=0.5,
+        ) or 0.5)
+        self.hard_stop_loss_pct_ceiling = float(config.get(
+            "risk", "hard_stop_loss_pct_ceiling", default=0.025,
+        ) or 0.025)
 
-    def _hard_stop_loss_price(self, entry_price: float | None) -> float | None:
+    def _effective_hard_stop_pct(self, entry: float, atr: float | None) -> float:
+        """Return the ATR-aware hard-stop percentage for this entry.
+
+        Phase 3: ``max(hard_stop_loss_pct, hard_stop_loss_atr_mult * ATR/price)``
+        capped at ``hard_stop_loss_pct_ceiling``. When ATR is missing, falls
+        back to the flat floor for backwards compatibility.
+        """
+        floor = max(0.0, float(self.hard_stop_loss_pct or 0.0))
+        ceiling = max(floor, float(self.hard_stop_loss_pct_ceiling or floor))
+        try:
+            atr_f = float(atr or 0.0)
+        except (TypeError, ValueError):
+            atr_f = 0.0
+        if entry <= 0 or atr_f <= 0:
+            return floor
+        atr_pct = (self.hard_stop_loss_atr_mult * atr_f) / entry
+        return min(ceiling, max(floor, atr_pct))
+
+    def _hard_stop_loss_price(
+        self,
+        entry_price: float | None,
+        atr: float | None = None,
+    ) -> float | None:
         try:
             entry = float(entry_price or 0)
         except (TypeError, ValueError):
             entry = 0.0
-        pct = max(0.0, float(self.hard_stop_loss_pct or 0.0))
+        pct = self._effective_hard_stop_pct(entry, atr)
         if entry <= 0 or pct <= 0:
             return None
         return _ceil_cents(entry * (1.0 - pct))
+
+    def _max_stop_loss_price(self, entry_price: float | None) -> float | None:
+        try:
+            entry = float(entry_price or 0)
+        except (TypeError, ValueError):
+            entry = 0.0
+        hard = max(0.0, float(self.hard_stop_loss_pct or 0.0))
+        max_pct = max(hard, max(0.0, float(self.max_stop_loss_pct or hard)))
+        if entry <= 0 or max_pct <= 0:
+            return None
+        return _ceil_cents(entry * (1.0 - max_pct))
+
+    def _volatility_stop_enabled(self) -> bool:
+        return self.stop_loss_model in {"volatility", "atr", "atr_volatility"}
 
     def _protective_stop_loss_price(
         self,
         entry_price: float | None,
         stop_loss: float | None = None,
+        atr: float | None = None,
     ) -> tuple[float, str]:
         try:
             entry = float(entry_price or 0)
         except (TypeError, ValueError):
             entry = 0.0
-        hard_stop = self._hard_stop_loss_price(entry)
+        hard_stop = self._hard_stop_loss_price(entry, atr=atr)
         if hard_stop is None or hard_stop <= 0 or hard_stop >= entry:
             raise ValueError(f"cannot compute hard stop from entry_price={entry_price}")
+        max_stop = self._max_stop_loss_price(entry) if self._volatility_stop_enabled() else hard_stop
+        if max_stop is None or max_stop <= 0 or max_stop >= entry:
+            max_stop = hard_stop
         if stop_loss in (None, ""):
             return hard_stop, "hard_stop"
         try:
@@ -120,9 +177,11 @@ class TradeExecutor:
                 ai_stop, entry, hard_stop,
             )
             return hard_stop, "ai_stop_invalid_for_entry_used_hard_stop"
+        if ai_stop < max_stop:
+            log.warning("Clamping AI stop %.4f to stop floor %.4f", ai_stop, max_stop)
+            return max_stop, "ai_stop_clamped_to_stop_floor"
         if ai_stop < hard_stop:
-            log.warning("Clamping AI stop %.4f to hard stop floor %.4f", ai_stop, hard_stop)
-            return hard_stop, "ai_stop_clamped_to_hard_stop"
+            return ai_stop, "ai_volatility_stop"
         return ai_stop, ("ai_tighter_stop" if ai_stop > hard_stop else "hard_stop")
 
     def _take_profit_or_none(self, take_profit: float | None, entry_price: float | None) -> float | None:
@@ -403,6 +462,107 @@ class TradeExecutor:
         return float(submitted_qty), dict(asset_audit or {})
 
     @staticmethod
+    def _quote_midpoint(quote: Any) -> tuple[float | None, dict[str, Any]]:
+        snap: dict[str, Any] = {}
+        if quote is None:
+            return None, snap
+
+        def _num(*names: str) -> float | None:
+            for name in names:
+                raw = getattr(quote, name, None)
+                if raw in (None, "") and isinstance(quote, dict):
+                    raw = quote.get(name)
+                if raw in (None, ""):
+                    continue
+                try:
+                    val = float(raw)
+                except (TypeError, ValueError):
+                    continue
+                if val > 0:
+                    return val
+            return None
+
+        bid = _num("bid_price", "bid")
+        ask = _num("ask_price", "ask")
+        last = _num("price", "last_price", "close")
+        snap.update({"bid": bid, "ask": ask, "last": last})
+        if bid and ask:
+            return (bid + ask) / 2.0, snap
+        return last or bid or ask, snap
+
+    def preflight_buy(
+        self,
+        symbol: str,
+        qty: float,
+        entry_price: float | None,
+        stop_loss: float | None = None,
+        take_profit: float | None = None,
+    ) -> tuple[bool, dict[str, Any]]:
+        """Validate a buy shape before funding it or submitting it.
+
+        This is intentionally broker-facing: asset tradability/fractionability,
+        submitted quantity, stop shape, take-profit sanity, and a latest-quote
+        check that prevents known stop-order rejections when the stop is too
+        close to or above the current market.
+        """
+        audit: dict[str, Any] = {
+            "symbol": str(symbol or "").upper(),
+            "requested_qty": qty,
+            "entry_price": entry_price,
+            "requested_stop_loss": stop_loss,
+            "requested_take_profit": take_profit,
+            "enabled": bool(self.cfg.get("execution_preflight", "enabled", default=True)),
+            "order_shape": "simple_market_buy_then_standalone_sell_stop",
+        }
+        if not audit["enabled"]:
+            audit["status"] = "approved_disabled"
+            return True, audit
+        try:
+            submitted_qty, asset_audit = self._normalize_buy_qty_for_asset(symbol, float(qty or 0))
+        except Exception as exc:
+            audit.update({
+                "status": "rejected",
+                "reject_reason": str(exc),
+                "asset_check": getattr(exc, "asset_audit", None),
+            })
+            return False, audit
+        audit["submitted_qty"] = submitted_qty
+        audit["asset_check"] = asset_audit
+        try:
+            stop_to_submit, stop_source = self._protective_stop_loss_price(entry_price, stop_loss)
+            target = self._take_profit_or_none(take_profit, entry_price)
+        except ValueError as exc:
+            audit.update({"status": "rejected", "reject_reason": str(exc)})
+            return False, audit
+        audit["stop_price"] = stop_to_submit
+        audit["stop_loss_source"] = stop_source
+        audit["take_profit"] = target
+        quote_price = None
+        quote_snapshot: dict[str, Any] = {}
+        quote_getter = getattr(self.client, "get_stock_quote", None)
+        if quote_getter is not None:
+            try:
+                quote_price, quote_snapshot = self._quote_midpoint(quote_getter(symbol))
+            except Exception as exc:
+                quote_snapshot = {"lookup_error": str(exc)}
+        audit["latest_quote"] = quote_snapshot
+        if quote_price is not None:
+            gap = max(
+                float(self.cfg.get("execution_preflight", "stop_min_gap_usd", default=0.02) or 0.02),
+                quote_price * float(self.cfg.get("execution_preflight", "stop_min_gap_pct", default=0.001) or 0.001),
+            )
+            audit["current_price_reference"] = round(float(quote_price), 4)
+            audit["min_stop_gap"] = round(float(gap), 4)
+            if stop_to_submit >= quote_price - gap:
+                audit.update({
+                    "status": "rejected",
+                    "reject_reason": "stop_not_below_current_market",
+                })
+                return False, audit
+        audit["status"] = "approved"
+        return True, audit
+
+    @staticmethod
     def _base_price_from_error(error: str) -> float | None:
         match = _BASE_PRICE_RE.search(str(error or ""))
         if not match:
@@ -411,6 +571,181 @@ class TradeExecutor:
             return float(match.group("price"))
         except (TypeError, ValueError):
             return None
+
+    def ensure_stop_coverage(self, *, source: str = "scan") -> dict[str, Any]:
+        """Per-scan safety net: every open long position must have an active
+        protective sell-stop in the order book.
+
+        Walks open positions, cross-references open orders, and submits a stop
+        for any uncovered position at ``avg_entry_price * (1 - hard_stop_loss_pct)``,
+        clamped no higher than the current market price. Whole-share positions
+        get GTC stops (persist across sessions); fractional positions get DAY
+        stops (Alpaca constraint) and rely on this function re-adding the stop
+        each scan.
+
+        Run this at the start of every intraday scan AND at the start of the
+        pre-market brief — pre-market scans don't open new positions but
+        verifying stop coverage is essential since a missing stop here is the
+        exact failure mode that produced the HCAI 2026-05-01 weekend loss.
+
+        Returns a dict suitable for journaling.
+        """
+        out: dict[str, Any] = {"source": source, "checked": [], "added": [], "errors": []}
+        try:
+            positions = self.client.get_positions_raw()
+        except Exception:
+            try:
+                positions = self.client.get_positions()
+            except Exception as e:
+                out["errors"].append({"stage": "get_positions", "error": str(e)})
+                log.error("[stop-coverage] cannot list positions: %s", e)
+                return out
+        try:
+            open_orders = self.client.get_open_orders() or []
+        except Exception as e:
+            out["errors"].append({"stage": "get_open_orders", "error": str(e)})
+            log.error("[stop-coverage] cannot list open orders: %s", e)
+            return out
+
+        cash_proxy = (self.cfg.get("cash_proxy", "symbol", default="SPY") or "SPY").upper()
+        cash_proxy_enabled = bool(self.cfg.get("cash_proxy", "enabled", default=False))
+
+        # Bucket open orders by symbol so we can find covering stops quickly.
+        stops_by_symbol: dict[str, list[Any]] = {}
+        for o in open_orders:
+            sym = str(getattr(o, "symbol", "") or "").upper()
+            otype = str(getattr(o, "type", "") or "").lower().rsplit(".", 1)[-1]
+            side = str(getattr(o, "side", "") or "").lower().rsplit(".", 1)[-1]
+            status = str(getattr(o, "status", "") or "").lower().rsplit(".", 1)[-1]
+            if (
+                side == "sell"
+                and otype in {"stop", "stop_limit", "trailing_stop"}
+                and status not in {"filled", "canceled", "cancelled", "expired", "rejected"}
+            ):
+                stops_by_symbol.setdefault(sym, []).append(o)
+
+        for p in positions or []:
+            sym = str(getattr(p, "symbol", "") or "").upper()
+            if not sym:
+                continue
+            try:
+                qty = float(getattr(p, "qty", 0) or 0)
+            except (TypeError, ValueError):
+                qty = 0.0
+            if qty <= 0:
+                continue  # short positions never reach this codebase, skip cleanly
+            try:
+                avg_entry = float(getattr(p, "avg_entry_price", 0) or 0)
+            except (TypeError, ValueError):
+                avg_entry = 0.0
+            try:
+                current_price = float(getattr(p, "current_price", 0) or 0)
+            except (TypeError, ValueError):
+                current_price = 0.0
+            # Skip the SPY cash proxy — it's a cash sink, not a thesis trade,
+            # and a stop on it could fire on routine market noise.
+            if cash_proxy_enabled and sym == cash_proxy:
+                out["checked"].append({"symbol": sym, "skipped": "cash_proxy"})
+                continue
+
+            existing = stops_by_symbol.get(sym, [])
+            covered_qty = 0.0
+            for o in existing:
+                try:
+                    covered_qty += abs(float(getattr(o, "qty", 0) or 0))
+                except (TypeError, ValueError):
+                    pass
+            covered = covered_qty >= qty * 0.999
+            check_row = {
+                "symbol": sym,
+                "qty": qty,
+                "avg_entry_price": avg_entry,
+                "covered_qty": covered_qty,
+                "covered": covered,
+                "existing_stop_count": len(existing),
+            }
+            out["checked"].append(check_row)
+            if covered:
+                continue
+
+            # Pick a stop that won't be instantly rejected by Alpaca.
+            # Default: hard_stop_loss_pct below avg entry.
+            # Floor: hard_stop_loss_pct below current price (so a position
+            # already in drawdown still gets a stop, just tighter than entry).
+            target_from_entry = (
+                avg_entry * (1.0 - self.hard_stop_loss_pct)
+                if avg_entry > 0 else 0.0
+            )
+            target_from_market = (
+                current_price * (1.0 - self.hard_stop_loss_pct)
+                if current_price > 0 else 0.0
+            )
+            candidates = [c for c in (target_from_entry, target_from_market) if c > 0]
+            if not candidates:
+                out["errors"].append({"symbol": sym, "stage": "compute_stop",
+                                      "error": "no entry or market price available"})
+                continue
+            stop_price = _floor_cents(min(candidates))
+            # If both entry-based and market-based stops are above current
+            # price, Alpaca will reject. Step below current with a small buffer.
+            if current_price > 0 and stop_price >= current_price:
+                stop_price = _floor_cents(current_price * (1.0 - self.hard_stop_loss_pct) - 0.01)
+            if stop_price <= 0:
+                out["errors"].append({"symbol": sym, "stage": "compute_stop",
+                                      "error": f"stop price {stop_price} not positive"})
+                continue
+            qty_for_stop = _floor_qty(qty)
+            tif = "gtc" if qty_for_stop == int(qty_for_stop) and qty_for_stop > 0 else "day"
+            try:
+                order = self.client.submit_stop_loss(
+                    symbol=sym,
+                    qty=qty_for_stop,
+                    stop_price=stop_price,
+                    side="sell",
+                    tif=tif,
+                    client_order_id=self._client_order_id(sym, prefix="tb-stopgrd"),
+                )
+                added = {
+                    "symbol": sym,
+                    "qty": qty_for_stop,
+                    "stop_price": stop_price,
+                    "tif": tif,
+                    "order_id": str(getattr(order, "id", "") or ""),
+                    "basis": "avg_entry" if stop_price == _floor_cents(target_from_entry) else "current_price",
+                }
+                out["added"].append(added)
+                log.info(
+                    "[stop-coverage] %s had no protective stop — added %s qty=%s stop=$%.2f order=%s",
+                    sym, tif, qty_for_stop, stop_price, added["order_id"],
+                )
+                log_trade({
+                    "event": "stop_coverage_added",
+                    "symbol": sym,
+                    "source": source,
+                    **added,
+                    "avg_entry_price": avg_entry,
+                    "current_price": current_price,
+                })
+            except Exception as e:
+                err = {"symbol": sym, "stage": "submit", "error": str(e),
+                       "stop_price": stop_price, "qty": qty_for_stop, "tif": tif}
+                out["errors"].append(err)
+                log.error("[stop-coverage] %s submit failed: %s", sym, e)
+                log_trade({
+                    "event": "stop_coverage_failed",
+                    "symbol": sym,
+                    "source": source,
+                    **err,
+                    "avg_entry_price": avg_entry,
+                    "current_price": current_price,
+                })
+
+        if out["added"] or out["errors"]:
+            log.warning(
+                "[stop-coverage] source=%s checked=%d added=%d errors=%d",
+                source, len(out["checked"]), len(out["added"]), len(out["errors"]),
+            )
+        return out
 
     def _submit_standalone_stop(
         self,
@@ -505,6 +840,7 @@ class TradeExecutor:
             stop_error = ""
             actual_stop = None
             actual_stop_source = stop_source
+            naked_close: dict[str, Any] | None = None
             if ok and filled_qty > 0:
                 stop_qty = filled_qty
                 if wash_recovery.get("triggered"):
@@ -526,6 +862,48 @@ class TradeExecutor:
                     stop_status = "failed"
                     log.error("[%s] entry filled but standalone stop failed: %s",
                               sizing.symbol, stop_error)
+                    # HCAI 2026-05-01: entry slipped below the protective stop;
+                    # Alpaca rejected the stop order ("stop price must be less
+                    # than current price") and the position rode the weekend
+                    # naked, ending -10%. When the stop can't land, the entry's
+                    # protective premise is already violated — flatten now
+                    # rather than carry an unprotected position. Disable via
+                    # risk.close_on_stop_failure: false.
+                    if bool(self.cfg.get("risk", "close_on_stop_failure", default=True)):
+                        log.error(
+                            "[%s] flattening position because protective stop "
+                            "could not be placed (entry filled @ $%.4f, requested "
+                            "stop $%s, broker error: %s)",
+                            sizing.symbol, avg_price or 0.0,
+                            actual_stop, stop_error[:200],
+                        )
+                        try:
+                            close_result = self.close_position(
+                                sizing.symbol,
+                                reason=f"naked_position_stop_failed: {stop_error[:160]}",
+                            )
+                            naked_close = {
+                                "triggered": True,
+                                "close_status": close_result.status,
+                                "close_filled_qty": close_result.filled_qty,
+                                "close_avg_price": close_result.filled_avg_price,
+                                "close_order_id": close_result.order_id,
+                                "stop_error": stop_error,
+                            }
+                            stop_status = "failed_position_closed"
+                        except Exception as close_exc:
+                            log.critical(
+                                "[%s] CRITICAL: stop failed AND emergency close "
+                                "failed: %s — position is naked",
+                                sizing.symbol, close_exc,
+                            )
+                            naked_close = {
+                                "triggered": True,
+                                "close_status": "exception",
+                                "close_error": str(close_exc),
+                                "stop_error": stop_error,
+                            }
+                            stop_status = "failed_position_naked"
             elif wash_recovery.get("triggered"):
                 self._cancel_open_parent_if_needed(order_id, final_status, ok)
                 wash_recovery["retry_parent_cancelled_before_stop_restore"] = True
@@ -559,6 +937,7 @@ class TradeExecutor:
                     "stop_order_status": stop_status,
                     "stop_order_error": stop_error,
                     "asset_check": asset_audit,
+                    "naked_position_close": naked_close,
                 },
                 "wash_trade_recovery": wash_recovery if wash_recovery.get("triggered") else None,
                 "final_status": final_status,
@@ -628,7 +1007,10 @@ class TradeExecutor:
         try:
             if entry_price is None and ai_audit:
                 entry_price = ai_audit.get("entry_price") or ai_audit.get("ai_entry_price")
-            stop_to_submit, stop_source = self._protective_stop_loss_price(entry_price, stop_loss)
+            atr_for_stop = (ai_audit or {}).get("atr") if ai_audit else None
+            stop_to_submit, stop_source = self._protective_stop_loss_price(
+                entry_price, stop_loss, atr=atr_for_stop,
+            )
             take_profit_to_submit = self._take_profit_or_none(take_profit, entry_price)
             order_qty = float(qty)
             order_qty, asset_audit = self._normalize_buy_qty_for_asset(symbol, order_qty)
@@ -647,6 +1029,7 @@ class TradeExecutor:
             stop_error = ""
             actual_stop = None
             actual_stop_source = stop_source
+            naked_close: dict[str, Any] | None = None
             if ok and filled_qty > 0:
                 stop_qty = filled_qty
                 if wash_recovery.get("triggered"):
@@ -668,6 +1051,40 @@ class TradeExecutor:
                     stop_status = "failed"
                     log.error("[%s] AI entry filled but standalone stop failed: %s",
                               symbol, stop_error)
+                    if bool(self.cfg.get("risk", "close_on_stop_failure", default=True)):
+                        log.error(
+                            "[%s] flattening AI entry because protective stop "
+                            "could not be placed (entry filled @ $%.4f, broker "
+                            "error: %s)",
+                            symbol, avg_price or 0.0, stop_error[:200],
+                        )
+                        try:
+                            close_result = self.close_position(
+                                symbol,
+                                reason=f"naked_position_stop_failed: {stop_error[:160]}",
+                            )
+                            naked_close = {
+                                "triggered": True,
+                                "close_status": close_result.status,
+                                "close_filled_qty": close_result.filled_qty,
+                                "close_avg_price": close_result.filled_avg_price,
+                                "close_order_id": close_result.order_id,
+                                "stop_error": stop_error,
+                            }
+                            stop_status = "failed_position_closed"
+                        except Exception as close_exc:
+                            log.critical(
+                                "[%s] CRITICAL: AI entry stop failed AND emergency "
+                                "close failed: %s — position naked",
+                                symbol, close_exc,
+                            )
+                            naked_close = {
+                                "triggered": True,
+                                "close_status": "exception",
+                                "close_error": str(close_exc),
+                                "stop_error": stop_error,
+                            }
+                            stop_status = "failed_position_naked"
             elif wash_recovery.get("triggered"):
                 self._cancel_open_parent_if_needed(order_id, final_status, ok)
                 wash_recovery["retry_parent_cancelled_before_stop_restore"] = True
@@ -701,6 +1118,7 @@ class TradeExecutor:
                     "take_profit_submitted": None,
                     "stop_order_status": stop_status,
                     "stop_order_error": stop_error,
+                    "naked_position_close": naked_close,
                 },
                 "wash_trade_recovery": wash_recovery if wash_recovery.get("triggered") else None,
                 "reason": reason,
@@ -887,7 +1305,9 @@ class TradeExecutor:
                 "percentage": pct, "reason": reason,
                 "cancelled_orders_before_sell": cancelled,
                 "order_id": order_id, "final_status": final_status,
-                "filled_qty": filled_qty, "ok": ok,
+                "filled_qty": filled_qty,
+                "filled_avg_price": avg_price,
+                "ok": ok,
             })
             if not ok:
                 log.warning("[%s] trim %.0f%% did NOT fill (status=%s)",
@@ -917,7 +1337,9 @@ class TradeExecutor:
                 "event": "position_closed", "symbol": symbol, "reason": reason,
                 "cancelled_orders_before_sell": cancelled,
                 "order_id": order_id, "final_status": final_status,
-                "filled_qty": filled_qty, "ok": ok,
+                "filled_qty": filled_qty,
+                "filled_avg_price": avg_price,
+                "ok": ok,
             })
             if not ok:
                 log.warning("[%s] close did NOT fill (status=%s)", symbol, final_status)

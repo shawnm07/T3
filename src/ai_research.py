@@ -128,29 +128,69 @@ def load_agent(name: str) -> AgentDef:
     )
 
 
+_FAILURE_DUMP_DIR = Path(__file__).resolve().parents[1] / "data" / "ai_failures"
+
+
+def _dump_agent_failure(
+    agent_name: str,
+    raw_text: str,
+    stop_reason: str | None,
+    in_tok: int | None,
+    out_tok: int | None,
+    reason: str,
+) -> None:
+    """Persist the raw model output when an agent response is unusable.
+    Lets us diagnose truncation / empty-JSON issues that otherwise vanish."""
+    try:
+        _FAILURE_DUMP_DIR.mkdir(parents=True, exist_ok=True)
+        from datetime import datetime, timezone
+        ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        path = _FAILURE_DUMP_DIR / f"{ts}_{agent_name}_{reason.replace('=', '_').replace(' ', '_')[:40]}.txt"
+        path.write_text(
+            f"agent={agent_name}\nstop_reason={stop_reason}\n"
+            f"input_tokens={in_tok}\noutput_tokens={out_tok}\nreason={reason}\n"
+            f"---\n{raw_text}\n",
+            encoding="utf-8",
+        )
+    except Exception as e:
+        log.debug("Failed to dump agent failure for %s: %s", agent_name, e)
+
+
 def _extract_json(text: str) -> dict | None:
-    """Best-effort extraction of a JSON object from model output."""
+    """Best-effort extraction of a JSON object from model output.
+
+    Returns the LARGEST top-level JSON dict (not the first sub-dict found),
+    so a truncated outer object doesn't silently get replaced by an inner
+    sub-dict like a single per_symbol entry.
+    """
     text = text.strip()
     # Strip markdown fences if present
     if text.startswith("```"):
         text = re.sub(r"^```(?:json)?\s*", "", text)
         text = re.sub(r"\s*```\s*$", "", text)
     decoder = json.JSONDecoder()
+    # Fast path: whole text parses cleanly.
     try:
         parsed, _ = decoder.raw_decode(text)
         return parsed if isinstance(parsed, dict) else None
     except json.JSONDecodeError:
         pass
-    # Find the first valid JSON object, skipping prose/pseudo-dicts that may
-    # contain braces before the real response.
+    # Slow path: scan for every `{` and keep the LARGEST successful parse.
+    # An outer truncated object (no closing brace) won't parse, but any inner
+    # sub-dict that does parse would have previously been returned and masked
+    # the truncation. By returning the largest, we still recover when the
+    # outer object is intact but preceded by prose.
+    best: dict | None = None
+    best_size = 0
     for m in re.finditer(r"{", text):
         try:
-            parsed, _ = decoder.raw_decode(text[m.start():])
+            parsed, end = decoder.raw_decode(text[m.start():])
         except json.JSONDecodeError:
             continue
-        if isinstance(parsed, dict):
-            return parsed
-    return None
+        if isinstance(parsed, dict) and end > best_size:
+            best = parsed
+            best_size = end
+    return best
 
 
 class AIResearcher:
@@ -265,7 +305,7 @@ class AIResearcher:
             "Here is the pre-computed research context. Analyze it internally per your "
             "instructions and return ONLY the JSON object. Do not include prose, bullets, "
             "markdown fences, or analysis before/after the JSON.\n\n```json\n"
-            + json.dumps(context, indent=2, default=str)
+            + json.dumps(context, separators=(",", ":"), default=str)
             + "\n```"
         )
 
@@ -298,13 +338,30 @@ class AIResearcher:
             if t:
                 text_parts.append(t)
         raw_text = "\n".join(text_parts)
-        parsed = _extract_json(raw_text)
-        if parsed is None:
-            log.warning("Agent %s returned unparseable output: %r", agent_name, raw_text[:300])
-            return {"_error": "json_parse_failed", "_raw": raw_text[:800], "_agent": agent_name}
-
+        stop_reason = getattr(resp, "stop_reason", None)
         cache_read = getattr(resp.usage, "cache_read_input_tokens", 0) or 0
         cache_write = getattr(resp.usage, "cache_creation_input_tokens", 0) or 0
+        in_tok = getattr(resp.usage, "input_tokens", None)
+        out_tok = getattr(resp.usage, "output_tokens", None)
+        parsed = _extract_json(raw_text)
+        if parsed is None:
+            log.warning(
+                "Agent %s returned unparseable output (stop_reason=%s, in=%s out=%s): %r",
+                agent_name, stop_reason, in_tok, out_tok, raw_text[:600],
+            )
+            _dump_agent_failure(agent_name, raw_text, stop_reason, in_tok, out_tok, "json_parse_failed")
+            return {"_error": "json_parse_failed", "_raw": raw_text[:1500],
+                    "_stop_reason": stop_reason, "_agent": agent_name,
+                    "_input_tokens": in_tok, "_output_tokens": out_tok}
+
+        if stop_reason and stop_reason not in ("end_turn", "stop_sequence", "tool_use"):
+            log.warning(
+                "Agent %s non-terminal stop_reason=%s (in=%s out=%s) — response may be truncated",
+                agent_name, stop_reason, in_tok, out_tok,
+            )
+            _dump_agent_failure(agent_name, raw_text, stop_reason, in_tok, out_tok,
+                                f"stop_reason={stop_reason}")
+
         if cache_read or cache_write:
             log.debug(
                 "Agent %s cache: read=%d write=%d (model=%s)",
@@ -313,8 +370,12 @@ class AIResearcher:
 
         parsed["_agent"] = agent_name
         parsed["_model"] = effective_model
-        parsed["_input_tokens"] = getattr(resp.usage, "input_tokens", None)
-        parsed["_output_tokens"] = getattr(resp.usage, "output_tokens", None)
+        parsed["_input_tokens"] = in_tok
+        parsed["_output_tokens"] = out_tok
         parsed["_cache_read_tokens"] = cache_read
         parsed["_cache_creation_tokens"] = cache_write
+        parsed["_stop_reason"] = stop_reason
+        # Preserve a truncated raw response so downstream validators / dumps can
+        # see what the model actually emitted when the parsed dict looks wrong.
+        parsed["_raw_truncated"] = raw_text[:2500]
         return parsed

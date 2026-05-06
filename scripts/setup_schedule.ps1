@@ -64,6 +64,13 @@ foreach ($obsolete in @("TradingBot_Scan_1230","TradingBot_Scan_1530")) {
 $triggerPre = New-ScheduledTaskTrigger -Weekly -WeeksInterval 1 -DaysOfWeek $weekdays -At "05:30"
 Register-BotTask "PreMarket" (Join-Path $BotDir "scripts\premarket_brief.py") @($triggerPre)
 
+# Opening-stop guard re-arm: Phoenix 06:40 (= 09:40 ET EDT), weekdays.
+# Premarket cancels vulnerable protective stops; this task re-arms them after
+# the first 10 minutes unless the position has already crossed the catastrophic
+# gap rule.
+$triggerOpenStopGuard = New-ScheduledTaskTrigger -Weekly -WeeksInterval 1 -DaysOfWeek $weekdays -At "06:40"
+Register-BotTask "OpenStopGuard" (Join-Path $BotDir "scripts\open_stop_guard.py") @($triggerOpenStopGuard)
+
 # Intraday scans: Phoenix 07:00, 08:00, 09:00, 10:00, 11:00, 12:00
 # (= 10/11/12/13/14/15 ET EDT), weekdays. These scans may open new
 # continuation-confirmed positions; PreClose owns explicit overnight buys.
@@ -94,6 +101,15 @@ $triggerBridge = New-ScheduledTaskTrigger -Once -At $bridgeStart `
     -RepetitionInterval (New-TimeSpan -Minutes 30) `
     -RepetitionDuration (New-TimeSpan -Days 3650)
 Register-BotTask "PostmortemBridge" (Join-Path $BotDir "scripts\telegram_postmortem_bridge.py") @($triggerBridge)
+
+# Converging trailing-stop bot: every 5 minutes, 24/7 (no day-of-week filter).
+# Runs even when the regular session is closed so it can synthesize
+# extended-hours stops via marketable limit sells when needed.
+$trailingStart = Get-Date "00:01"
+$triggerTrailing = New-ScheduledTaskTrigger -Once -At $trailingStart `
+    -RepetitionInterval (New-TimeSpan -Minutes 5) `
+    -RepetitionDuration (New-TimeSpan -Days 3650)
+Register-BotTask "TrailingStops" (Join-Path $BotDir "Trailing_Stop\run.py") @($triggerTrailing)
 
 Write-Host ""
 Write-Host "=== Registered Tasks ===" -ForegroundColor Green

@@ -13,6 +13,7 @@ from src.config import Config
 from src.daily_pnl import get_daily_pnl, get_spy_daily_pct
 from src.journal import log_decision
 from src.logging_setup import setup_logging
+from src.opening_stop_guard import capture_opening_guard_orders
 from src.orchestrator import TradingOrchestrator
 from src.telegram_notifier import notify_premarket, send_alert
 
@@ -27,6 +28,24 @@ def main() -> int:
         clock = client.get_clock()
         log.info("Clock: is_open=%s next_open=%s", clock.is_open, clock.next_open)
 
+        # Stop-coverage safety net BEFORE opening-guard cancellation. If a
+        # position carried over from yesterday without a protective stop
+        # (e.g. HCAI 2026-05-01: stop rejected at entry, position rode the
+        # weekend naked), this adds one. The opening guard then runs as
+        # designed to cancel stops over the open auction; the rearm job
+        # restores them after the open delay.
+        try:
+            cov = orch.executor.ensure_stop_coverage(source="premarket")
+            log.info(
+                "Pre-market stop coverage: checked=%d added=%d errors=%d",
+                len(cov.get("checked", [])), len(cov.get("added", [])),
+                len(cov.get("errors", [])),
+            )
+            if cov.get("added") or cov.get("errors"):
+                log_decision({"event": "stop_coverage", **cov})
+        except Exception as e:
+            log.error("[stop-coverage] pre-market safety net raised: %s", e)
+
         # Cancel leftover open orders from yesterday, but preserve sell-side
         # exit legs that guard live positions. Canceling one leg of an Alpaca
         # bracket can cancel the paired stop, so take-profit limits are kept too.
@@ -39,6 +58,28 @@ def main() -> int:
                 except Exception as e:
                     log.warning("Could not fetch positions before stale-order cleanup: %s", e)
                     held_symbols = set()
+
+                opening_guard = capture_opening_guard_orders(
+                    cfg,
+                    client,
+                    held_symbols={str(s or "").upper() for s in held_symbols},
+                    open_orders=open_orders,
+                )
+                guarded_ids = {
+                    str(row.get("order_id") or "")
+                    for row in (opening_guard.get("cancelled") or [])
+                    if row.get("order_id")
+                }
+                if guarded_ids:
+                    cancelled_count += len(guarded_ids)
+                    open_orders = [
+                        order for order in open_orders
+                        if str(getattr(order, "id", "") or "") not in guarded_ids
+                    ]
+                    log.info(
+                        "Opening-stop guard: cancelled=%d for delayed rearm",
+                        len(guarded_ids),
+                    )
 
                 def _order_value(order, name: str) -> str:
                     raw = getattr(order, name, "") or ""

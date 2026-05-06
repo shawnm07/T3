@@ -409,8 +409,12 @@ def _apply_screener_floors(
     min_price = float(cfg.get("screener", "min_price", default=0) or 0)
     min_volume = int(cfg.get("screener", "min_avg_volume", default=0) or 0)
     min_mcap = float(cfg.get("screener", "min_market_cap_usd", default=0) or 0)
+    min_dollar_volume = float(
+        cfg.get("screener", "min_dollar_volume_usd", default=0) or 0
+    )
     out: dict[str, Candidate] = {}
     dropped = 0
+    dropped_dollar_volume = 0
     for sym, cand in pool.items():
         if cand.is_held:
             out[sym] = cand
@@ -424,9 +428,24 @@ def _apply_screener_floors(
         if cand.market_cap_usd > 0 and cand.market_cap_usd < min_mcap:
             dropped += 1
             continue
+        # Dollar-volume floor: drops thin/choppy names where price * volume
+        # is too small for our position sizes. Only enforced when both price
+        # and volume are populated; held positions are exempted above.
+        if (
+            min_dollar_volume > 0
+            and cand.price > 0
+            and cand.volume > 0
+            and (cand.price * cand.volume) < min_dollar_volume
+        ):
+            dropped += 1
+            dropped_dollar_volume += 1
+            continue
         out[sym] = cand
     if dropped:
-        log.info("[discovery] screener floors dropped %d symbols", dropped)
+        log.info(
+            "[discovery] screener floors dropped %d symbols (%d below dollar-volume floor)",
+            dropped, dropped_dollar_volume,
+        )
     return out
 
 

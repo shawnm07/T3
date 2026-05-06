@@ -53,6 +53,97 @@ def _save_research(name: str, payload: dict[str, Any]) -> Path:
     return path
 
 
+# ---------------------------------------------------------------------------
+# Phase 0b: selector input slimming
+# ---------------------------------------------------------------------------
+
+# Fields dropped before sending the candidate pool to portfolio-selector. Each
+# is either pure prose duplication of numeric fields the model already sees,
+# or zero-valued noise on non-held candidates.
+_SELECTOR_PRUNE_KEYS_ALWAYS = (
+    # Prose narrative duplicating numeric *_rank / *_leader / *_relative_score.
+    "sector_comparison_summary",
+    "theme_comparison_summary",
+    "peer_comparison_summary",
+    # Duplicates candidate_priority_reasons.
+    "discovery_priority_reasons",
+)
+
+# Zero/empty fields that are only meaningful for held positions; on fresh
+# candidates they add noise without signal.
+_SELECTOR_PRUNE_KEYS_NON_HELD = (
+    "qty",
+    "avg_entry_price",
+    "market_value_usd",
+    "abs_market_value_usd",
+    "unrealized_pl_usd",
+    "unrealized_plpc",
+)
+
+
+def _slim_selector_pool_blocks(pool: list[dict[str, Any]]) -> None:
+    """Mutate the candidate pool in place to drop duplicate / noisy fields.
+
+    Roughly halves the per-candidate payload (2.2KB → ~1.1KB measured on the
+    2026-05-05 11:00 PDT scan that hit max_tokens). The selector still
+    receives every numeric ranking signal — only narrative duplicates are
+    removed. See EXECUTION_PLAN.md Phase 0b for the audit.
+    """
+    for block in pool:
+        for k in _SELECTOR_PRUNE_KEYS_ALWAYS:
+            block.pop(k, None)
+
+        if not block.get("currently_held"):
+            for k in _SELECTOR_PRUNE_KEYS_NON_HELD:
+                block.pop(k, None)
+
+        # momentum_profile.reasons duplicates fields the candidate already
+        # exposes top-level (price_vs_vwap_pct, ema_state, recent_trend,
+        # volume_trend, distance_from_high_pct...). min_score is a static
+        # config knob the selector doesn't need to see per symbol.
+        mp = block.get("momentum_profile")
+        if isinstance(mp, dict):
+            mp.pop("reasons", None)
+            mp.pop("min_score", None)
+
+        # peer_pressure: keep only the *signal* (which peer is stronger and
+        # whether justification is required). Drop redundant numeric fields
+        # already exposed elsewhere as peer_relative_score / peer_rank.
+        pp = block.get("peer_pressure")
+        if isinstance(pp, dict):
+            slim = {}
+            if pp.get("stronger_peer"):
+                slim["stronger_peer"] = pp["stronger_peer"]
+            if pp.get("requires_explicit_justification"):
+                slim["must_justify"] = True
+            if slim:
+                block["peer_pressure"] = slim
+            else:
+                block.pop("peer_pressure", None)
+
+        # position_lifecycle: keep only fields useful for the selector's
+        # forward decision (when entered, what action). Drop the long
+        # historical reason narrative — it biases the selector toward the
+        # prior plan and is the largest sub-field.
+        pl = block.get("position_lifecycle")
+        if isinstance(pl, dict):
+            slim_pl = {}
+            if pl.get("entry_ts"):
+                slim_pl["entry_ts"] = pl["entry_ts"]
+            if pl.get("ai_action"):
+                slim_pl["last_ai_action"] = pl["ai_action"]
+            if pl.get("filled_avg_price") is not None:
+                slim_pl["filled_avg_price"] = pl["filled_avg_price"]
+            if slim_pl:
+                block["position_lifecycle"] = slim_pl
+            else:
+                block.pop("position_lifecycle", None)
+
+        # Strip None / null fields to shrink JSON.
+        for k in [k for k, v in block.items() if v is None]:
+            block.pop(k, None)
+
+
 class TradingOrchestrator:
     def __init__(self, config: Config):
         self.cfg = config
@@ -105,6 +196,25 @@ class TradingOrchestrator:
             self.cash_proxy_enabled
             and str(symbol or "").strip().upper() == str(self.cash_proxy_symbol or "").strip().upper()
         )
+
+    def _resolve_trade_learning(self, phase: str) -> dict[str, Any] | None:
+        try:
+            from src.trade_learning import resolve_exit_learning_metrics
+            result = resolve_exit_learning_metrics(
+                self.cfg,
+                self.client,
+                cash_proxy_symbol=self.cash_proxy_symbol if self.cash_proxy_enabled else None,
+            )
+            if result and result.get("resolved"):
+                log_decision({
+                    "event": "trade_learning_resolved",
+                    "phase": phase,
+                    "result": result,
+                })
+            return result
+        except Exception as exc:
+            log.debug("trade learning resolve failed (%s): %s", phase, exc)
+            return {"error": str(exc), "phase": phase}
 
     def _asset_ai_reject_reason(self, info: dict[str, Any]) -> str | None:
         status = str(info.get("status") or "").lower()
@@ -256,6 +366,433 @@ class TradingOrchestrator:
         state = self._load_veto_state()
         entry = state.get(symbol) or {}
         return int(entry.get("count", 0))
+
+    # ---- position lifecycle / fresh-exit guard -----------------------------
+
+    def _position_lifecycle_path(self) -> Path:
+        rel = self.cfg.get(
+            "selector", "position_lifecycle_state_file",
+            default="data/state/position_lifecycle.json",
+        )
+        return Path(__file__).resolve().parents[1] / rel
+
+    def _load_position_lifecycle(self) -> dict[str, Any]:
+        path = self._position_lifecycle_path()
+        if not path.exists():
+            return {}
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return {}
+        return data if isinstance(data, dict) else {}
+
+    def _save_position_lifecycle(self, state: dict[str, Any]) -> None:
+        path = self._position_lifecycle_path()
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps(state, indent=2, default=str), encoding="utf-8")
+        except OSError as exc:
+            log.warning("position lifecycle save failed: %s", exc)
+
+    @staticmethod
+    def _parse_lifecycle_ts(raw: str | None) -> datetime | None:
+        if not raw:
+            return None
+        try:
+            ts = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+        except ValueError:
+            return None
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=timezone.utc)
+        return ts.astimezone(timezone.utc)
+
+    def _record_position_entry(
+        self,
+        symbol: str,
+        *,
+        source: str,
+        execution: dict[str, Any] | None = None,
+        context: dict[str, Any] | None = None,
+    ) -> None:
+        sym = str(symbol or "").strip().upper()
+        if not sym or self._is_cash_proxy(sym) or "/" in sym:
+            return
+        state = self._load_position_lifecycle()
+        context = dict(context or {})
+        execution = dict(execution or {})
+        state[sym] = {
+            "entry_ts": datetime.now(timezone.utc).isoformat(),
+            "source": source,
+            "filled_qty": execution.get("filled_qty"),
+            "filled_avg_price": execution.get("filled_avg_price"),
+            "order_id": execution.get("order_id"),
+            "reason": context.get("reason") or context.get("one_sentence_reason"),
+            "ai_action": context.get("ai_action"),
+            "ai_confidence": context.get("ai_confidence") or context.get("confidence"),
+            "opportunity_score": context.get("opportunity_score"),
+        }
+        self._save_position_lifecycle(state)
+
+    def _clear_position_lifecycle(self, symbol: str) -> None:
+        sym = str(symbol or "").strip().upper()
+        if not sym:
+            return
+        state = self._load_position_lifecycle()
+        if sym in state:
+            state.pop(sym, None)
+            self._save_position_lifecycle(state)
+
+    def _position_lifecycle_context(self, symbol: str) -> dict[str, Any]:
+        sym = str(symbol or "").strip().upper()
+        entry = (self._load_position_lifecycle().get(sym) or {})
+        if not isinstance(entry, dict):
+            return {}
+        ts = self._parse_lifecycle_ts(entry.get("entry_ts"))
+        if ts is None:
+            return {}
+        age_minutes = max(0.0, (datetime.now(timezone.utc) - ts).total_seconds() / 60.0)
+        cooldown = float(self.cfg.get("selector", "fresh_exit_cooldown_minutes", default=120) or 120)
+        return {
+            **entry,
+            "age_minutes": round(age_minutes, 1),
+            "fresh_exit_cooldown_minutes": cooldown,
+            "fresh_exit_cooldown_active": age_minutes < cooldown,
+        }
+
+    def _predetermined_dust_sweep_for_buys(
+        self,
+        target_weights: dict[str, float] | None,
+    ) -> list[dict[str, Any]]:
+        """Phase 1a: dust-sweep off-target held positions BEFORE the buy phase.
+
+        Runs the same deterministic check as the post-execution verifier
+        (see ``_verify_portfolio_alignment``) but earlier in the scan so the
+        proceeds can fund the same scan's buys. Honors the same fresh-entry
+        guard. Returns a list of execution result dicts to append to the
+        scan summary. Empty when nothing needs sweeping.
+        """
+        if not target_weights:
+            return []
+        try:
+            account, positions = self.client.get_snapshot(force_refresh=True, log_detail=False)
+        except Exception as e:
+            log.warning("pre-buy dust-sweep: snapshot failed: %s", e)
+            return []
+        if not positions:
+            return []
+        guard_loss_floor = float(
+            self.cfg.get("portfolio_verifier", "fresh_entry_loss_floor_pct",
+                         default=-0.005) or -0.005
+        )
+        results: list[dict[str, Any]] = []
+        for p in positions:
+            sym = getattr(p, "symbol", None)
+            if not sym or sym == self.cash_proxy_symbol:
+                continue
+            try:
+                qty = abs(float(p.qty))
+            except (TypeError, ValueError):
+                continue
+            if qty <= 0:
+                continue
+            tw = float(target_weights.get(sym, 0.0) or 0.0)
+            if tw > 0:
+                continue
+            if self._verifier_dust_sweep_blocked_fresh(
+                sym, p, loss_floor_pct=guard_loss_floor,
+            ):
+                continue
+            log.info(
+                "[selector] pre-buy dust-sweep: closing %s (qty=%s, target=0%%)",
+                sym, qty,
+            )
+            try:
+                exec_result = self.executor.close_position(
+                    sym, reason="pre-buy dust-sweep target=0",
+                )
+            except Exception as e:
+                log.warning("pre-buy dust-sweep failed for %s: %s", sym, e)
+                continue
+            if exec_result.ok:
+                self._clear_position_lifecycle(sym)
+            results.append({
+                "symbol": sym,
+                "side": "sell",
+                "is_new_entry": False,
+                "skipped": None,
+                "execution": exec_result.to_dict() if hasattr(exec_result, "to_dict") else {
+                    "ok": getattr(exec_result, "ok", False),
+                    "filled_qty": getattr(exec_result, "filled_qty", None),
+                    "order_id": getattr(exec_result, "order_id", None),
+                },
+                "label": "[selector] pre-buy dust-sweep",
+                "qty_before": qty,
+            })
+        return results
+
+    def _verifier_dust_sweep_blocked_fresh(
+        self,
+        symbol: str,
+        position: Any,
+        *,
+        loss_floor_pct: float,
+    ) -> bool:
+        """Phase 1b: skip verifier dust-sweep for very-fresh entries.
+
+        Returns True when the position was opened today by the same intraday
+        scan flow AND it isn't already materially in the red. The selector
+        flipping its target from 100% to 0% within an hour is the dominant
+        churn mode (see EXECUTION_PLAN.md Phase 1b). Only block when:
+          - position has a recorded entry_ts within today's session, AND
+          - unrealized P&L pct >= ``loss_floor_pct`` (default -0.5%), AND
+          - protective stop has not been breached (executor handles that).
+        Logs a single WARN line per skip so operators can audit the guard.
+        """
+        sym = str(symbol or "").strip().upper()
+        if not sym:
+            return False
+        ctx = self._position_lifecycle_context(sym)
+        if not ctx:
+            return False
+        ts = self._parse_lifecycle_ts(ctx.get("entry_ts"))
+        if ts is None:
+            return False
+        # Same-day check: in UTC, compare calendar date with now().
+        now = datetime.now(timezone.utc)
+        if ts.date() != now.date():
+            return False
+        try:
+            plpc = float(getattr(position, "unrealized_plpc", 0.0) or 0.0)
+        except (TypeError, ValueError):
+            plpc = 0.0
+        if plpc <= loss_floor_pct:
+            # Already losing money — let the dust-sweep run.
+            return False
+        log.warning(
+            "[verifier] %s dust-sweep BLOCKED by fresh-entry guard "
+            "(entry_ts=%s, age=%.1fmin, plpc=%.4f, loss_floor=%.4f)",
+            sym, ctx.get("entry_ts"), ctx.get("age_minutes", 0.0),
+            plpc, loss_floor_pct,
+        )
+        return True
+
+    def _fresh_exit_guard(self, action: Any, *, full_exit: bool) -> dict[str, Any] | None:
+        lifecycle = self._position_lifecycle_context(getattr(action, "symbol", ""))
+        if not lifecycle.get("fresh_exit_cooldown_active"):
+            return None
+        min_conf = float(self.cfg.get("selector", "fresh_exit_min_confidence", default=0.85) or 0.85)
+        try:
+            conf = float(getattr(action, "ai_confidence", 0.0) or 0.0)
+        except (TypeError, ValueError):
+            conf = 0.0
+        try:
+            plpc = float(getattr(action, "unrealized_plpc", 0.0) or 0.0)
+        except (TypeError, ValueError):
+            plpc = 0.0
+        try:
+            opportunity = float(getattr(action, "opportunity_score", 0.0) or 0.0)
+        except (TypeError, ValueError):
+            opportunity = 0.0
+        reason = (
+            f"{getattr(action, 'reason', '')} "
+            f"{getattr(action, 'one_sentence_reason', '')} "
+            f"{getattr(action, 'ai_action', '')}"
+        ).lower()
+        severe_terms = (
+            "thesis gone", "signals gone", "breakdown", "failed continuation",
+            "weak continuation", "underperform", "reversal", "bearish",
+            "stop", "risk", "earnings", "bad news", "loss", "capital protection",
+        )
+        severe_reason = any(term in reason for term in severe_terms)
+        severe_underperformance = plpc <= -0.015
+        severe_opportunity_loss = opportunity > 0 and opportunity <= 25
+        if conf >= min_conf or severe_reason or severe_underperformance or severe_opportunity_loss:
+            return None
+        return {
+            "reason": "fresh_exit_cooldown_low_confidence",
+            "full_exit": bool(full_exit),
+            "ai_confidence": round(conf, 3),
+            "min_confidence": min_conf,
+            "unrealized_plpc": round(plpc, 4),
+            "opportunity_score": opportunity,
+            "lifecycle": lifecycle,
+        }
+
+    # ---- weekend protection enforcement ------------------------------------
+
+    @staticmethod
+    def _order_enum_text(value: Any) -> str:
+        raw = getattr(value, "value", value)
+        return str(raw or "").lower().rsplit(".", 1)[-1]
+
+    def _protective_order_snapshot(self, order: Any) -> dict[str, Any]:
+        return {
+            "id": str(getattr(order, "id", "") or ""),
+            "symbol": str(getattr(order, "symbol", "") or "").upper(),
+            "side": self._order_enum_text(getattr(order, "side", "")),
+            "type": self._order_enum_text(getattr(order, "type", "")),
+            "time_in_force": self._order_enum_text(getattr(order, "time_in_force", "")),
+            "status": self._order_enum_text(getattr(order, "status", "")),
+            "qty": float(getattr(order, "qty", 0) or 0),
+            "stop_price": (
+                float(getattr(order, "stop_price", 0) or 0)
+                if getattr(order, "stop_price", None) not in (None, "")
+                else None
+            ),
+        }
+
+    def _is_open_protective_stop(self, order: Any, symbol: str) -> bool:
+        snap = self._protective_order_snapshot(order)
+        return (
+            snap["symbol"] == str(symbol or "").upper()
+            and snap["side"] == "sell"
+            and snap["type"] in {"stop", "stop_limit", "trailing_stop"}
+            and snap["status"] not in {"filled", "canceled", "cancelled", "expired", "rejected"}
+            and snap["qty"] > 0
+        )
+
+    def _weekend_stop_protection(
+        self,
+        position: Any,
+        open_orders: list[Any],
+        *,
+        dry_run: bool,
+    ) -> dict[str, Any]:
+        sym = str(getattr(position, "symbol", "") or "").upper()
+        qty = abs(float(getattr(position, "qty", 0) or 0))
+        market_value = abs(float(getattr(position, "market_value", 0) or 0))
+        current_price = float(
+            getattr(position, "current_price", 0)
+            or getattr(position, "avg_entry_price", 0)
+            or 0
+        )
+        if not sym or qty <= 0:
+            return {"symbol": sym, "status": "skipped", "reason": "no_position_qty"}
+        whole_qty = int(qty)
+        fractional_qty = max(0.0, qty - whole_qty)
+        fractional_value = fractional_qty * current_price if current_price > 0 else 0.0
+        allowed_dust = float(self.cfg.get(
+            "overnight", "weekend", "allow_unprotected_fractional_dust_usd",
+            default=500,
+        ) or 500)
+        tif = str(self.cfg.get(
+            "overnight", "weekend", "protective_stop_tif", default="gtc",
+        ) or "gtc").lower()
+        base = {
+            "symbol": sym,
+            "qty": round(qty, 6),
+            "whole_qty": whole_qty,
+            "fractional_qty": round(fractional_qty, 6),
+            "fractional_value": round(fractional_value, 2),
+            "market_value": round(market_value, 2),
+            "current_price": round(current_price, 4),
+            "required_tif": tif,
+        }
+        if fractional_qty > 1e-6 and fractional_value > allowed_dust:
+            reason = (
+                f"weekend protection: fractional dust ${fractional_value:.0f} "
+                f"exceeds allowed ${allowed_dust:.0f}"
+            )
+            if dry_run:
+                return {**base, "status": "close_dry", "reason": reason}
+            res = self.executor.close_position(sym, reason=reason)
+            if res.ok:
+                self._clear_position_lifecycle(sym)
+            return {**base, "status": "closed" if res.ok else "close_failed",
+                    "reason": reason, "execution": res.to_dict()}
+        if whole_qty < 1:
+            if market_value <= allowed_dust:
+                return {**base, "status": "allowed_fractional_dust_only"}
+            reason = "weekend protection: no whole shares available for GTC stop"
+            if dry_run:
+                return {**base, "status": "close_dry", "reason": reason}
+            res = self.executor.close_position(sym, reason=reason)
+            if res.ok:
+                self._clear_position_lifecycle(sym)
+            return {**base, "status": "closed" if res.ok else "close_failed",
+                    "reason": reason, "execution": res.to_dict()}
+
+        protective = [
+            self._protective_order_snapshot(o)
+            for o in (open_orders or [])
+            if self._is_open_protective_stop(o, sym)
+        ]
+        gtc_qty = sum(
+            float(o.get("qty") or 0)
+            for o in protective
+            if str(o.get("time_in_force") or "").lower() == "gtc"
+        )
+        if gtc_qty + 1e-6 >= whole_qty:
+            return {**base, "status": "protected_existing_gtc", "orders": protective}
+        if dry_run:
+            return {**base, "status": "submit_gtc_stop_dry", "orders": protective}
+
+        cancelled = self.executor._cancel_symbol_orders_before_sell(
+            sym,
+            reason="replace weekend DAY protection with GTC stop",
+        )
+        stop_ref = current_price or float(getattr(position, "avg_entry_price", 0) or 0)
+        try:
+            stop_price = self.risk.protective_stop_loss_price(stop_ref, None)
+        except Exception:
+            stop_price = round(max(0.01, stop_ref * 0.99), 2)
+        if current_price > 0:
+            buffer_pct = float(self.cfg.get(
+                "opening_stop_guard", "rearm_below_market_buffer_pct", default=0.003,
+            ) or 0.003)
+            if stop_price >= current_price:
+                stop_price = round(max(0.01, current_price * (1.0 - buffer_pct)), 2)
+        try:
+            order = self.client.submit_stop_loss(
+                symbol=sym,
+                qty=whole_qty,
+                stop_price=stop_price,
+                side="sell",
+                tif=tif,
+            )
+            return {
+                **base,
+                "status": "protected_new_gtc",
+                "cancelled_orders_before_stop": cancelled,
+                "stop_order_id": str(getattr(order, "id", "") or ""),
+                "stop_price": stop_price,
+            }
+        except Exception as exc:
+            reason = f"weekend protection failed to submit {tif.upper()} stop: {exc}"
+            log.error("[%s] %s", sym, reason)
+            res = self.executor.close_position(sym, reason=reason)
+            if res.ok:
+                self._clear_position_lifecycle(sym)
+            return {
+                **base,
+                "status": "closed" if res.ok else "close_failed",
+                "reason": reason,
+                "cancelled_orders_before_stop": cancelled,
+                "execution": res.to_dict(),
+            }
+
+    def _enforce_weekend_protection(
+        self,
+        positions: list[Any],
+        *,
+        dry_run: bool,
+    ) -> dict[str, Any]:
+        if not bool(self.cfg.get("overnight", "weekend", "require_protective_stop", default=False)):
+            return {"enabled": False}
+        try:
+            open_orders = self.client.get_open_orders()
+        except Exception as exc:
+            log.warning("weekend protection: open-order fetch failed: %s", exc)
+            open_orders = []
+        actions: list[dict[str, Any]] = []
+        for p in positions or []:
+            sym = str(getattr(p, "symbol", "") or "").upper()
+            if not sym or "/" in sym or self._is_cash_proxy(sym):
+                continue
+            if abs(float(getattr(p, "qty", 0) or 0)) <= 0:
+                continue
+            actions.append(self._weekend_stop_protection(p, open_orders, dry_run=dry_run))
+        return {"enabled": True, "actions": actions}
 
     def _veto_circuit_breaker_should_trim(self, symbol: str, directional: float) -> bool:
         if not bool(self.cfg.get("overnight", "veto_circuit_breaker", "enabled", default=True)):
@@ -564,7 +1101,16 @@ class TradingOrchestrator:
         floor_pct: float,
         context: str,
     ) -> float:
-        """Return the buy notional allowed by confirmed cash after funding attempts."""
+        """Return the buy notional allowed by confirmed cash after funding attempts.
+
+        Phase 2b (2026-05-05): if the funding cap shrinks the order below
+        ``cash.cap_drop_threshold_pct`` of its requested size, DROP the buy
+        entirely instead of submitting a stub. Today's scan #3 produced
+        $609 single-share buys of GEV/GOOGL/MRVL when each was meant to be
+        a $7-8K position — those stubs were no-ops that immediately got
+        stopped out and tied up a slot. Better to fail loudly and let the
+        next scan retry with full cash.
+        """
         requested = round(max(0.0, float(requested_notional or 0.0)), 2)
         if requested <= 0:
             return 0.0
@@ -581,6 +1127,19 @@ class TradingOrchestrator:
         if allowed < min_trade:
             log.warning("%s: skipping %s buy; allowed $%.0f below min trade $%.0f",
                         context, symbol, allowed, min_trade)
+            return 0.0
+        # Phase 2b: drop sub-threshold caps instead of stubbing.
+        cap_drop_pct = float(self.cfg.get(
+            "cash", "cap_drop_threshold_pct", default=0.40,
+        ) or 0.40)
+        if requested > 0 and (allowed / requested) < cap_drop_pct and not (
+            requested - allowed < 50
+        ):
+            log.warning(
+                "%s: DROPPING %s buy — cash-capped to %.0f%% of target "
+                "(target=$%.0f, allowed=$%.0f). Skipping the slot.",
+                context, symbol, (allowed / requested) * 100, requested, allowed,
+            )
             return 0.0
         return allowed
 
@@ -1150,16 +1709,266 @@ class TradingOrchestrator:
                      p.symbol, model_used, action, conf, reasoning)
 
             if action == "exit" and conf >= min_exit_conf:
+                # Phase 4a: 30-min hold confirmation buffer. Today's review
+                # showed PWR exited on a momentum-fade signal that recovered
+                # +$94 within the next 30 min. Require a second consecutive
+                # exit signal at least N minutes apart, OR a stop-loss
+                # breach / earnings-window override.
+                buffer_action = self._exit_confirmation_buffer_check(
+                    symbol=p.symbol,
+                    macro=macro,
+                    triggers=ctx.get("exit_triggers") or {},
+                    plpc=plpc,
+                )
+                if buffer_action == "skip":
+                    log.info(
+                        "[%s] exit-arbiter EXIT held by 30-min confirmation buffer "
+                        "(first signal recorded; need 2nd confirmation)",
+                        p.symbol,
+                    )
+                    continue
                 closes.append((
                     p.symbol,
                     f"AI exit-arbiter (conf={conf:.2f}, model={model_used}): {reasoning}",
                 ))
+                self._exit_confirmation_buffer_clear(p.symbol)
+                self._record_exit_arbiter_action(p.symbol, "exit", conf, reasoning)
             elif action == "reduce" and conf >= min_exit_conf:
-                # Partial reduce is handled by the rebalance arbiter on the
-                # same scan; we intentionally don't hard-close here.
-                log.info("[%s] exit-arbiter suggests reduce — deferring to rebalance arbiter", p.symbol)
+                # Phase 4b: act on reduce immediately — 50% partial sell +
+                # tighten stop. Previously this deferred to the rebalance
+                # arbiter which then ran a full EXIT, producing all-or-nothing
+                # behavior when a true reduce was the request.
+                self._handle_exit_arbiter_reduce(p, plpc, conf, reasoning)
+                self._exit_confirmation_buffer_clear(p.symbol)
+                self._record_exit_arbiter_action(p.symbol, "reduce", conf, reasoning)
             # else: hold / low-confidence → do nothing
         return closes
+
+    def _exit_confirmation_buffer_path(self) -> Path:
+        return Path(__file__).resolve().parents[1] / "data" / "state" / "exit_signal_buffer.json"
+
+    def _load_exit_confirmation_buffer(self) -> dict[str, Any]:
+        path = self._exit_confirmation_buffer_path()
+        try:
+            return json.loads(path.read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            return {}
+        except Exception as e:
+            log.warning("exit-buffer load failed: %s", e)
+            return {}
+
+    def _save_exit_confirmation_buffer(self, state: dict[str, Any]) -> None:
+        path = self._exit_confirmation_buffer_path()
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps(state, indent=2), encoding="utf-8")
+        except Exception as e:
+            log.warning("exit-buffer save failed: %s", e)
+
+    def _exit_confirmation_buffer_clear(self, symbol: str) -> None:
+        sym = str(symbol or "").strip().upper()
+        if not sym:
+            return
+        state = self._load_exit_confirmation_buffer()
+        if sym in state:
+            state.pop(sym, None)
+            self._save_exit_confirmation_buffer(state)
+
+    def _exit_arbiter_actions_path(self) -> Path:
+        return Path(__file__).resolve().parents[1] / "data" / "state" / "recent_exit_actions.json"
+
+    def _load_recent_exit_actions(self) -> dict[str, Any]:
+        path = self._exit_arbiter_actions_path()
+        try:
+            return json.loads(path.read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            return {}
+        except Exception as e:
+            log.warning("recent-exit-actions load failed: %s", e)
+            return {}
+
+    def _save_recent_exit_actions(self, state: dict[str, Any]) -> None:
+        path = self._exit_arbiter_actions_path()
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps(state, indent=2), encoding="utf-8")
+        except Exception as e:
+            log.warning("recent-exit-actions save failed: %s", e)
+
+    def _record_exit_arbiter_action(
+        self, symbol: str, action: str, confidence: float, reasoning: str,
+    ) -> None:
+        sym = str(symbol or "").strip().upper()
+        if not sym:
+            return
+        state = self._load_recent_exit_actions()
+        state[sym] = {
+            "action": str(action or "").strip().lower(),
+            "ts": datetime.now(timezone.utc).isoformat(),
+            "confidence": round(float(confidence), 3),
+            "reason": str(reasoning or "")[:200],
+        }
+        self._save_recent_exit_actions(state)
+
+    def _recent_exit_actions_for_selector(self) -> dict[str, Any]:
+        """Return exit-arbiter actions still inside the cooldown window.
+
+        Surfaced to the portfolio selector as `system_state.recent_exit_actions`
+        so the selector cannot quietly reverse a recent EXIT/REDUCE without
+        elevated confidence. Stale entries past the cooldown are pruned.
+        """
+        cooldown_min = float(
+            self.cfg.get("exit_arbiter", "rebuy_cooldown_minutes", default=60) or 60
+        )
+        if cooldown_min <= 0:
+            return {}
+        state = self._load_recent_exit_actions()
+        if not state:
+            return {}
+        now = datetime.now(timezone.utc)
+        out: dict[str, Any] = {}
+        changed = False
+        for sym, entry in list(state.items()):
+            ts = self._parse_lifecycle_ts((entry or {}).get("ts"))
+            if ts is None:
+                state.pop(sym, None)
+                changed = True
+                continue
+            age_min = (now - ts).total_seconds() / 60.0
+            if age_min > cooldown_min:
+                state.pop(sym, None)
+                changed = True
+                continue
+            out[sym] = {
+                "action": entry.get("action"),
+                "confidence": entry.get("confidence"),
+                "minutes_ago": round(age_min, 1),
+                "minutes_remaining": round(cooldown_min - age_min, 1),
+                "reason": entry.get("reason"),
+            }
+        if changed:
+            self._save_recent_exit_actions(state)
+        return out
+
+    def _exit_confirmation_buffer_check(
+        self,
+        symbol: str,
+        macro: MacroSignal | None,
+        triggers: dict[str, Any] | None,
+        plpc: float,
+    ) -> str:
+        """Phase 4a: enforce a confirmation window before AI-opinion exits.
+
+        Returns "proceed" to allow the exit, or "skip" to hold this scan
+        and require a second consecutive exit signal ≥ N minutes later.
+
+        Skips the buffer (returns "proceed") when:
+          - macro halt is active (urgent risk-off)
+          - position is in earnings window (handled by earnings-gate)
+          - signal is a stop-loss breach (deterministic, not opinion)
+          - position is already losing materially (plpc <= -loss_floor)
+        """
+        if not bool(self.cfg.get("exit_arbiter", "confirmation_buffer_enabled", default=True)):
+            return "proceed"
+        # Skip buffer in urgent contexts.
+        if macro is not None and (
+            getattr(macro, "score", 0.0) <= float(
+                self.cfg.get("macro", "bearish_halt_score", default=-0.55) or -0.55
+            )
+        ):
+            return "proceed"
+        triggers = dict(triggers or {})
+        if triggers.get("stop_loss_breach"):
+            return "proceed"
+        if triggers.get("earnings_window") or triggers.get("earnings_close"):
+            return "proceed"
+        loss_floor = float(self.cfg.get(
+            "exit_arbiter", "confirmation_buffer_loss_floor_pct", default=-0.015,
+        ) or -0.015)
+        if plpc <= loss_floor:
+            # Already losing materially — let the AI exit immediately.
+            return "proceed"
+
+        confirm_minutes = float(self.cfg.get(
+            "exit_arbiter", "confirmation_minutes", default=30,
+        ) or 30)
+
+        sym = str(symbol or "").strip().upper()
+        state = self._load_exit_confirmation_buffer()
+        entry = state.get(sym) or {}
+        now = datetime.now(timezone.utc)
+        first_ts_raw = entry.get("first_signal_ts")
+        first_ts = self._parse_lifecycle_ts(first_ts_raw)
+        if first_ts is None:
+            # First exit signal — record and ask for confirmation.
+            state[sym] = {
+                "first_signal_ts": now.isoformat(),
+                "plpc_at_signal": round(float(plpc), 4),
+            }
+            self._save_exit_confirmation_buffer(state)
+            return "skip"
+        age_min = (now - first_ts).total_seconds() / 60.0
+        if age_min < confirm_minutes:
+            # Still inside the confirmation window. Hold.
+            return "skip"
+        # Second confirmation arrived after the buffer expired — proceed.
+        return "proceed"
+
+    def _handle_exit_arbiter_reduce(
+        self,
+        p: Any,
+        plpc: float,
+        conf: float,
+        reasoning: str,
+    ) -> None:
+        """Phase 4b: act on exit-arbiter `reduce` — 50% partial sell + tighter stop."""
+        try:
+            qty = abs(float(p.qty))
+        except (TypeError, ValueError):
+            qty = 0.0
+        if qty <= 0:
+            log.info("[%s] reduce skipped: zero qty", p.symbol)
+            return
+        trim_fraction = float(self.cfg.get(
+            "exit_arbiter", "reduce_trim_fraction", default=0.5,
+        ) or 0.5)
+        trim_fraction = max(0.05, min(0.95, trim_fraction))
+        sell_qty = qty * trim_fraction
+        # Whole-share quantization for protected stocks; allow fractional only
+        # for sub-$10 names (consistent with the rest of the codebase).
+        try:
+            price_for_round = float(getattr(p, "current_price", 0) or 0)
+        except (TypeError, ValueError):
+            price_for_round = 0.0
+        if price_for_round >= 10.0:
+            sell_qty = float(int(sell_qty))
+        if sell_qty <= 0:
+            log.info(
+                "[%s] reduce computed zero sell qty (qty=%s, fraction=%.2f) — skip",
+                p.symbol, qty, trim_fraction,
+            )
+            return
+        try:
+            exec_result = self.executor.execute_ai_qty_delta(
+                symbol=p.symbol,
+                delta_qty=-sell_qty,
+                reason=(
+                    f"AI exit-arbiter REDUCE (conf={conf:.2f}): {reasoning}"
+                ),
+            )
+        except Exception as e:
+            log.warning("[%s] reduce execution raised: %s", p.symbol, e)
+            return
+        if not getattr(exec_result, "ok", False):
+            log.warning(
+                "[%s] reduce sell did not fill: status=%s",
+                p.symbol, getattr(exec_result, "final_status", "?"),
+            )
+            return
+        log.info(
+            "[%s] reduce: trimmed %s shares (%.0f%% of position) — exit-arbiter confirmed",
+            p.symbol, sell_qty, trim_fraction * 100,
+        )
 
     def _earnings_gate_decision(
         self, p, einfo: EarningsInfo, tech, sent, numeric, macro: MacroSignal | None,
@@ -2206,6 +3015,18 @@ class TradingOrchestrator:
             action.side == "sell"
             and (action.target_notional <= 0 or action.target_pct <= 0 or action.ai_action == "EXIT")
         )
+        # Phase 3: surface ATR to the executor so the protective stop can be
+        # ATR-aware. ``action.tech_score`` doesn't carry ATR directly; pull
+        # from the live tech_map captured for this scan.
+        atr_for_stop = None
+        try:
+            tech_for_sym = (
+                getattr(self, "_last_tech_map", None) or {}
+            ).get(getattr(action, "symbol", ""))
+            if tech_for_sym is not None:
+                atr_for_stop = float(getattr(tech_for_sym, "atr", 0) or 0) or None
+        except (TypeError, ValueError, AttributeError):
+            atr_for_stop = None
         ai_audit = {
             "source": "ai_direct_rebalance",
             "label": label,
@@ -2220,8 +3041,32 @@ class TradingOrchestrator:
             "current_notional": action.current_notional,
             "target_notional": action.target_notional,
             "ai_action": action.ai_action,
+            "ai_confidence": getattr(action, "ai_confidence", None),
+            "opportunity_score": getattr(action, "opportunity_score", None),
+            # Phase 3: ATR for ATR-aware protective-stop floor.
+            "atr": atr_for_stop,
         }
         try:
+            if action.side == "sell":
+                fresh_guard = self._fresh_exit_guard(action, full_exit=full_exit)
+                if fresh_guard:
+                    log.info(
+                        "[%s] %s sell skipped by fresh-exit guard: conf=%.2f < %.2f",
+                        action.symbol, label,
+                        fresh_guard.get("ai_confidence", 0.0),
+                        fresh_guard.get("min_confidence", 0.0),
+                    )
+                    log_decision({
+                        "event": "fresh_exit_guard_skipped",
+                        "symbol": action.symbol,
+                        "action": action_dict,
+                        "guard": fresh_guard,
+                    })
+                    return {
+                        **action_dict,
+                        "skipped": "fresh_exit_cooldown_low_confidence",
+                        "fresh_exit_guard": fresh_guard,
+                    }
             if full_exit:
                 if action.ai_delta_qty is not None:
                     try:
@@ -2231,6 +3076,8 @@ class TradingOrchestrator:
                         return {**action_dict, "skipped": "invalid_ai_delta_qty"}
                 exec_result = self.executor.close_position(action.symbol, reason=action.reason)
                 action_dict["full_exit_via_close_position"] = True
+                if exec_result.ok:
+                    self._clear_position_lifecycle(action.symbol)
                 return {**action_dict, "execution": exec_result.to_dict()}
 
             if action.ai_delta_qty is None:
@@ -2259,6 +3106,21 @@ class TradingOrchestrator:
                 if not entry_ref and abs(delta_qty) > 0:
                     entry_ref = float(action.delta_notional) / abs(delta_qty)
                 submitted_qty = float(buy_audit.get("submitted_qty") or delta_qty)
+                preflight_ok, preflight = self.executor.preflight_buy(
+                    symbol=action.symbol,
+                    qty=submitted_qty,
+                    entry_price=float(entry_ref or 0),
+                    stop_loss=action.ai_stop_loss,
+                    take_profit=action.ai_take_profit,
+                )
+                ai_audit["execution_preflight"] = preflight
+                if not preflight_ok:
+                    return {
+                        **action_dict,
+                        "skipped": "execution_preflight_rejected",
+                        "execution_preflight": preflight,
+                    }
+                submitted_qty = float(preflight.get("submitted_qty") or submitted_qty)
                 funding_requirement = submitted_qty * float(entry_ref or 0)
                 if funding_requirement <= 0:
                     funding_requirement = float(action.delta_notional)
@@ -2282,6 +3144,19 @@ class TradingOrchestrator:
                     reason=action.reason,
                     ai_audit=ai_audit,
                 )
+                if exec_result.ok:
+                    self._record_position_entry(
+                        action.symbol,
+                        source=label,
+                        execution=exec_result.to_dict(),
+                        context={
+                            **ai_audit,
+                            "reason": action.reason,
+                            "one_sentence_reason": getattr(action, "one_sentence_reason", ""),
+                            "ai_confidence": getattr(action, "ai_confidence", None),
+                            "opportunity_score": getattr(action, "opportunity_score", None),
+                        },
+                    )
             elif action.side == "sell":
                 exec_result = self.executor.execute_ai_qty_delta(
                     symbol=action.symbol,
@@ -2733,7 +3608,18 @@ class TradingOrchestrator:
         cash_usd = float(account.cash) if account else 0.0
 
         # ---- Pass 1: deterministic dust sweep ----
+        # Phase 1b: same-day fresh-entry guard. Today's review (2026-05-05)
+        # showed 5 positions opened by the selector dust-swept on the very
+        # next scan because the selector's targets evicted them within 1-2
+        # hours of entry. This produced ~$50K of churn for a tiny net P&L.
+        # Guard: if a position was opened today and isn't materially in the
+        # red, skip the dust-sweep — give the thesis a chance to play out.
+        guard_loss_floor = float(
+            self.cfg.get("portfolio_verifier", "fresh_entry_loss_floor_pct",
+                         default=-0.005) or -0.005
+        )
         dust_closed: list[dict[str, Any]] = []
+        skipped_fresh: list[dict[str, Any]] = []
         for p in positions:
             sym = p.symbol
             # SPY is reconciled separately via _apply_spy_target — skip here.
@@ -2744,6 +3630,13 @@ class TradingOrchestrator:
                 continue
             tw = float(target_weights.get(sym, 0.0) or 0.0)
             if tw <= 0.0:
+                # Phase 1b guard: skip dust-sweep for very-fresh entries
+                # that aren't already losing money.
+                if self._verifier_dust_sweep_blocked_fresh(
+                    sym, p, loss_floor_pct=guard_loss_floor,
+                ):
+                    skipped_fresh.append({"symbol": sym, "qty_before": qty})
+                    continue
                 # Target zero but residual shares. Route through the executor so
                 # protective child orders are canceled before the close request.
                 log.info("Verifier dust-sweep: force-closing %s (qty=%s, target=0%%)", sym, qty)
@@ -2761,6 +3654,8 @@ class TradingOrchestrator:
                     "order_id": exec_result.order_id,
                     "error": None if exec_result.ok else exec_result.message,
                 })
+                if exec_result.ok:
+                    self._clear_position_lifecycle(sym)
 
         # Refresh after dust sweep so weight calc reflects post-close state.
         if dust_closed:
@@ -2770,6 +3665,12 @@ class TradingOrchestrator:
                 cash_usd = float(account.cash) if account else cash_usd
             except Exception as e:
                 log.warning("Verifier: post-dust snapshot refresh failed: %s", e)
+        if skipped_fresh:
+            log.info(
+                "Verifier: dust-sweep skipped on %d fresh-entry position(s): %s",
+                len(skipped_fresh),
+                ", ".join(s["symbol"] for s in skipped_fresh),
+            )
 
         # ---- Build current-vs-target diff for Sonnet ----
         tolerance_pct = float(self.cfg.get("portfolio_verifier", "tolerance_pct_of_equity", default=0.005))
@@ -2920,14 +3821,32 @@ class TradingOrchestrator:
             try:
                 if side == "buy":
                     floor_pct = max(float(cash_target or 0.0), float(self.risk.cash_reserve_pct))
+                    opus_info = per_symbol.get(sym, {}) or {}
+                    entry_ref = opus_info.get("entry_price") or current_price
+                    preflight_ok, preflight = self.executor.preflight_buy(
+                        symbol=sym,
+                        qty=delta_qty,
+                        entry_price=float(entry_ref),
+                        stop_loss=opus_info.get("stop_loss"),
+                        take_profit=opus_info.get("take_profit"),
+                    )
+                    if not preflight_ok:
+                        rejected.append({
+                            "symbol": sym,
+                            "reason": "execution_preflight_rejected",
+                            "execution_preflight": preflight,
+                        })
+                        continue
+                    submitted_qty = float(preflight.get("submitted_qty") or delta_qty)
+                    if abs(submitted_qty - delta_qty) > 1e-9:
+                        delta_qty = submitted_qty
+                        delta_usd = submitted_qty * current_price
                     funded_delta = self._funded_buy_notional(
                         sym, delta_usd, live_equity, floor_pct, "verifier",
                     )
                     if funded_delta + 0.01 < delta_usd:
                         rejected.append({"symbol": sym, "reason": "insufficient_confirmed_cash"})
                         continue
-                    opus_info = per_symbol.get(sym, {}) or {}
-                    entry_ref = opus_info.get("entry_price") or current_price
                     exec_res = self.executor.execute_ai_bracket(
                         symbol=sym,
                         qty=delta_qty,
@@ -2937,8 +3856,21 @@ class TradingOrchestrator:
                         reason=f"verifier reconcile to Opus target {row['target_weight']*100:.1f}% "
                                f"(gap was ${row['gap_usd']:+.0f})",
                         ai_audit={"source": "portfolio_verifier", "proposal": prop,
-                                  "row": row, "per_symbol": opus_info},
+                                  "row": row, "per_symbol": opus_info,
+                                  "execution_preflight": preflight},
                     )
+                    if exec_res.ok:
+                        self._record_position_entry(
+                            sym,
+                            source="portfolio_verifier",
+                            execution=exec_res.to_dict(),
+                            context={
+                                "reason": f"verifier reconcile to Opus target {row['target_weight']*100:.1f}%",
+                                "ai_action": opus_info.get("action"),
+                                "ai_confidence": opus_info.get("confidence"),
+                                "opportunity_score": opus_info.get("opportunity_score"),
+                            },
+                        )
                 else:
                     exec_res = self.executor.execute_ai_qty_delta(
                         symbol=sym,
@@ -3209,6 +4141,16 @@ class TradingOrchestrator:
             if target_pct <= 0:
                 continue
             target_notional = round(target_pct * equity, 2)
+            min_entry_pct = float(self.cfg.get(
+                "selector", "min_new_entry_pct",
+                default=float(self.cfg.get("selector", "min_per_position_pct", default=0.04) or 0.04),
+            ) or 0.04)
+            if target_pct < min_entry_pct:
+                _block(sym, "below_min_new_entry_pct",
+                       requested_target_pct=round(target_pct, 4),
+                       min_new_entry_pct=min_entry_pct,
+                       requested_delta_notional=target_notional)
+                continue
             min_trade = float(self.cfg.get("risk", "min_trade_usd", default=500))
             if target_notional < min_trade:
                 _block(sym, "below_min_trade",
@@ -3447,7 +4389,17 @@ class TradingOrchestrator:
             "You are the SOLE authority on which 3-6 positions the bot holds.",
             "Optimize for REMAINING upside between NOW and the NEXT SCAN.",
             "currently_held flag carries ZERO weight. P&L is sunk and irrelevant.",
+            (
+                f"Fresh entries inside {float(self.cfg.get('selector', 'fresh_exit_cooldown_minutes', default=120) or 120):.0f} "
+                "minutes get a conservative first read: reduce/exit only when the entry thesis is gone, "
+                "the position is materially underperforming, protective risk changed, or your confidence is very high."
+            ),
             "Fresh BUYs require live continuation; gap-only, flat-after-open names should PASS.",
+            (
+                f"Do not open novelty starter positions below "
+                f"{float(self.cfg.get('selector', 'min_new_entry_pct', default=0.04) or 0.04):.0%} "
+                "of equity after staging; PASS them until the setup deserves real capital."
+            ),
             "Use momentum_profile, VWAP, 5-minute EMA state, recent slope, and volume trend.",
             "Apply exhaustion penalty to symbols near day high with fading volume.",
             "Force rotation: held symbols not in selected_positions MUST EXIT.",
@@ -3478,6 +4430,16 @@ class TradingOrchestrator:
         ss = base.setdefault("system_state", {})
         ss["allow_floor_breach"] = bool(allow_floor_breach)
         ss["intraday_new_entries_allowed"] = True
+        # Surface recent exit-arbiter actions (cooldown window, default 60 min)
+        # so the selector cannot silently reverse a just-applied EXIT/REDUCE.
+        recent_exits = self._recent_exit_actions_for_selector()
+        if recent_exits:
+            ss["recent_exit_actions"] = recent_exits
+            ss["recent_exit_rebuy_min_confidence"] = float(
+                self.cfg.get(
+                    "exit_arbiter", "rebuy_min_confidence", default=0.80
+                ) or 0.80
+            )
 
         # Build unified candidate_pool. Held positions get full block (qty,
         # weight, pnl); new candidates get zeros for those fields plus discovery
@@ -3537,16 +4499,26 @@ class TradingOrchestrator:
                     "numeric_confidence": (round(float(num.confidence), 3) if num else None),
                     "numeric_combined_score": (round(float(num.combined_score), 3) if num else None),
                     "numeric_action": (num.action if num else None),
-                    "intraday_chart": chart,
+                    # intraday_chart fields are surfaced top-level below
+                    # (price_vs_vwap_pct, distance_from_high_pct, etc.) so we
+                    # don't embed the raw chart dict here — that would duplicate
+                    # ~640 bytes per candidate and inflated input tokens 50x
+                    # with no extra signal for the selector.
                     "momentum_profile": momentum_profile,
                     "earnings_days_until": (einfo.days_until if einfo else None),
                     "earnings_next_date": (einfo.next_date if einfo else None),
                 }
             else:
-                block["intraday_chart"] = chart
+                # Held blocks come from _portfolio_signals which DOES embed
+                # intraday_chart. Drop it here to keep the selector context
+                # lean — the same signals are surfaced top-level below.
+                block.pop("intraday_chart", None)
                 block["momentum_profile"] = momentum_profile
                 if chart_price:
                     block["current_price"] = round(float(chart_price), 4)
+            lifecycle = self._position_lifecycle_context(sym) if currently_held else {}
+            if lifecycle:
+                block["position_lifecycle"] = lifecycle
             block["currently_held"] = currently_held
             try:
                 current_qty = float(block.get("qty", 0) or 0) if currently_held else 0.0
@@ -3600,6 +4572,7 @@ class TradingOrchestrator:
                 "current_qty": current_qty,
                 "momentum_profile": momentum_profile,
                 "intraday_chart": chart,
+                "position_lifecycle": lifecycle,
             }
 
         annotate_candidate_leadership(
@@ -3619,6 +4592,7 @@ class TradingOrchestrator:
                 "peer_group",
                 "peer_rank",
                 "peer_group_size",
+                "peer_lone",
                 "peer_leader",
                 "peer_leader_score",
                 "peer_relative_score",
@@ -3627,6 +4601,7 @@ class TradingOrchestrator:
                 "peer_comparison_summary",
                 "sector_rank",
                 "sector_group_size",
+                "sector_lone",
                 "sector_leader",
                 "sector_leader_score",
                 "sector_relative_score",
@@ -3634,6 +4609,7 @@ class TradingOrchestrator:
                 "sector_comparison_summary",
                 "theme_rank",
                 "theme_group_size",
+                "theme_lone",
                 "theme_leader",
                 "theme_leader_score",
                 "theme_relative_score",
@@ -3642,6 +4618,14 @@ class TradingOrchestrator:
             ):
                 if key in block:
                     pool_meta[sym][key] = block.get(key)
+
+        # Phase 0b: slim the per-candidate payload before sending to the
+        # selector. Today's bloat audit (2026-05-05) showed 28K input tokens
+        # for a 50-symbol pool, with ~7KB of *prose narrative* duplicating
+        # numeric `*_rank` / `*_leader` fields. The selector needs the
+        # signal, not three sentences saying the same thing.
+        # See EXECUTION_PLAN.md Phase 0b.
+        _slim_selector_pool_blocks(unified_pool)
 
         base["candidate_pool"] = unified_pool
         base.pop("positions", None)
@@ -3665,6 +4649,7 @@ class TradingOrchestrator:
           8. apply SPY target, run verifier
         """
         log.info("=== Starting scan via portfolio-selector (dry_run=%s) ===", dry_run)
+        trade_learning_start = self._resolve_trade_learning("scan_start")
         self._last_arbiter_set_spy_target = False
         self._last_ai_target_weights = None
         self._last_ai_per_symbol = {}
@@ -3675,6 +4660,16 @@ class TradingOrchestrator:
         log.info("Account: equity=$%.2f cash=$%.2f positions=%d",
                  equity, float(account.cash), len(positions))
         if not dry_run:
+            # Safety net: ensure every open position has an active protective
+            # stop in the order book before anything else runs. Catches the
+            # HCAI failure mode (entry filled but stop rejected → naked
+            # position) on subsequent scans.
+            try:
+                cov = self.executor.ensure_stop_coverage(source="scan_selector")
+                if cov.get("added") or cov.get("errors"):
+                    log_decision({"event": "stop_coverage", **cov})
+            except Exception as e:
+                log.error("[stop-coverage] safety net raised: %s", e)
             self._restore_cash_floor(equity)
 
         # Diversification audit at scan start: surfaces any theme cap
@@ -3685,6 +4680,9 @@ class TradingOrchestrator:
         scan_type = self._detect_scan_type()
 
         portfolio = self._portfolio_signals(macro)
+        # Phase 3: stash tech_map so the rebalance executor can read ATR per
+        # symbol when constructing the protective stop.
+        self._last_tech_map = portfolio.get("tech_map", {}) or {}
         exit_results: list[dict[str, Any]] = []
         exits = self.evaluate_exits(macro, portfolio=portfolio, scan_type=scan_type)
         earnings_exit_syms: set[str] = {
@@ -3697,6 +4695,8 @@ class TradingOrchestrator:
             else:
                 res = self.executor.close_position(sym, reason=reason)
                 exit_results.append({**res.to_dict(), "reason": reason})
+                if res.ok:
+                    self._clear_position_lifecycle(sym)
         if exit_results and not dry_run:
             exited_syms = {e.get("symbol") for e in exit_results
                            if e.get("status") != "rejected"}
@@ -3847,9 +4847,30 @@ class TradingOrchestrator:
                           ]})
 
         log_decision({"event": "selector_output", "result": result})
+        # Phase 0: candidate_rankings was dropped from the schema. Reconstitute
+        # a ranking list from per_symbol so downstream journal consumers keep
+        # working without forcing the model to emit a 50-row duplicate.
+        per_symbol_dump = result.get("per_symbol") or {}
+        rankings = sorted(
+            (
+                {
+                    "symbol": sym,
+                    "opportunity_score": info.get("opportunity_score", 0),
+                    "action": info.get("action"),
+                    "currently_held": bool(
+                        pool_meta.get(sym, {}).get("currently_held", False)
+                    ),
+                }
+                for sym, info in per_symbol_dump.items()
+                if isinstance(info, dict)
+            ),
+            key=lambda r: -float(r.get("opportunity_score", 0) or 0),
+        )
+        for i, r in enumerate(rankings, start=1):
+            r["rank"] = i
         log_decision({
             "event": "selector_rankings",
-            "candidate_rankings": result.get("candidate_rankings", []),
+            "candidate_rankings": rankings,
         })
         log_decision({
             "event": "selector_exhaustion",
@@ -3980,10 +5001,47 @@ class TradingOrchestrator:
             "cash_target_pct": cash_target_pct,
         })
         executions: list[dict[str, Any]] = []
-        # Sells/exits first so freed cash can fund new buys.
-        plan_sorted = sorted(plan or [],
-                             key=lambda a: 0 if a.side == "sell" else 1)
-        for a in plan_sorted:
+        # Phase 1a: split rebalance into Sell + DustSweep + Buy passes so
+        # freed cash funds buys instead of buys racing the sell fills and
+        # being capped to single-share lots. The pre-buy dust-sweep also
+        # handles positions where the selector silently dropped a target
+        # (off-pool drift, residual fractional shares) — without waiting for
+        # the post-execution verifier (which today runs AFTER the buy
+        # phase, too late to fund anything).
+        sell_actions = [a for a in (plan or []) if a.side == "sell"]
+        buy_actions = [a for a in (plan or []) if a.side == "buy"]
+
+        # --- Sell phase ---
+        for a in sell_actions:
+            if dry_run:
+                log.info("[DRY] Rebalance %s", a.to_dict())
+                executions.append({"dry_run": True, **a.to_dict()})
+                continue
+            action_result = self._execute_ai_rebalance_action(
+                a, equity=equity, cash_floor_pct=selector_cash_floor_pct,
+                label="[selector] rebalance",
+            )
+            executions.append(action_result)
+            exec_result = action_result.get("execution") or {}
+            if exec_result and not exec_result.get("ok"):
+                log.warning("[selector] rebalance %s did not fill", a.symbol)
+
+        # --- Pre-buy dust-sweep ---
+        # Catch any held position whose target is 0% but didn't make it into
+        # the sell plan (compute_rebalance_plan can drop it under certain
+        # conditions). Running this BEFORE the buy phase means dust-sweep
+        # proceeds fund buys; the post-execution verifier still runs as a
+        # final reconciliation pass.
+        if not dry_run:
+            try:
+                pre_buy_dust = self._predetermined_dust_sweep_for_buys(target_weights)
+                if pre_buy_dust:
+                    executions.extend(pre_buy_dust)
+            except Exception as e:
+                log.warning("[selector] pre-buy dust-sweep failed: %s", e)
+
+        # --- Buy phase ---
+        for a in buy_actions:
             if dry_run:
                 log.info("[DRY] Rebalance %s", a.to_dict())
                 executions.append({"dry_run": True, **a.to_dict()})
@@ -4087,6 +5145,26 @@ class TradingOrchestrator:
                 log.warning("[selector] verifier raised: %s", e)
                 verifier_summary = {"error": str(e)}
 
+        # Phase 2a: SPY-as-cash discipline. Today's review (2026-05-05) showed
+        # the bot held ZERO SPY for 6 hours mid-day with $40-87K idle cash
+        # because the selector emitted `spy_target_pct=0` and the apply step
+        # respected that literally. After the verifier completes, sweep any
+        # idle cash above the reserve into SPY so capital isn't sitting flat
+        # while the index rallies. The user explicitly requested this on
+        # 2026-05-05.
+        idle_park_action = None
+        if not dry_run and self.cash_proxy_enabled:
+            try:
+                idle_park_action = self._sweep_cash_to_proxy(equity)
+                if idle_park_action:
+                    log.info(
+                        "[selector] SPY-as-cash sweep: $%.0f idle parked",
+                        float(idle_park_action.get("notional") or 0),
+                    )
+            except Exception as e:
+                log.warning("[selector] idle-cash SPY sweep failed: %s", e)
+        trade_learning_end = self._resolve_trade_learning("scan_end")
+
         summary = {
             "ts": pd.Timestamp.utcnow().isoformat(),
             "equity": equity,
@@ -4115,6 +5193,10 @@ class TradingOrchestrator:
             "executions": executions,
             "cash_proxy": cash_proxy_action,
             "verifier": verifier_summary,
+            "trade_learning": {
+                "start": trade_learning_start,
+                "end": trade_learning_end,
+            },
         }
         _save_research("scan", summary)
         log.info("Scan complete (selector): selected=%d, exits=%d, executions=%d",
@@ -4138,6 +5220,12 @@ class TradingOrchestrator:
         log.info("Account: computed_equity=$%.2f, cash=$%.2f, positions=%d",
                  equity, float(account.cash), len(positions))
         if not dry_run:
+            try:
+                cov = self.executor.ensure_stop_coverage(source="scan_legacy")
+                if cov.get("added") or cov.get("errors"):
+                    log_decision({"event": "stop_coverage", **cov})
+            except Exception as e:
+                log.error("[stop-coverage] safety net raised: %s", e)
             self._restore_cash_floor(equity)
         macro = self.macro_brief()
 
@@ -4165,6 +5253,8 @@ class TradingOrchestrator:
             else:
                 res = self.executor.close_position(sym, reason=reason)
                 exit_results.append({**res.to_dict(), "reason": reason})
+                if res.ok:
+                    self._clear_position_lifecycle(sym)
 
         # After closes, refresh portfolio state and rebuild signal bundle so rebalance
         # sees the accurate current book. (Drop exited symbols from the in-memory bundle.)
@@ -4384,6 +5474,38 @@ class TradingOrchestrator:
                 # Ensure real cash covers the notional; sell SPY cash-proxy if needed.
                 # Re-fetched per-iteration so a prior unfilled trade doesn't leave
                 # us thinking we have cash we don't.
+                preflight_ok, preflight = self.executor.preflight_buy(
+                    symbol=d.symbol,
+                    qty=sizing.qty,
+                    entry_price=sizing.entry,
+                    stop_loss=sizing.stop_loss,
+                    take_profit=sizing.take_profit,
+                )
+                if not preflight_ok:
+                    log.warning("[%s] entry preflight rejected: %s",
+                                d.symbol, preflight.get("reject_reason"))
+                    executions.append({
+                        "sizing": sizing.to_dict(),
+                        "decision": d.to_dict(),
+                        "status": "skipped",
+                        "message": "execution_preflight_rejected",
+                        "execution_preflight": preflight,
+                    })
+                    continue
+                submitted_qty = float(preflight.get("submitted_qty") or sizing.qty)
+                if abs(submitted_qty - float(sizing.qty)) > 1e-9 and sizing.entry:
+                    sizing = replace(
+                        sizing,
+                        qty=submitted_qty,
+                        notional=round(submitted_qty * float(sizing.entry), 2),
+                        risk_usd=round(
+                            submitted_qty * (float(sizing.entry) - float(sizing.stop_loss)),
+                            2,
+                        ),
+                        limits={**dict(sizing.limits), "execution_preflight": preflight},
+                    )
+                else:
+                    sizing.limits["execution_preflight"] = preflight
                 if not self._ensure_cash_for(sizing.notional, equity):
                     log.warning("[%s] entry skipped: insufficient confirmed cash", d.symbol)
                     executions.append({
@@ -4400,6 +5522,17 @@ class TradingOrchestrator:
                     "execution": result.to_dict(),
                     **result.to_dict(),
                 })
+                if result.ok:
+                    self._record_position_entry(
+                        d.symbol,
+                        source="legacy_scan",
+                        execution=result.to_dict(),
+                        context={
+                            "reason": "; ".join(d.reasoning),
+                            "confidence": d.confidence,
+                            "ai_action": d.action,
+                        },
+                    )
                 if not result.ok:
                     log.warning("[%s] entry did not fill — refreshing positions before next sizing",
                                 d.symbol)
@@ -4492,6 +5625,7 @@ class TradingOrchestrator:
         """~5 min before the close: decide whether to hold each position overnight,
         and optionally open new positions likely to gap up at the next open."""
         log.info("=== Pre-close overnight decision (dry_run=%s) ===", dry_run)
+        trade_learning_start = self._resolve_trade_learning("preclose_start")
 
         # HARD RULE: preclose closes/opens touch capital, so they must route
         # through the Opus 4.7 arbiter. No AI → no preclose trades.
@@ -4517,6 +5651,7 @@ class TradingOrchestrator:
                 "exits": [],
                 "new_executions": [],
                 "market_bias": 0.0,
+                "trade_learning": {"start": trade_learning_start},
             }
 
         # Config knobs (weekday defaults)
@@ -4656,6 +5791,8 @@ class TradingOrchestrator:
                     else:
                         _res = self.executor.close_position(sym, reason=_earn_reason)
                         exit_results.append({**_res.to_dict(), "reason": _earn_reason})
+                        if _res.ok:
+                            self._clear_position_lifecycle(sym)
                     continue
                 if _earn_verdict == "hold":
                     log.info(
@@ -4771,12 +5908,74 @@ class TradingOrchestrator:
                          "(min_exit_conf=%.2f, weekend=%s): %s",
                          sym, model_used, ai_action, ai_conf,
                          min_exit_conf, weekend_session, ai_reasoning)
-                if ai_action != "exit" or ai_conf < min_exit_conf:
+                report["ai_action"] = ai_action
+                report["ai_confidence"] = round(ai_conf, 3)
+                if ai_conf < min_exit_conf:
                     log.info("[%s] preclose close vetoed by AI — holding overnight", sym)
                     self._record_preclose_veto(sym)
                     # Veto circuit-breaker: if the AI has held the same name
                     # through 2+ consecutive negative-directional preclose
                     # decisions, force a 50% trim now.
+                    if self._veto_circuit_breaker_should_trim(sym, directional):
+                        trim_reason = (
+                            f"veto-cap trim_50: AI vetoed close "
+                            f"{self._preclose_veto_count(sym)}x in a row "
+                            f"(directional={directional:+.2f}, last AI: {ai_reasoning})"
+                        )
+                        log.warning("[%s] %s", sym, trim_reason)
+                        if dry_run:
+                            exit_results.append({
+                                "symbol": sym, "action": "trim_50_dry",
+                                "reason": trim_reason, "ai_verdict": verdict,
+                            })
+                        else:
+                            res = self.executor.reduce_position_pct(
+                                sym, percentage=50.0, reason=trim_reason,
+                            )
+                            exit_results.append({
+                                **res.to_dict(), "reason": trim_reason,
+                                "ai_verdict": verdict,
+                            })
+                        self._reset_preclose_veto(sym)
+                    continue
+                if ai_action == "reduce":
+                    pct_raw = (
+                        verdict.get("percentage")
+                        or verdict.get("reduce_pct")
+                        or verdict.get("trim_pct")
+                    )
+                    if pct_raw in (None, "") and verdict.get("size_fraction") not in (None, ""):
+                        try:
+                            pct_raw = float(verdict.get("size_fraction")) * 100.0
+                        except (TypeError, ValueError):
+                            pct_raw = None
+                    try:
+                        reduce_pct = float(pct_raw) if pct_raw not in (None, "") else float(
+                            self.cfg.get("overnight", "preclose_reduce_default_pct", default=50)
+                        )
+                    except (TypeError, ValueError):
+                        reduce_pct = 50.0
+                    reduce_pct = max(1.0, min(99.0, reduce_pct))
+                    reason = (
+                        f"preclose AI reduce {reduce_pct:.0f}% "
+                        f"(conf={ai_conf:.2f}, model={model_used}): {ai_reasoning}"
+                    )
+                    if dry_run:
+                        exit_results.append({"symbol": sym, "action": "reduce_dry",
+                                             "percentage": reduce_pct,
+                                             "reason": reason, "ai_verdict": verdict})
+                    else:
+                        res = self.executor.reduce_position_pct(
+                            sym, percentage=reduce_pct, reason=reason,
+                        )
+                        exit_results.append({**res.to_dict(), "reason": reason,
+                                             "ai_verdict": verdict})
+                    self._reset_preclose_veto(sym)
+                    continue
+                if ai_action != "exit":
+                    log.info("[%s] preclose close vetoed by AI action=%s — holding overnight",
+                             sym, ai_action)
+                    self._record_preclose_veto(sym)
                     if self._veto_circuit_breaker_should_trim(sym, directional):
                         trim_reason = (
                             f"veto-cap trim_50: AI vetoed close "
@@ -4808,6 +6007,8 @@ class TradingOrchestrator:
                 else:
                     res = self.executor.close_position(sym, reason=reason)
                     exit_results.append({**res.to_dict(), "reason": reason, "ai_verdict": verdict})
+                    if res.ok:
+                        self._clear_position_lifecycle(sym)
                 self._reset_preclose_veto(sym)
 
         # ---------- Find new overnight candidates ----------
@@ -4950,14 +6151,69 @@ class TradingOrchestrator:
                     "discovery_sources": discovery_sources.get(t.symbol, []),
                 }
                 preclose_ctx_by_sym[t.symbol] = report_entry
-                # RSI ceiling on new overnight longs: skip extended / overbought
-                # names that leave no room to run into the gap.
-                if t.rsi is not None and t.rsi > max_rsi_new_buy:
-                    report_entry["skipped"] = f"rsi {t.rsi:.1f} > {max_rsi_new_buy:.1f}"
+                # Phase 5 (2026-05-05): tiered RSI gate. The flat 78-cap on
+                # 2026-05-05 blocked 17 names — including most of the day's
+                # strongest performers — even though macro was risk-on
+                # (breadth 69%, score +0.28). Tier the cap so genuine
+                # leaders in a momentum tape still qualify, but extreme
+                # overbought (RSI > 85) always skips.
+                rsi_extreme_cap = float(
+                    self.cfg.get("preclose", "rsi_extreme_cap", default=85.0) or 85.0
+                )
+                rsi_leader_override = bool(
+                    self.cfg.get("preclose", "rsi_leader_override", default=True)
+                )
+                rsi_macro_floor = float(
+                    self.cfg.get("preclose", "rsi_macro_floor", default=0.20) or 0.20
+                )
+                if t.rsi is not None and t.rsi > rsi_extreme_cap:
+                    report_entry["skipped"] = (
+                        f"rsi {t.rsi:.1f} > {rsi_extreme_cap:.1f} (extreme overbought, no override)"
+                    )
                     cand_reports.append(report_entry)
-                    log.info("[%s] overnight skip: RSI %.1f > %.1f (overbought)",
-                             t.symbol, t.rsi, max_rsi_new_buy)
+                    log.info(
+                        "[%s] overnight skip: RSI %.1f > %.1f (extreme — no override)",
+                        t.symbol, t.rsi, rsi_extreme_cap,
+                    )
                     continue
+                if t.rsi is not None and t.rsi > max_rsi_new_buy:
+                    # Try the leader/macro override before skipping.
+                    macro_ok = (market_bias >= rsi_macro_floor)
+                    momentum_ok = (
+                        getattr(t, "score", 0) is not None
+                        and float(t.score or 0) > 0
+                        and float(getattr(t, "trend", 0) or 0) > 0
+                    )
+                    if (
+                        rsi_leader_override
+                        and macro_ok
+                        and momentum_ok
+                    ):
+                        log.info(
+                            "[%s] preclose RSI %.1f > %.1f BUT macro=%.2f & "
+                            "tech.score=%.2f, tech.trend=%.2f — leader override",
+                            t.symbol, t.rsi, max_rsi_new_buy, market_bias,
+                            float(t.score or 0), float(getattr(t, "trend", 0) or 0),
+                        )
+                        report_entry["rsi_leader_override"] = {
+                            "rsi": round(float(t.rsi), 1),
+                            "rsi_cap": float(max_rsi_new_buy),
+                            "rsi_extreme_cap": rsi_extreme_cap,
+                            "market_bias": round(float(market_bias), 3),
+                            "macro_floor": rsi_macro_floor,
+                            "tech_score": round(float(t.score or 0), 3),
+                            "tech_trend": round(float(getattr(t, "trend", 0) or 0), 3),
+                        }
+                        # Fall through and let the candidate score normally.
+                    else:
+                        report_entry["skipped"] = f"rsi {t.rsi:.1f} > {max_rsi_new_buy:.1f}"
+                        cand_reports.append(report_entry)
+                        log.info(
+                            "[%s] overnight skip: RSI %.1f > %.1f "
+                            "(macro_ok=%s momentum_ok=%s)",
+                            t.symbol, t.rsi, max_rsi_new_buy, macro_ok, momentum_ok,
+                        )
+                        continue
                 if near_earnings and not earnings_catalyst_exception:
                     report_entry["skipped"] = (
                         "near earnings without preclose catalyst exception"
@@ -5105,6 +6361,38 @@ class TradingOrchestrator:
                 )
                 if not sizing:
                     continue
+                if not dry_run:
+                    preflight_ok, preflight = self.executor.preflight_buy(
+                        symbol=tech.symbol,
+                        qty=sizing.qty,
+                        entry_price=sizing.entry,
+                        stop_loss=sizing.stop_loss,
+                        take_profit=sizing.take_profit,
+                    )
+                    if not preflight_ok:
+                        log.warning("[%s] preclose buy preflight rejected: %s",
+                                    tech.symbol, preflight.get("reject_reason"))
+                        new_executions.append({
+                            "sizing": sizing.to_dict(),
+                            "status": "skipped",
+                            "message": "execution_preflight_rejected",
+                            "execution_preflight": preflight,
+                        })
+                        continue
+                    submitted_qty = float(preflight.get("submitted_qty") or sizing.qty)
+                    if abs(submitted_qty - float(sizing.qty)) > 1e-9 and sizing.entry:
+                        sizing = replace(
+                            sizing,
+                            qty=submitted_qty,
+                            notional=round(submitted_qty * float(sizing.entry), 2),
+                            risk_usd=round(
+                                submitted_qty * (float(sizing.entry) - float(sizing.stop_loss)),
+                                2,
+                            ),
+                            limits={**dict(sizing.limits), "execution_preflight": preflight},
+                        )
+                    else:
+                        sizing.limits["execution_preflight"] = preflight
                 if sequential_cash and not dry_run:
                     if sizing.notional > available_liquidity:
                         log.info(
@@ -5159,6 +6447,18 @@ class TradingOrchestrator:
                         "execution": result.to_dict(),
                         **result.to_dict(),  # keep top-level symbol/status for easy reads
                     })
+                    if result.ok:
+                        self._record_position_entry(
+                            tech.symbol,
+                            source="preclose",
+                            execution=result.to_dict(),
+                            context={
+                                "reason": "; ".join(decision_obj.reasoning),
+                                "confidence": ai_conf,
+                                "ai_action": ai_action,
+                                "opportunity_score": round(float(ov.score) * 100, 1),
+                            },
+                        )
                     if not result.ok and sequential_cash:
                         # Refund the liquidity we pre-deducted so subsequent picks aren't starved.
                         available_liquidity += sizing.notional
@@ -5166,8 +6466,34 @@ class TradingOrchestrator:
                                     tech.symbol, sizing.notional)
                     positions = self.client.get_positions()
 
+        weekend_protection = None
+        if weekend_session:
+            if not dry_run:
+                try:
+                    positions = self.client.get_positions()
+                except Exception:
+                    pass
+            weekend_protection = self._enforce_weekend_protection(
+                positions,
+                dry_run=dry_run,
+            )
+            for action in (weekend_protection.get("actions") or []):
+                if action.get("execution"):
+                    exit_results.append({
+                        **(action.get("execution") or {}),
+                        "symbol": action.get("symbol"),
+                        "reason": action.get("reason"),
+                        "weekend_protection": action,
+                    })
+            if not dry_run:
+                try:
+                    positions = self.client.get_positions()
+                except Exception:
+                    pass
+
         # Park any remaining idle cash in SPY for overnight carry.
         cash_proxy_action = None if dry_run else self._sweep_cash_to_proxy(equity)
+        trade_learning_end = self._resolve_trade_learning("preclose_end")
 
         summary = {
             "ts": pd.Timestamp.utcnow().isoformat(),
@@ -5180,7 +6506,12 @@ class TradingOrchestrator:
             "exits": exit_results,
             "candidate_reports": cand_reports,
             "new_executions": new_executions,
+            "weekend_protection": weekend_protection,
             "cash_proxy": cash_proxy_action,
+            "trade_learning": {
+                "start": trade_learning_start,
+                "end": trade_learning_end,
+            },
             "thresholds": {
                 "hold": hold_threshold, "buy": buy_threshold,
                 "max_new": max_new, "size_mult": size_mult,

@@ -206,16 +206,27 @@ def annotate_candidate_leadership(
             leader = ranked[0]
             leader_score = _num(leader.get("candidate_priority_score"), 0.0)
             size = len(ranked)
+            # Lone-group guard: a candidate alone in its sector / peer / theme
+            # bucket has no one to outperform, so do NOT label it as the
+            # leader — that label was being used to justify "sector leader"
+            # narratives even when no peer was in the pool.
+            is_lone = size == 1
             for idx, block in enumerate(ranked, start=1):
                 score = _num(block.get("candidate_priority_score"), 0.0)
-                percentile = 1.0 if size == 1 else 1.0 - ((idx - 1) / (size - 1))
+                percentile = 1.0 if is_lone else 1.0 - ((idx - 1) / (size - 1))
                 block[f"{rank_prefix}_rank"] = idx
                 block[f"{rank_prefix}_group_size"] = size
-                block[f"{rank_prefix}_leader"] = leader.get("symbol")
-                block[f"{rank_prefix}_leader_score"] = round(leader_score, 2)
-                block[f"{rank_prefix}_relative_score"] = round(score - leader_score, 2)
+                block[f"{rank_prefix}_lone"] = is_lone
+                if is_lone:
+                    block[f"{rank_prefix}_leader"] = None
+                    block[f"{rank_prefix}_leader_score"] = None
+                    block[f"{rank_prefix}_relative_score"] = 0.0
+                else:
+                    block[f"{rank_prefix}_leader"] = leader.get("symbol")
+                    block[f"{rank_prefix}_leader_score"] = round(leader_score, 2)
+                    block[f"{rank_prefix}_relative_score"] = round(score - leader_score, 2)
                 block[f"{rank_prefix}_percentile"] = round(percentile, 3)
-                if rank_prefix == "peer" and idx > 1:
+                if rank_prefix == "peer" and not is_lone and idx > 1:
                     gap = leader_score - score
                     block["peer_pressure"] = {
                         "stronger_peer": leader.get("symbol"),
@@ -229,10 +240,16 @@ def annotate_candidate_leadership(
                         "score_gap": 0.0,
                         "requires_explicit_justification": False,
                     }
-                block[f"{rank_prefix}_comparison_summary"] = (
-                    f"{block.get('symbol')} ranks {idx}/{size} in {group_value}; "
-                    f"leader {leader.get('symbol')} scores {leader_score:.1f}."
-                )
+                if is_lone:
+                    block[f"{rank_prefix}_comparison_summary"] = (
+                        f"{block.get('symbol')} is alone in {group_value} "
+                        f"(no peer in pool); leadership label withheld."
+                    )
+                else:
+                    block[f"{rank_prefix}_comparison_summary"] = (
+                        f"{block.get('symbol')} ranks {idx}/{size} in {group_value}; "
+                        f"leader {leader.get('symbol')} scores {leader_score:.1f}."
+                    )
 
     _annotate_group("peer_group", lambda b: b.get("peer_group"), "peer")
     _annotate_group("sector", lambda b: b.get("sector"), "sector")

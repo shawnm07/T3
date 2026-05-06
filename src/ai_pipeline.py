@@ -6,11 +6,13 @@ orchestrator blends with the numeric score.
 """
 from __future__ import annotations
 import asyncio
+import json
 import logging
 import sys
 import time
 from dataclasses import dataclass, field
 from decimal import Decimal, ROUND_CEILING, ROUND_HALF_UP
+from pathlib import Path
 from typing import Any
 
 from src.ai_research import AIResearcher
@@ -280,6 +282,18 @@ def _hard_stop_loss_pct(cfg: Config) -> float:
         return 0.01
 
 
+def _max_stop_loss_pct(cfg: Config) -> float:
+    hard = _hard_stop_loss_pct(cfg)
+    model = str(cfg.get("risk", "stop_loss_model", default="fixed") or "fixed").lower()
+    if model not in {"volatility", "atr", "atr_volatility"}:
+        return hard
+    try:
+        configured = max(0.0, float(cfg.get("risk", "max_stop_loss_pct", default=hard)))
+    except (TypeError, ValueError):
+        configured = hard
+    return max(hard, configured)
+
+
 def _ceil_cents(value: float) -> float:
     return float(Decimal(str(value)).quantize(Decimal("0.01"), rounding=ROUND_CEILING))
 
@@ -517,10 +531,33 @@ def validate_selector_response(
         err = (result or {}).get("_error") if isinstance(result, dict) else type(result).__name__
         return False, [f"non-dict or error: {err}"]
 
+    # Empty-response guard. If none of the major selector contract fields are
+    # present, the model returned a truncated or off-contract JSON (e.g. an
+    # inner sub-dict picked up by the JSON extractor when the outer object
+    # didn't close). Surface this as a single distinctive problem so the dump
+    # captures what was actually emitted instead of producing 8 derivative
+    # "missing field" complaints.
+    # Phase 0: candidate_rankings was dropped from the schema — per_symbol
+    # already carries the same data for every pool member.
+    contract_fields = ("selected_positions", "target_weights", "per_symbol",
+                       "spy_decision")
+    present = [f for f in contract_fields
+               if result.get(f) not in (None, [], {}, "")]
+    stop_reason = result.get("_stop_reason")
+    if not present:
+        return False, [
+            "empty_or_off_contract_response "
+            f"(stop_reason={stop_reason} out_tok={result.get('_output_tokens')} "
+            f"keys={sorted(k for k in result if not k.startswith('_'))[:6]})"
+        ]
+    if stop_reason == "max_tokens":
+        problems.append(
+            f"response truncated (stop_reason=max_tokens out_tok={result.get('_output_tokens')})"
+        )
+
     selected = result.get("selected_positions") or []
     target_w = result.get("target_weights") or {}
     per_sym = result.get("per_symbol") or {}
-    rankings = result.get("candidate_rankings") or []
 
     min_pos = 0 if allow_floor_breach else int(cfg.get("selector", "min_positions", default=3))
     max_pos = int(cfg.get("selector", "max_positions", default=6))
@@ -558,9 +595,8 @@ def validate_selector_response(
             problems.append(f"weight {s}={wf:.4f} out of (0, {max_pp}]")
 
     # AI-direct order params: qty / entry_price / delta_qty are authoritative.
-    # Python enforces a protective stop no wider than 1% below entry. A tighter
-    # AI stop is honored; a wider supplied stop is clamped to the hard floor so
-    # a harmless model rounding miss cannot abort the entire scan.
+    # Python enforces a protective stop floor. The default remains the hard
+    # 1% stop; volatility mode allows wider AI/ATR stops up to max_stop_loss_pct.
     equity_for_check = 0.0
     try:
         equity_for_check = float(equity or 0)
@@ -573,6 +609,7 @@ def validate_selector_response(
             equity_for_check = 0.0
     max_risk_pct = float(cfg.get("risk", "max_risk_per_trade_pct", default=0.005))
     hard_stop_pct = _hard_stop_loss_pct(cfg)
+    max_stop_pct = _max_stop_loss_pct(cfg)
 
     def _current_qty_for(sym: str) -> float:
         try:
@@ -599,6 +636,7 @@ def validate_selector_response(
         if entry <= 0:
             problems.append(f"per_symbol[{s}].entry_price must be > 0, got {entry}")
         hard_stop_floor = _ceil_cents(entry * (1.0 - hard_stop_pct)) if entry > 0 and hard_stop_pct > 0 else 0.0
+        max_stop_floor = _ceil_cents(entry * (1.0 - max_stop_pct)) if entry > 0 and max_stop_pct > 0 else hard_stop_floor
         stop_for_risk = hard_stop_floor
         raw_stop = info.get("stop_loss")
         if raw_stop not in (None, ""):
@@ -609,15 +647,15 @@ def validate_selector_response(
             else:
                 if stop <= 0 or stop >= entry:
                     problems.append(f"per_symbol[{s}].stop_loss ({stop}) must be > 0 and < entry_price ({entry})")
-                elif hard_stop_floor > 0 and stop < hard_stop_floor:
-                    info["stop_loss"] = hard_stop_floor
+                elif max_stop_floor > 0 and stop < max_stop_floor:
+                    info["stop_loss"] = max_stop_floor
                     result.setdefault("_auto_repaired", {})
                     result["_auto_repaired"].setdefault("stop_loss_floor", {})[s] = {
                         "from": stop,
-                        "to": hard_stop_floor,
+                        "to": max_stop_floor,
                     }
-                    stop_for_risk = hard_stop_floor
-                elif hard_stop_floor > 0:
+                    stop_for_risk = max_stop_floor
+                elif max_stop_floor > 0:
                     rounded_stop = _round_cents(stop)
                     if rounded_stop != stop:
                         info["stop_loss"] = rounded_stop
@@ -626,7 +664,7 @@ def validate_selector_response(
                             "from": stop,
                             "to": rounded_stop,
                         }
-                    stop_for_risk = max(rounded_stop, hard_stop_floor)
+                    stop_for_risk = rounded_stop
         raw_target = info.get("take_profit")
         if raw_target not in (None, ""):
             try:
@@ -639,7 +677,17 @@ def validate_selector_response(
         current_qty = _current_qty_for(s)
         expected_delta = qty - current_qty
         if abs(delta_qty - expected_delta) > 0.01:
-            delta_tolerance = max(0.05, abs(expected_delta) * 0.02)
+            # If qty was rounded to a whole share but current_qty is fractional
+            # (typical for held positions sized in dollars), the model's
+            # delta_qty will be ±frac(current_qty) off — that's not a real
+            # error, just rounding. Allow up to ~1 share of slack in that case.
+            qty_is_whole = abs(qty - round(qty)) < 1e-6
+            current_is_fractional = abs(current_qty - round(current_qty)) > 1e-6
+            base_tol = max(0.05, abs(expected_delta) * 0.02)
+            if qty_is_whole and current_is_fractional:
+                delta_tolerance = max(base_tol, 1.0)
+            else:
+                delta_tolerance = base_tol
             if abs(delta_qty - expected_delta) <= delta_tolerance:
                 info["delta_qty"] = expected_delta
                 result.setdefault("_auto_repaired", {})
@@ -749,19 +797,19 @@ def validate_selector_response(
         ]
         if missing_per_sym_initial and len(repairable_per_sym) == len(missing_per_sym_initial):
             for s in repairable_per_sym:
+                # Phase 0: slim PASS auto-fill — drop exhaustion_penalty,
+                # remaining_upside_score (duplicates of opportunity_score and
+                # the exhaustion_penalty_applied list), and emit a short
+                # reason_code instead of a full sentence.
                 per_sym[s] = {
                     "target_pct": 0.0,
                     "qty": 0,
                     "delta_qty": 0,
                     "entry_price": 0,
-                    "stop_loss": None,
-                    "take_profit": None,
                     "action": "PASS",
                     "confidence": 0.0,
                     "opportunity_score": 0,
-                    "one_sentence_reason": "Auto-filled PASS because the selector omitted this non-selected candidate.",
-                    "exhaustion_penalty": False,
-                    "remaining_upside_score": 0,
+                    "reason_code": "auto_pass_omitted",
                 }
             result["per_symbol"] = per_sym
             result.setdefault("_auto_repaired", {})
@@ -838,76 +886,41 @@ def validate_selector_response(
         if not isinstance(info, dict):
             problems.append(f"per_symbol[{s}] not a dict")
             continue
-        for f in ("target_pct", "action", "opportunity_score", "one_sentence_reason",
-                  "exhaustion_penalty", "remaining_upside_score"):
+        # Phase 0 slim schema: action / target_pct / opportunity_score are
+        # always required. one_sentence_reason is required ONLY for actions
+        # that move capital (BUY / INCREASE / EXIT / REDUCE); HOLD / PASS
+        # may use a short `reason_code` enum or omit the reason altogether.
+        # exhaustion_penalty + remaining_upside_score were dropped — they
+        # duplicate the exhaustion_penalty_applied list and opportunity_score.
+        for f in ("target_pct", "action", "opportunity_score"):
             if f not in info:
                 problems.append(f"per_symbol[{s}].{f} missing")
         action = str(info.get("action", "")).upper()
         if action and action not in _SELECTOR_VALID_ACTIONS:
             problems.append(f"per_symbol[{s}].action invalid: {action!r}")
-        reason = info.get("one_sentence_reason", "")
-        if isinstance(reason, str) and ";" in reason:
-            info["one_sentence_reason"] = reason.replace(";", ".")
+        if action in ("BUY", "INCREASE", "EXIT", "REDUCE"):
+            reason = info.get("one_sentence_reason", "")
+            if not reason or not isinstance(reason, str) or not reason.strip():
+                problems.append(
+                    f"per_symbol[{s}].one_sentence_reason required for action={action}"
+                )
+            elif ";" in reason:
+                info["one_sentence_reason"] = reason.replace(";", ".")
+        else:
+            reason = info.get("one_sentence_reason", "")
+            if isinstance(reason, str) and ";" in reason:
+                info["one_sentence_reason"] = reason.replace(";", ".")
 
-    if not isinstance(rankings, list):
-        problems.append("candidate_rankings not a list")
-    else:
-        ranked_syms = {r.get("symbol") for r in rankings if isinstance(r, dict)}
-        missing_rank = pool_set - ranked_syms
-        extra_rank = ranked_syms - pool_set
-        if extra_rank:
-            kept_rankings = [
-                r for r in rankings
-                if not isinstance(r, dict) or r.get("symbol") in pool_set
-            ]
-            removed_rankings = [
-                r.get("symbol") for r in rankings
-                if isinstance(r, dict) and r.get("symbol") in extra_rank
-            ]
-            rankings = kept_rankings
-            result["candidate_rankings"] = rankings
-            result.setdefault("_auto_repaired", {})
-            result["_auto_repaired"]["candidate_rankings_extra_removed"] = removed_rankings
-            ranked_syms = {r.get("symbol") for r in rankings if isinstance(r, dict)}
-            missing_rank = pool_set - ranked_syms
-            extra_rank = set()
-        repairable_rank = [
-            s for s in sorted(missing_rank)
-            if s not in selected
-        ]
-        if missing_rank and len(repairable_rank) == len(missing_rank):
-            max_rank = 0
-            for r in rankings:
-                if isinstance(r, dict):
-                    try:
-                        max_rank = max(max_rank, int(r.get("rank", 0) or 0))
-                    except (TypeError, ValueError):
-                        pass
-            for i, s in enumerate(repairable_rank, start=1):
-                rankings.append({
-                    "symbol": s,
-                    "rank": max_rank + i,
-                    "opportunity_score": 0,
-                    "currently_held": bool(pool_meta.get(s, {}).get("currently_held", False)),
-                    "exhausted": False,
-                    "remaining_upside_score": 0,
-                    "one_sentence_reason": "Auto-filled low-ranked PASS because the selector omitted this non-selected candidate.",
-                })
-            result["candidate_rankings"] = rankings
-            result.setdefault("_auto_repaired", {})
-            result["_auto_repaired"]["candidate_rankings_pass_fill"] = repairable_rank
-            ranked_syms = {r.get("symbol") for r in rankings if isinstance(r, dict)}
-            missing_rank = pool_set - ranked_syms
-        if missing_rank:
-            problems.append(f"candidate_rankings missing {len(missing_rank)} symbols: {sorted(missing_rank)[:5]}")
-
-    # Anti-stagnation enforcement
+    # Anti-stagnation enforcement (Phase 0: scores read from per_symbol now
+    # that candidate_rankings was dropped from the schema).
     if not allow_floor_breach and selected:
         scores: dict[str, float] = {}
-        for r in rankings if isinstance(rankings, list) else []:
-            if isinstance(r, dict):
+        if isinstance(per_sym, dict):
+            for sym, info in per_sym.items():
+                if not isinstance(info, dict):
+                    continue
                 try:
-                    scores[r.get("symbol", "")] = float(r.get("opportunity_score", 0) or 0)
+                    scores[str(sym)] = float(info.get("opportunity_score", 0) or 0)
                 except (TypeError, ValueError):
                     continue
         new_in_pool = [s for s in pool_symbols if not pool_meta.get(s, {}).get("currently_held", False)]
@@ -972,6 +985,41 @@ def validate_selector_response(
     return (len(problems) == 0), problems
 
 
+def _dump_selector_validation_failure(
+    result: dict[str, Any],
+    problems: list[str],
+    attempt: int,
+) -> None:
+    """Persist the parsed selector response + validation problems on failure.
+    Critical for diagnosing why the selector returns empty/incomplete JSON."""
+    from datetime import datetime, timezone
+    from pathlib import Path
+    out_dir = Path(__file__).resolve().parents[1] / "data" / "ai_failures"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    path = out_dir / f"{ts}_portfolio-selector_validation_attempt{attempt}.json"
+    path.write_text(
+        json.dumps({
+            "attempt": attempt,
+            "problems": problems,
+            "stop_reason": result.get("_stop_reason"),
+            "input_tokens": result.get("_input_tokens"),
+            "output_tokens": result.get("_output_tokens"),
+            "top_level_keys": sorted(result.keys()),
+            "selected_positions": result.get("selected_positions"),
+            "target_weights": result.get("target_weights"),
+            "spy_decision": result.get("spy_decision"),
+            "spy_target_pct": result.get("spy_target_pct"),
+            "cash_target_pct": result.get("cash_target_pct"),
+            "per_symbol_count": len(result.get("per_symbol") or {}),
+            "raw_thesis": (result.get("portfolio_thesis") or "")[:400],
+            "_raw_truncated": (result.get("_raw") or "")[:1500],
+            "full_response": result,
+        }, indent=2, default=str),
+        encoding="utf-8",
+    )
+
+
 def _selector_problems_are_retryable(problems: list[str]) -> bool:
     """True when problems are exclusively count/range OR anti-stagnation —
     these are worth a feedback-prompted retry. Other problems (missing
@@ -982,6 +1030,66 @@ def _selector_problems_are_retryable(problems: list[str]) -> bool:
     keywords = ("selected count", "duplicates in selected_positions",
                 "incorporate new opportunities", "trails stronger peer")
     return all(any(kw in p for kw in keywords) for p in problems)
+
+
+def _selector_problems_indicate_truncation(problems: list[str]) -> bool:
+    """True when the response is empty / truncated. A bare retry (no feedback
+    prompt) is the right move — the original prompt was fine, the model just
+    cut off. Surfaced separately from _selector_problems_are_retryable because
+    these don't need (and shouldn't get) the feedback string appended."""
+    if not problems:
+        return False
+    return any(
+        ("empty_or_off_contract_response" in p) or ("response truncated" in p)
+        for p in problems
+    )
+
+
+def _record_selector_token_usage(
+    config: Config,
+    result: dict[str, Any],
+    *,
+    allow_floor_breach: bool,
+) -> None:
+    """Append a row to data/state/selector_token_history.jsonl + warn at 80%.
+
+    Phase 0 telemetry: the 2026-05-05 11:00 PDT scan hit the 32K output cap
+    with no warning. Surface usage trends so a future drift toward the cap
+    raises a flag long before it fails a scan.
+    """
+    cap = int(config.get("ai", "max_tokens_per_agent", default={}).get(
+        "portfolio-selector", 12000) or 12000)
+    in_tok = result.get("_input_tokens")
+    out_tok = result.get("_output_tokens")
+    cache_read = result.get("_cache_read_tokens")
+
+    try:
+        out_int = int(out_tok or 0)
+    except (TypeError, ValueError):
+        out_int = 0
+
+    if out_int >= int(cap * 0.8):
+        log.warning(
+            "PORTFOLIO SELECTOR token usage at %.0f%% of cap "
+            "(out=%s, cap=%s) — investigate before it fails a scan",
+            (out_int / max(cap, 1)) * 100, out_tok, cap,
+        )
+
+    state_dir = Path(__file__).resolve().parents[1] / "data" / "state"
+    state_dir.mkdir(parents=True, exist_ok=True)
+    path = state_dir / "selector_token_history.jsonl"
+    from datetime import datetime, timezone
+    row = {
+        "ts": datetime.now(timezone.utc).isoformat(),
+        "input_tokens": in_tok,
+        "output_tokens": out_tok,
+        "cache_read_tokens": cache_read,
+        "cap": cap,
+        "pct_of_cap": (out_int / cap) if cap > 0 else None,
+        "allow_floor_breach": bool(allow_floor_breach),
+    }
+    with path.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(row) + "\n")
 
 
 def run_portfolio_selector(
@@ -1030,19 +1138,72 @@ def run_portfolio_selector(
                         attempt, max_attempts, last_error)
             result = None
 
+        # Phase 0: hard-stop on max_tokens. Retrying just spends more tokens
+        # to fail again — the prompt itself is too verbose. Bail out, alert
+        # the user via Telegram, and skip the scan. Token-bloat reduction
+        # work lives in EXECUTION_PLAN.md Phase 0b.
+        if isinstance(result, dict) and result.get("_stop_reason") == "max_tokens":
+            in_tok = result.get("_input_tokens")
+            out_tok = result.get("_output_tokens")
+            log.critical(
+                "PORTFOLIO SELECTOR hit max_tokens on attempt %d "
+                "(in=%s out=%s) — NO retry, NO trades. Slim the prompt.",
+                attempt, in_tok, out_tok,
+            )
+            try:
+                from src.telegram_notifier import get_notifier
+                get_notifier().send_alert(
+                    alert_type="MAX_TOKENS",
+                    task_name="portfolio-selector",
+                    message=(
+                        f"Selector hit max_tokens cap on attempt {attempt} "
+                        f"(in={in_tok}, out={out_tok}). Scan skipped — no retry. "
+                        f"Investigate prompt size."
+                    ),
+                )
+            except Exception as e:
+                log.debug("Telegram max_tokens alert failed: %s", e)
+            last_error = f"max_tokens (out={out_tok})"
+            last_problems = [f"max_tokens cap hit on attempt {attempt} (out={out_tok})"]
+            break  # do not retry — see EXECUTION_PLAN.md Phase 0a
+
         if isinstance(result, dict) and not result.get("_error"):
             ok, problems = validate_selector_response(
                 result, held_symbols, pool_symbols, pool_meta, config, allow_floor_breach,
                 equity=float(context.get("equity", 0) or 0),
             )
             if ok:
-                if attempt > 1:
-                    log.info("PORTFOLIO SELECTOR succeeded on attempt %d/%d",
-                             attempt, max_attempts)
+                log.info(
+                    "PORTFOLIO SELECTOR succeeded on attempt %d/%d "
+                    "(in=%s out=%s cache_read=%s)",
+                    attempt, max_attempts,
+                    result.get("_input_tokens"),
+                    result.get("_output_tokens"),
+                    result.get("_cache_read_tokens"),
+                )
+                # Phase 0: telemetry. Persist per-scan token usage so we can
+                # spot drift toward the cap before it fails a scan, and warn
+                # loudly when we creep above 80% of the configured ceiling.
+                try:
+                    _record_selector_token_usage(
+                        config, result, allow_floor_breach=allow_floor_breach,
+                    )
+                except Exception as e:
+                    log.debug("token-usage telemetry failed: %s", e)
                 return result
             last_problems = problems
-            log.warning("PORTFOLIO SELECTOR attempt %d/%d failed validation: %s",
-                        attempt, max_attempts, problems[:5])
+            log.warning("PORTFOLIO SELECTOR attempt %d/%d failed validation "
+                        "(stop_reason=%s in=%s out=%s keys=%s): %s",
+                        attempt, max_attempts,
+                        result.get("_stop_reason"),
+                        result.get("_input_tokens"),
+                        result.get("_output_tokens"),
+                        sorted(k for k in result.keys() if not k.startswith("_")),
+                        problems[:5])
+            try:
+                _dump_selector_validation_failure(result, problems, attempt)
+            except Exception as e:
+                log.debug("Selector dump failed: %s", e)
 
             # Feedback-prompted retry for retryable problems (count or anti-stagnation).
             if (extra_retries_used < extra_retries_allowed
@@ -1063,6 +1224,15 @@ def run_portfolio_selector(
                 max_attempts += 1
                 log.info("PORTFOLIO SELECTOR retrying with validator feedback")
                 continue
+
+            # Truncation / off-contract responses: a clean retry has the best
+            # shot. No feedback prompt — the prior context was fine, the model
+            # just cut off. Don't burn the extra-retry budget on these.
+            if _selector_problems_indicate_truncation(problems):
+                log.info(
+                    "PORTFOLIO SELECTOR attempt %d/%d looks truncated/off-contract; "
+                    "will retry with a clean prompt", attempt, max_attempts,
+                )
         elif isinstance(result, dict):
             last_error = str(result.get("_error", "unknown"))
             log.warning("PORTFOLIO SELECTOR attempt %d/%d returned error: %s",

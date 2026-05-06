@@ -62,6 +62,10 @@ class RiskManager:
         self.stop_atr_mult = config.get("risk", "stop_loss_atr_mult", default=2.0)
         self.tp_atr_mult = config.get("risk", "take_profit_atr_mult", default=4.0)
         self.hard_stop_loss_pct = float(config.get("risk", "hard_stop_loss_pct", default=0.01))
+        self.stop_loss_model = str(config.get("risk", "stop_loss_model", default="fixed") or "fixed").lower()
+        self.max_stop_loss_pct = float(config.get(
+            "risk", "max_stop_loss_pct", default=self.hard_stop_loss_pct,
+        ) or self.hard_stop_loss_pct)
         self.max_positions = config.get("risk", "max_positions", default=6)
         self.min_trade = config.get("risk", "min_trade_usd", default=500)
         self.cash_reserve_pct = config.get("risk", "cash_reserve_pct", default=0.20)
@@ -86,40 +90,109 @@ class RiskManager:
             return 0.0
         return _ceil_cents(entry_f * (1.0 - pct))
 
-    def protective_stop_loss_price(self, entry: float, stop_loss: float | None = None) -> float:
-        """Return the stop to submit: hard 1% floor, unless AI supplies tighter.
+    def _volatility_stop_enabled(self) -> bool:
+        return self.stop_loss_model in {"volatility", "atr", "atr_volatility"}
 
-        A supplied stop that is a little wider than the hard floor is clamped to
-        the floor. This keeps harmless model/penny drift from blocking an
-        otherwise valid protected order.
+    def _max_stop_loss_pct(self) -> float:
+        hard = max(0.0, float(self.hard_stop_loss_pct or 0.0))
+        configured = max(0.0, float(self.max_stop_loss_pct or hard))
+        return max(hard, configured)
+
+    def stop_loss_pct_for(self, entry: float, atr: float | None = None) -> float:
+        """Return the allowed stop distance for this entry.
+
+        With the default/fixed model, this remains the historical hard-stop
+        percentage. With ``risk.stop_loss_model=volatility`` and a usable ATR,
+        it widens to ``stop_loss_atr_mult * ATR`` capped by
+        ``max_stop_loss_pct``.
+        """
+        entry_f = float(entry or 0.0)
+        hard = max(0.0, float(self.hard_stop_loss_pct or 0.0))
+        if entry_f <= 0 or hard <= 0:
+            return 0.0
+        if not self._volatility_stop_enabled():
+            return hard
+        try:
+            atr_f = float(atr or 0.0)
+        except (TypeError, ValueError):
+            atr_f = 0.0
+        if atr_f <= 0:
+            return hard
+        atr_pct = (float(self.stop_atr_mult or 0.0) * atr_f) / entry_f
+        return min(self._max_stop_loss_pct(), max(hard, atr_pct))
+
+    def stop_loss_price(self, entry: float, atr: float | None = None) -> float:
+        entry_f = float(entry or 0.0)
+        pct = self.stop_loss_pct_for(entry_f, atr=atr)
+        if entry_f <= 0 or pct <= 0:
+            return 0.0
+        return _ceil_cents(entry_f * (1.0 - pct))
+
+    def protective_stop_loss_price(
+        self,
+        entry: float,
+        stop_loss: float | None = None,
+        atr: float | None = None,
+    ) -> float:
+        """Return the stop to submit, honoring tighter AI stops.
+
+        The fixed model keeps the old 1% floor. The volatility model permits a
+        wider ATR/max-pct floor when ATR context or an AI-supplied stop exists,
+        while still clamping anything beyond the configured maximum loss.
         """
         entry_f = float(entry or 0.0)
         hard_stop = self.hard_stop_loss_price(entry_f)
-        if hard_stop <= 0 or hard_stop >= entry_f:
+        allowed_floor = self.stop_loss_price(entry_f, atr=atr)
+        if (
+            self._volatility_stop_enabled()
+            and atr in (None, "")
+            and stop_loss not in (None, "")
+        ):
+            allowed_floor = _ceil_cents(entry_f * (1.0 - self._max_stop_loss_pct()))
+        if hard_stop <= 0 or hard_stop >= entry_f or allowed_floor <= 0 or allowed_floor >= entry_f:
             raise ValueError("invalid_hard_stop")
         if stop_loss in (None, ""):
-            return hard_stop
+            return allowed_floor
         try:
             ai_stop = _round_cents(float(stop_loss))
         except (TypeError, ValueError) as exc:
             raise ValueError("stop_loss_not_numeric") from exc
         if ai_stop <= 0 or ai_stop >= entry_f:
             raise ValueError("stop_loss_must_be_between_zero_and_entry")
-        if ai_stop < hard_stop:
-            log.warning("Clamping AI stop %.4f to hard stop floor %.4f", ai_stop, hard_stop)
-            return hard_stop
+        if ai_stop < allowed_floor:
+            log.warning("Clamping AI stop %.4f to stop floor %.4f", ai_stop, allowed_floor)
+            return allowed_floor
         return ai_stop
 
-    def _stop_loss_source(self, entry: float, stop_loss: float | None, protective_stop: float) -> str:
+    def _stop_loss_source(
+        self,
+        entry: float,
+        stop_loss: float | None,
+        protective_stop: float,
+        atr: float | None = None,
+    ) -> str:
         hard_stop = self.hard_stop_loss_price(entry)
+        allowed_floor = self.stop_loss_price(entry, atr=atr)
+        if (
+            self._volatility_stop_enabled()
+            and atr in (None, "")
+            and stop_loss not in (None, "")
+        ):
+            allowed_floor = _ceil_cents(float(entry or 0.0) * (1.0 - self._max_stop_loss_pct()))
         if stop_loss in (None, ""):
-            return "hard_stop"
+            return "volatility_stop" if allowed_floor < hard_stop else "hard_stop"
         try:
             ai_stop = _round_cents(float(stop_loss))
         except (TypeError, ValueError):
-            return "hard_stop"
-        if ai_stop < hard_stop:
-            return "ai_stop_clamped_to_hard_stop"
+            return "volatility_stop" if allowed_floor < hard_stop else "hard_stop"
+        if ai_stop < allowed_floor:
+            return (
+                "ai_stop_clamped_to_stop_floor"
+                if allowed_floor < hard_stop
+                else "ai_stop_clamped_to_hard_stop"
+            )
+        if protective_stop < hard_stop:
+            return "ai_volatility_stop"
         return "ai_tighter_stop" if protective_stop > hard_stop else "hard_stop"
 
     def validate_ai_sizing(
@@ -157,6 +230,8 @@ class RiskManager:
             "ai_stop_loss": ai_stop_f,
             "ai_take_profit": ai_take_f,
             "hard_stop_loss_pct": float(self.hard_stop_loss_pct),
+            "stop_loss_model": self.stop_loss_model,
+            "max_stop_loss_pct": self._max_stop_loss_pct(),
             "equity": float(equity or 0),
             "max_position_pct": float(self.max_position_pct),
             "max_risk_per_trade_pct": float(self.cfg.get("risk", "max_risk_per_trade_pct", default=0.005)),
@@ -178,6 +253,7 @@ class RiskManager:
             self.last_sizing_audit = audit
             return False, audit
         audit["stop_loss"] = protective_stop
+        audit["max_stop_loss_floor"] = _ceil_cents(entry * (1.0 - self._max_stop_loss_pct()))
         audit["stop_loss_source"] = self._stop_loss_source(entry, stop_loss, protective_stop)
         if take_profit not in (None, ""):
             try:
@@ -280,6 +356,8 @@ class RiskManager:
             limits={
                 "source": "ai_direct",
                 "hard_stop_loss_pct": float(self.hard_stop_loss_pct),
+                "stop_loss_model": self.stop_loss_model,
+                "max_stop_loss_pct": self._max_stop_loss_pct(),
                 "hard_stop_loss_floor": hard_stop,
                 "stop_loss_source": self._stop_loss_source(float(entry), stop_loss, protective_stop),
                 "ai_stop_loss": stop_loss,
@@ -391,11 +469,8 @@ class RiskManager:
         if is_high_conviction:
             reasons.append("high_conviction")
 
-        # Python owns the hard execution stop: every strategy entry/add gets a
-        # 1% protective stop by default. ATR remains useful for the optional
-        # profit target and as audit context, but it no longer controls max loss.
         atr_stop = price - self.stop_atr_mult * atr
-        stop = self.hard_stop_loss_price(price)
+        stop = self.protective_stop_loss_price(price, None, atr=atr)
         target = price + self.tp_atr_mult * atr
 
         risk_per_share = abs(price - stop)
@@ -406,6 +481,10 @@ class RiskManager:
             "stop_loss": round(float(stop), 4),
             "atr_reference_stop_loss": round(float(atr_stop), 4),
             "hard_stop_loss_pct": round(float(self.hard_stop_loss_pct), 4),
+            "stop_loss_model": self.stop_loss_model,
+            "stop_loss_pct_applied": round(float(self.stop_loss_pct_for(price, atr=atr)), 4),
+            "max_stop_loss_pct": round(float(self._max_stop_loss_pct()), 4),
+            "hard_stop_loss_floor": round(float(self.hard_stop_loss_price(price)), 4),
             "take_profit": round(float(target), 4),
             "risk_per_share": round(float(risk_per_share), 4),
             "risk_usd_before_risk_cap": round(float(risk_usd), 2),

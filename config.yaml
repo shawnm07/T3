@@ -8,9 +8,27 @@ risk:
   max_leverage: 1.0
   stop_loss_atr_mult: 2.0
   take_profit_atr_mult: 4.0
-  # Hard execution stop applied by Python to every strategy BUY/ADD.
-  # AI may choose symbols and sizing, but cannot widen this stop.
+  # Stop model: default entry protection is still conservative, but live
+  # strategy entries may use ATR-aware stops capped by max_stop_loss_pct.
+  stop_loss_model: volatility
+  max_stop_loss_pct: 0.03
+  max_risk_per_trade_pct: 0.005
+  # Hard execution floor used when no volatility context is available.
+  # AI may choose symbols and sizing, but cannot widen beyond max_stop_loss_pct.
   hard_stop_loss_pct: 0.01
+  # Phase 3 (2026-05-05): ATR-aware hard stop. The protective stop attached
+  # at entry uses max(hard_stop_loss_pct, hard_stop_loss_atr_mult * ATR / price)
+  # capped at hard_stop_loss_pct_ceiling. Without ATR context falls back to
+  # the flat floor. Set to address AMZN/WDC stop-outs on 1% intraday wicks
+  # despite carrying ~2-2.5% daily ATR.
+  hard_stop_loss_atr_mult: 0.5
+  hard_stop_loss_pct_ceiling: 0.025
+  # If the entry fills but the protective stop order is rejected by Alpaca
+  # (typical cause: market price already below the requested stop because the
+  # entry slipped — the HCAI 2026-05-01 weekend failure mode), immediately
+  # market-sell the position rather than carrying it naked. Set to false only
+  # if you accept unprotected exposure when stop placement fails.
+  close_on_stop_failure: true
   min_confidence: 0.40
   max_positions: 6
   min_trade_usd: 500
@@ -92,6 +110,11 @@ screener:
   min_market_cap_usd: 2000000000
   min_avg_volume: 1000000
   min_price: 5
+  # Dollar-volume floor: rejects thin/choppy small-caps where price * volume
+  # is too low for the bot's typical position sizes. Held positions are
+  # exempt (soft enforcement) so we don't fire-sale an existing book; new
+  # entries below this floor are dropped at discovery time.
+  min_dollar_volume_usd: 50000000
 
 signals:
   weights:
@@ -118,6 +141,16 @@ scheduling:
   # The preclose task owns explicitly overnight/new-next-day buys.
   late_session_no_new_entries_minutes: 0
 
+preclose:
+  # Phase 5 (2026-05-05): tier the overnight RSI cap so genuine momentum
+  # leaders don't get vetoed in a clearly risk-on tape. The 2026-05-05
+  # preclose blocked 17 names — including most of the day's strongest
+  # performers — because the flat 78 cap fired regardless of macro.
+  rsi_overbought_cap: 78        # alias for overnight.max_rsi_for_new_buy (kept for clarity)
+  rsi_extreme_cap: 85           # never override above this (true exhaustion)
+  rsi_leader_override: true     # allow names with macro tailwind + rising tech to bypass the 78 gate
+  rsi_macro_floor: 0.20         # market_bias >= this required for the override
+
 overnight:
   # Pre-close (~5 min before bell) overnight-hold decision.
   hold_threshold: 0.0         # directional overnight score below this → close the position
@@ -139,11 +172,15 @@ overnight:
     buy_threshold: 0.55             # new overnight buys need stronger conviction
     bearish_buy_threshold: 0.65     # even higher when SPY tape is bearish
     exit_arbiter_min_confidence: 0.40  # AI 'hold' below this → close anyway (easier to close on Friday)
+    require_protective_stop: true
+    allow_unprotected_fractional_dust_usd: 500
+    protective_stop_tif: gtc
   # Preclose-only override of the exit-arbiter min-confidence. Pre-close
   # closes are the cheapest exit (we have all-day data); we should be more
   # willing to act on AI 'exit' verdicts at modest confidence than during
   # intraday volatility-driven exits.
   preclose_exit_arbiter_min_confidence: 0.50
+  preclose_reduce_default_pct: 50
   # Per-symbol consecutive-veto circuit breaker. If the exit-arbiter
   # vetoes the preclose-close of the same symbol N times in a row while
   # directional is negative, the next negative-directional preclose
@@ -227,12 +264,35 @@ portfolio_verifier:
   enabled: true
   tolerance_pct_of_equity: 0.005   # discrepancies below 0.5% of equity are noise
   min_corrective_usd: 50           # never submit a corrective trade smaller than this
+  # Phase 1b (2026-05-05): same-day fresh-entry guard. The verifier
+  # dust-sweep skips a position opened today when its unrealized P&L is
+  # better than this floor (i.e. not yet materially in the red). Prevents
+  # the 1-2-hour-old whipsaw seen on 2026-05-05 (MU/INTC/AAPL/AVGO/FIX).
+  # Negative number — the position must be losing MORE than this magnitude
+  # before the dust-sweep fires.
+  fresh_entry_loss_floor_pct: -0.005
 
 exit_arbiter:
   # Opus 4.7 AI must explicitly approve every position close. Deterministic
   # exit triggers (technical flip, bad news, stall, preclose bias) are only
   # *inputs* to this decision — they never fire a trade on their own.
   min_confidence: 0.55
+  # Phase 4a (2026-05-05): require a 2nd consecutive exit signal ≥ N min
+  # apart before flattening on opinion-based momentum-fade triggers. Skipped
+  # when stop_loss breaches, earnings windows, macro halts, or position is
+  # already losing > confirmation_buffer_loss_floor_pct.
+  confirmation_buffer_enabled: true
+  confirmation_minutes: 30
+  confirmation_buffer_loss_floor_pct: -0.015
+  # Phase 4b: when AI says reduce, trim this fraction of the position
+  # immediately rather than deferring to the rebalance arbiter for full EXIT.
+  reduce_trim_fraction: 0.5
+  # Rebuy cooldown: how long an exit-arbiter EXIT/REDUCE is surfaced to the
+  # portfolio selector via system_state.recent_exit_actions. Inside this
+  # window the selector cannot BUY/INCREASE that symbol unless its
+  # confidence is >= rebuy_min_confidence and it cites a new signal.
+  rebuy_cooldown_minutes: 60
+  rebuy_min_confidence: 0.80
 
 earnings:
   # Avoid the binary-event lottery around earnings. Held-position close
@@ -287,18 +347,28 @@ ai:
   parallel_analyst_calls: true     # technical/fundamental/sentiment agents run concurrently
   max_tokens_per_call: 1500
   # Per-agent overrides — arbiters return larger structured JSON and trip the
-  # global cap once the book grows. Anthropic bills only on tokens generated,
-  # so larger caps are free headroom.
+  # global cap once the book grows.
   max_tokens_per_agent:
     portfolio-arbiter: 8000   # full-book JSON (thesis + per-symbol for ~20 holdings)
-    portfolio-selector: 16000 # unified pool: per_symbol + rankings for every pool member (~30-50 syms)
+    # Selector emits one per_symbol entry per pool symbol (validator hard
+    # requirement). With a 50-symbol pool that's ~22K observed output (per
+    # 2026-05-06 telemetry: in=38.7K, out=21.8K). 24K gives ~10% headroom
+    # over observed; revisit if pool size policy changes. Hitting this cap
+    # raises a Telegram alert and skips the scan WITHOUT retry (see
+    # ai_pipeline.run_portfolio_selector). Companion changes: input JSON
+    # is compact (ai_research.py separators=(',',':')) and HOLD/PASS
+    # entries omit one_sentence_reason (portfolio-selector.md schema).
+    portfolio-selector: 30000
     exit-arbiter: 3000
     earnings-gate: 3000
     risk-manager: 4000
     portfolio-verifier: 4000  # corrective-trade JSON for post-execution reconcile
   temperature: 0.3
   weight: 0.6                      # AI confidence blend weight vs numeric (0..1)
-  timeout_seconds: 240             # bumped for portfolio-selector (~16k token output on Opus 4.7)
+  # Sonnet 4.6 with 50-symbol pool (~30k input tokens) + ~24k output tokens
+  # routinely takes 3-5 minutes. 240s was hitting timeouts mid-stream which
+  # surfaced as empty / truncated responses; allow a full 10 minutes per call.
+  timeout_seconds: 600
 
 telegram:
   enabled: true                    # if true + TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID set, sends notifications
@@ -317,11 +387,24 @@ telegram:
 # ranks held ∪ discovered in a single pool and returns 3–6 selected
 # positions with score-weighted target weights. NO incumbent bias.
 # ================================================================
+# Phase 2 cash-handling knobs (2026-05-05).
+cash:
+  # Phase 2b: drop a buy if the cash-floor cap shrinks it below this
+  # fraction of the requested notional. Stub buys (single-share lots) are
+  # immediately stopped out by their own stops and tie up a slot until the
+  # next scan. Better to skip and retry next scan with full cash.
+  cap_drop_threshold_pct: 0.40
+  # Phase 2a: minimum idle dollars before we sweep into SPY at end of scan.
+  idle_park_min_usd: 1000
+
 selector:
   enabled: true                    # unified pool selector with no incumbent bias
   min_positions: 3
   max_positions: 6
   min_per_position_pct: 0.04       # selected positions floor at 4% of equity
+  min_new_entry_pct: 0.04          # block staged novelty entries below 4% of equity
+  fresh_exit_cooldown_minutes: 120
+  fresh_exit_min_confidence: 0.85
   pool_size_target: 40
   pool_size_max: 50
   min_average_confidence: 0.50     # sanity check on selected set's avg confidence
@@ -446,3 +529,45 @@ diversification:
 journal:
   log_full_pool: true              # log every symbol in the candidate pool
   log_full_rankings: true          # log every candidate's opportunity_score + remaining_upside
+
+execution_preflight:
+  enabled: true
+  stop_min_gap_usd: 0.02
+  stop_min_gap_pct: 0.001
+
+opening_stop_guard:
+  enabled: true
+  state_file: data/state/opening_stop_guard.json
+  delay_minutes: 10
+  catastrophic_gap_pct: 0.03
+  rearm_below_market_buffer_pct: 0.003
+
+trade_learning:
+  enabled: true
+  state_file: data/state/exit_learning_pending.json
+  sync_lookback_hours: 36
+
+# ----------------------------------------------------------------------
+# Converging trailing-stop bot (separate from main pipeline).
+# Runs every 5 minutes via Task Scheduler — see Trailing_Stop/README.md.
+# Floor: stop never below avg_fill * (1 - floor_pct/100).
+# Convergence: distance from peak shrinks linearly from floor_pct to
+# converged_pct as gain rises from 0 to converge_gain_pct (clamped beyond).
+# ----------------------------------------------------------------------
+trailing_stops:
+  enabled: true
+  floor_pct: 2.0          # max % below avg fill (and starting trail %)
+  converged_pct: 0.5      # tightest trail % at/above converge_gain_pct
+  converge_gain_pct: 10.0 # gain at which convergence reaches floor
+  state_file: Trailing_Stop/state/trailing_stops.json
+  price_sources:
+    - twelve_data
+    - alpha_vantage
+    - alpaca
+  notify_on_create: true
+  notify_on_fill: true
+  notify_on_adjust: false
+  extended_hours:
+    enabled: true
+    limit_discount_pct: 0.3   # marketable limit = price * (1 - 0.3%)
+    tif: gtc                  # native stops use GTC so they survive overnight

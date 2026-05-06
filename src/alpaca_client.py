@@ -240,6 +240,38 @@ class AlpacaClient:
         return TimeInForce.DAY
 
     @staticmethod
+    def _is_whole_qty(qty: float) -> bool:
+        try:
+            qty_f = float(qty)
+        except (TypeError, ValueError):
+            return False
+        return qty_f > 0 and abs(qty_f - round(qty_f)) < 1e-9
+
+    @classmethod
+    def _standalone_stop_time_in_force(
+        cls,
+        tif: str | None,
+        *,
+        symbol: str,
+        side: str,
+        qty: float,
+    ) -> TimeInForce:
+        requested = str(tif or "day").lower()
+        if requested == "gtc":
+            if cls._is_whole_qty(qty):
+                gtc = getattr(TimeInForce, "GTC", None)
+                if gtc is not None:
+                    return gtc
+                log.warning("TimeInForce.GTC unavailable; forcing %s %s stop to day", side, symbol)
+            else:
+                log.warning(
+                    "Forcing fractional %s %s stop time_in_force gtc -> day (qty=%s)",
+                    side.lower(), symbol, qty,
+                )
+            return TimeInForce.DAY
+        return cls._day_time_in_force(tif, symbol=symbol, side=side)
+
+    @staticmethod
     def _protected_order_qty(symbol: str, qty: float) -> int:
         """Alpaca bracket/OTO orders must be whole-share orders."""
         try:
@@ -353,7 +385,9 @@ class AlpacaClient:
         be protected after their actual fill quantity is known.
         """
         side_enum = OrderSide.BUY if side.lower() == "buy" else OrderSide.SELL
-        tif_enum = self._day_time_in_force(tif, symbol=symbol, side=side)
+        tif_enum = self._standalone_stop_time_in_force(
+            tif, symbol=symbol, side=side, qty=qty,
+        )
         kwargs: dict = dict(
             symbol=symbol,
             qty=qty,
@@ -436,6 +470,28 @@ class AlpacaClient:
 
     def get_open_orders(self):
         return self.trading.get_orders(GetOrdersRequest(status="open"))
+
+    def get_orders(
+        self,
+        status: str = "open",
+        *,
+        limit: int | None = None,
+        after: datetime | None = None,
+        until: datetime | None = None,
+        side: str | None = None,
+        symbols: list[str] | None = None,
+    ):
+        side_enum = None
+        if side:
+            side_enum = OrderSide.BUY if side.lower() == "buy" else OrderSide.SELL
+        return self.trading.get_orders(GetOrdersRequest(
+            status=status,
+            limit=limit,
+            after=after,
+            until=until,
+            side=side_enum,
+            symbols=symbols,
+        ))
 
     def cancel_open_orders_for_symbol(self, symbol: str) -> int:
         """Cancel open parent/child orders for a symbol before a trim/exit."""

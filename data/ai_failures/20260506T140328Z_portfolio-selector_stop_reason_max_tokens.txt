@@ -1,0 +1,285 @@
+agent=portfolio-selector
+stop_reason=max_tokens
+input_tokens=38434
+output_tokens=12000
+reason=stop_reason=max_tokens
+---
+Looking at the candidate pool, I need to identify the top 3-6 names by remaining upside for the next 1.5-2 hours.
+
+**Key analysis:**
+
+Top candidates by candidate_priority_score with passes_new_entry_gate=true:
+- AMD: 79.24, strong_continuation, bullish, rising, RSI 80.2, momentum 100 — sector/peer leader
+- TSM: 76.54, strong_continuation, bullish, breaking_out, RSI 67.5, momentum 100 — sector leader "Other"
+- CUE: 74.35, strong_continuation, bullish, +10% intraday, momentum 95 — theme leader "other"
+- MARA: 74.22, strong_continuation, bullish, +6.6% intraday, momentum 100 — earnings in 5 days (risk)
+- CNSP: 73.92, strong_continuation, bullish, +14% intraday, momentum 95
+- NVDA: 73.82, strong_continuation, bullish, momentum 100, RSI 58 (not overbought)
+- SMCI: 71.64, strong_continuation, bullish, momentum 100
+- SKK: 71.28, acceptable_continuation, bullish, +22% intraday — very volatile, small cap
+- DGXX: 71.94, strong_continuation, bullish, earnings in 8 days — risk
+- DELL: 70.91, strong_continuation, bullish, breaking_out
+- AAPL: 70.11, strong_continuation, bullish, breaking_out
+- MRVL: 69.71, strong_continuation, bullish
+
+**Diversification check:**
+- ai_data_center theme: AMD, NVDA, SMCI, DELL, MRVL, TSM (capped at 3, weight cap 50%)
+- Information Technology sector: AMD, NVDA, SMCI, DELL (capped at 3)
+
+**GBTG (held):** fading, bearish EMA, near_low, momentum 8 (fading), RSI 85.9 near exhaustion, recent_trend falling. Score 34.91 with +3 incumbent bonus = ~37.91. Far below top candidates. EXIT.
+
+**Selection strategy:**
+- AMD: 79.24 — must include, sector/peer/theme leader, strong continuation
+- TSM: 76.54 — sector leader "Other", strong continuation, breaking out, different sector from AMD
+- CUE: 74.35 — "other" theme leader, strong continuation, +10% intraday, different sector
+- NVDA: 73.82 — strong continuation, but same sector (IT) and same theme (ai_data_center) as AMD → sector cap issue (IT: AMD + NVDA = 2, ok; ai_data_center: AMD + NVDA = 2, ok)
+- MARA: 74.22 — earnings in 5 days, risky but strong momentum; "other" theme/sector
+- CNSP: 73.92 — strong continuation, +14% intraday, "other" theme/sector
+
+**Sector check with AMD, TSM, CUE, NVDA, MARA, CNSP:**
+- Information Technology: AMD, NVDA = 2 ✓
+- Other: TSM, CUE, MARA, CNSP = 4 → violates sector cap (max 3)
+- ai_data_center theme: AMD, TSM, NVDA = 3 ✓ (at cap)
+- other theme: CUE, MARA, CNSP = 3 ✓
+
+Need to drop one "Other" sector name. MARA has earnings in 5 days — drop MARA. Replace with next best non-"Other" or keep 5.
+
+**Final 5: AMD, TSM, CUE, NVDA, CNSP**
+- IT sector: AMD, NVDA = 2 ✓
+- Other sector: TSM, CUE, CNSP = 3 ✓
+- ai_data_center theme: AMD, TSM, NVDA = 3 ✓ (at cap, weight ≤50%)
+- other theme: CUE, CNSP = 2 ✓
+
+**Sizing:**
+Equity = $100,940.56, max_position_pct = 0.50
+SPY currently 75.38% — need to reduce SPY significantly to fund positions.
+investable = 1 - spy_target_pct - cash_target_pct
+
+I'll target ~5% cash, ~5% SPY (minimal parking), ~90% in positions.
+investable = 0.90
+
+Scores: AMD=79.24, TSM=76.54, CUE=74.35, NVDA=73.82, CNSP=73.92
+Sum = 79.24+76.54+74.35+73.82+73.92 = 377.87
+
+Weights (raw):
+- AMD: 79.24/377.87 * 0.90 = 0.1887
+- TSM: 76.54/377.87 * 0.90 = 0.1823
+- CUE: 74.35/377.87 * 0.90 = 0.1771
+- NVDA: 73.82/377.87 * 0.90 = 0.1758
+- CNSP: 73.92/377.87 * 0.90 = 0.1761
+
+All within [0.04, 0.50] ✓
+Sum of weights = 0.1887+0.1823+0.1771+0.1758+0.1761 = 0.9000 ✓
+Total = 0.90 + 0.05 (SPY) + 0.05 (cash) = 1.00 ✓
+
+**Qty calculations:**
+- AMD: 0.1887 * 100940.56 = $19,047 / $428.19 = 44.49 → 44 shares (starter 70%: 44*0.70=30.8→31 shares for new entry)
+  - Actually rule says new entries target ~70% of desired full position. Let me use 70% sizing.
+  - AMD target full = 44 shares → starter = 31 shares → 31 * 428.19 = $13,274 = 13.15% ✓
+  
+Let me recalculate with 70% starter sizing for all new entries:
+- AMD: 44 * 0.70 = 30.8 → 31 shares; 31 * 428.19 = $13,274
+- TSM: 0.1823 * 100940.56 = $18,401 / 412.77 = 44.58 → 44 shares → 31 shares; 31 * 412.77 = $12,796
+- CUE: 0.1771 * 100940.56 = $17,876 / 37.9999 = 470.4 → 470 shares → 329 shares; 329 * 38.00 = $12,502
+- NVDA: 0.1758 * 100940.56 = $17,745 / 201.27 = 88.17 → 88 shares → 62 shares; 62 * 201.27 = $12,479
+- CNSP: 0.1761 * 100940.56 = $17,776 / 7.81 = 2276 shares → 1593 shares; 1593 * 7.81 = $12,441
+
+Total invested: 13274 + 12796 + 12502 + 12479 + 12441 = $63,492
+SPY: 0.05 * 100940.56 = $5,047 → 5047/729.13 = 6.92 shares
+Cash: 0.05 * 100940.56 = $5,047
+
+Total: 63492 + 5047 + 5047 = $73,586 — this leaves too much unallocated.
+
+The issue is I'm applying 70% starter sizing but the weights should reflect actual allocation. Let me reconsider: the 70% rule means I buy 70% of the target qty this scan. The target_pct in the output should reflect the ACTUAL allocation (70% of full), not the full target.
+
+So actual target_pct = 70% of the score-weighted target:
+- AMD: 0.1887 * 0.70 = 0.1321
+- TSM: 0.1823 * 0.70 = 0.1276
+- CUE: 0.1771 * 0.70 = 0.1240
+- NVDA: 0.1758 * 0.70 = 0.1231
+- CNSP: 0.1761 * 0.70 = 0.1233
+
+Sum = 0.6301
+SPY = 1 - 0.6301 - 0.05 = 0.3199 → ~32% SPY as cash parking
+Cash = 0.05
+
+Total = 0.6301 + 0.3199 + 0.05 = 1.00 ✓
+
+**Qty at 70% sizing:**
+- AMD: 0.1321 * 100940.56 / 428.19 = 13,334 / 428.19 = 31.14 → 31 shares
+- TSM: 0.1276 * 100940.56 / 412.77 = 12,880 / 412.77 = 31.20 → 31 shares
+- CUE: 0.1240 * 100940.56 / 37.9999 = 12,517 / 38.00 = 329.4 → 329 shares
+- NVDA: 0.1231 * 100940.56 / 201.27 = 12,426 / 201.27 = 61.74 → 61 shares (fractional supported but whole for protected entries)
+- CNSP: 0.1233 * 100940.56 / 7.81 = 12,446 / 7.81 = 1593.6 → 1593 shares
+
+**Verify position size caps (max 50%):**
+- AMD: 31 * 428.19 = $13,274 / 100940.56 = 13.15% ✓
+- TSM: 31 * 412.77 = $12,796 / 100940.56 = 12.68% ✓
+- CUE: 329 * 38.00 = $12,502 / 100940.56 = 12.39% ✓
+- NVDA: 61 * 201.27 = $12,277 / 100940.56 = 12.16% ✓
+- CNSP: 1593 * 7.81 = $12,441 / 100940.56 = 12.33% ✓
+
+**Risk check (max 0.5% per trade = $504.70):**
+Stop loss = max(0.01, 0.5*ATR/price) capped at 2.5%
+- AMD: 0.5*20.65/428.19 = 2.41% → $13,274 * 0.0241 = $319.90 ✓
+- TSM: 0.5*13.974/412.77 = 1.69% → $12,796 * 0.0169 = $216.25 ✓
+- CUE: 0.5*6.069/37.9999 = 7.98% → capped at 2.5% → $12,502 * 0.025 = $312.55 ✓
+- NVDA: 0.5*6.316/201.27 = 1.57% → $12,277 * 0.0157 = $192.75 ✓
+- CNSP: 0.5*0.943/7.81 = 6.04% → capped at 2.5% → $12,441 * 0.025 = $311.03 ✓
+
+All within risk limits ✓
+
+**Stop loss prices:**
+- AMD: 428.19 * (1 - 0.0241) = 417.87
+- TSM: 412.77 * (1 - 0.0169) = 405.79
+- CUE: 37.9999 * (1 - 0.025) = 37.05
+- NVDA: 201.27 * (1 - 0.0157) = 198.11
+- CNSP: 7.81 * (1 - 0.025) = 7.62
+
+**SPY target:**
+Current SPY qty = 104.272 shares @ $729.13 = $76,084
+Target SPY value = 0.3199 * 100940.56 = $32,290
+Target SPY qty = 32290 / 729.13 = 44.28 → 44 shares
+Delta = 44 - 104.272 = -60.272 → sell ~60 shares
+
+**GBTG EXIT:**
+qty=0, delta_qty=-2109
+
+**Actual target_pcts (using actual qty * price / equity):**
+- AMD: 31 * 428.19 / 100940.56 = 13274/100940.56 = 0.1315
+- TSM: 31 * 412.77 / 100940.56 = 12796/100940.56 = 0.1268
+- CUE: 329 * 38.00 / 100940.56 = 12502/100940.56 = 0.1239
+- NVDA: 61 * 201.27 / 100940.56 = 12277/100940.56 = 0.1217
+- CNSP: 1593 * 7.81 / 100940.56 = 12441/100940.56 = 0.1233
+
+Sum = 0.6272
+SPY: 44 * 729.13 / 100940.56 = 32081.72/100940.56 = 0.3179
+Cash remainder: 1 - 0.6272 - 0.3179 = 0.0549
+
+Total = 0.6272 + 0.3179 + 0.0549 = 1.0000 ✓
+
+**target_weights** (must sum with spy+cash to [0.99,1.01]):
+target_weights keys = selected_positions only
+Sum of target_weights + spy_target_pct + cash_target_pct must be in [0.99, 1.01]
+
+Let me set:
+- spy_target_pct = 0.3179
+- cash_target_pct = 0.0549
+- target_weights: AMD=0.1315, TSM=0.1268, CUE=0.1239, NVDA=0.1217, CNSP=0.1233
+- Sum weights = 0.6272
+- Total = 0.6272 + 0.3179 + 0.0549 = 1.0000 ✓
+
+**INTC peer_pressure.must_justify=true** — not selected, PASS with peer_outranked reason.
+**ASML peer_pressure.must_justify=true** — not selected, PASS.
+**AVGO peer_pressure.must_justify=true** — not selected, PASS.
+
+Now let me construct the full JSON with all pool symbols in per_symbol:
+
+{
+  "portfolio_thesis": "Rotating out of stagnant GBTG into the day's strongest momentum leaders: AMD (sector/peer leader with momentum score 100 and strong continuation), TSM (breaking out, sector leader in Other), and CUE/CNSP (high-momentum small caps with strong intraday continuation). NVDA rounds out the portfolio with clean continuation above VWAP. All five pass the new entry gate; SPY absorbs remaining capital as liquid parking.",
+  "spy_target_pct": 0.3179,
+  "cash_target_pct": 0.0549,
+  "spy_decision": {
+    "target_pct": 0.3179,
+    "action": "REDUCE",
+    "opportunity_score": 45,
+    "one_sentence_reason": "SPY reduced from 75% to 32% to fund five high-conviction momentum entries while retaining liquid parking for the remaining uninvested capital."
+  },
+  "spy_vs_cash_reasoning": "Excess uninvested capital parks in SPY rather than cash per discipline; only minimal cash reserve held.",
+  "selected_positions": ["AMD", "TSM", "CUE", "NVDA", "CNSP"],
+  "target_weights": {
+    "AMD": 0.1315,
+    "TSM": 0.1268,
+    "CUE": 0.1239,
+    "NVDA": 0.1217,
+    "CNSP": 0.1233
+  },
+  ...
+}
+
+Now I need to include ALL pool symbols in per_symbol. Let me enumerate them all.
+
+Pool symbols: INTC, BLZE, EVER, STRL, AMD, SMCI, DGXX, NVDA, BITO, SOXS, ASML, AVGO, BE, DELL, ETN, FIX, GEV, MRVL, MU, PWR, QCOM, SNDK, STX, TSM, VRT, WDC, SKK, WGS, BRBR, AVNW, AAPL, AMZN, AVLN, AXTX, BAND, BHC, CNSP, COIN, CUE, CYTK, ELPW, F, GBTG, GOOGL, HCAI, JPM, LLY, MARA, META, MSFT
+
+That's 50 symbols. Let me assign opportunity scores and actions for each.
+
+Selected (BUY): AMD(82), TSM(78), CUE(76), NVDA(75), CNSP(74)
+EXIT: GBTG (fading, bearish, near_low)
+PASS: all others
+
+Opportunity scores for non-selected:
+- GBTG: 25 (fading, bearish, held but exiting)
+- STRL: 65 (strong continuation but "Other" sector already at cap with TSM/CUE/CNSP)
+- MARA: 70 (strong but earnings in 5 days)
+- DGXX: 68 (strong but earnings in 8 days)
+- DELL: 67 (strong continuation, IT sector)
+- AAPL: 66 (strong continuation)
+- MRVL: 65 (strong continuation)
+- SMCI: 68 (strong continuation, IT sector - would be 4th IT)
+- SKK: 60 (acceptable continuation, very volatile)
+- AVNW: 52 (strong continuation but negative tech score)
+- HCAI: 50
+- AMZN: 55
+- F: 55
+- GOOGL: 58
+- JPM: 58
+- AMD: 82
+- TSM: 78
+- CUE: 76
+- CNSP: 74
+- NVDA: 75
+
+For must_justify peers not selected:
+- INTC (must_justify AMD): score ~45
+- ASML (must_justify AMD): score ~50
+- AVGO (must_justify AMD): score ~20
+- QCOM (must_justify AMD): score ~22
+- BE (must_justify SMCI): score ~15
+- ETN (must_justify SMCI): score ~15
+- FIX (must_justify SMCI): score ~18
+- GEV (must_justify SMCI): score ~14
+- PWR (must_justify SMCI): score ~18
+- VRT (must_justify SMCI): score ~20
+
+{
+  "portfolio_thesis": "Rotating entirely out of stagnant GBTG (fading momentum, bearish EMA, near day low) into five high-conviction momentum leaders: AMD (peer/sector/theme leader, momentum 100), TSM (breaking out, sector leader), CUE and CNSP (strong intraday continuation in uncorrelated 'other' bucket), and NVDA (clean continuation above VWAP). SPY absorbs ~32% as liquid parking while five positions capture the day's strongest setups.",
+  "spy_target_pct": 0.3179,
+  "cash_target_pct": 0.0549,
+  "spy_decision": {"target_pct": 0.3179, "action": "REDUCE", "opportunity_score": 45, "one_sentence_reason": "SPY reduced from 75% to 32% to fund five high-conviction momentum entries while retaining liquid parking for uninvested capital."},
+  "spy_vs_cash_reasoning": "Excess uninvested capital parks in SPY per discipline; only minimal cash reserve held beyond the 5% floor.",
+  "selected_positions": ["AMD", "TSM", "CUE", "NVDA", "CNSP"],
+  "target_weights": {"AMD": 0.1315, "TSM": 0.1268, "CUE": 0.1239, "NVDA": 0.1217, "CNSP": 0.1233},
+  ...
+}
+
+Let me verify sum: 0.1315+0.1268+0.1239+0.1217+0.1233 = 0.6272
+0.6272 + 0.3179 + 0.0549 = 1.0000 ✓
+
+Now the full per_symbol for all 50 pool members:
+
+{"portfolio_thesis":"Rotating entirely out of stagnant GBTG (fading momentum, bearish EMA, at day low) into five high-conviction momentum leaders: AMD (peer/sector/theme leader, momentum score 100, strong continuation), TSM (breaking out near day high, sector leader in its group), CUE and CNSP (strong intraday continuation in uncorrelated other bucket), and NVDA (clean continuation above VWAP, momentum 100). SPY absorbs ~32% as liquid parking while the five positions capture the day's strongest setups across diversified sectors and themes.","spy_target_pct":0.3179,"cash_target_pct":0.0549,"spy_decision":{"target_pct":0.3179,"action":"REDUCE","opportunity_score":45,"one_sentence_reason":"SPY reduced from 75% to 32% to fund five high-conviction momentum entries while retaining liquid parking for uninvested capital."},"spy_vs_cash_reasoning":"Excess uninvested capital parks in SPY per discipline; only minimal cash reserve held beyond the 5% floor.","selected_positions":["AMD","TSM","CUE","NVDA","CNSP"],"target_weights":{"AMD":0.1315,"TSM":0.1268,"CUE":0.1239,"NVDA":0.1217,"CNSP":0.1233},"per_symbol":{"AMD":{"target_pct":0.1315,"qty":31,"delta_qty":31,"entry_price":428.19,"stop_loss":417.87,"take_profit":null,"action":"BUY","confidence":0.82,"opportunity_score":82,"one_sentence_reason":"AMD is the peer, sector, and theme leader with momentum score 100, strong continuation above VWAP, bullish EMA, and rising volume — best remaining upside in the semiconductor space."},"TSM":{"target_pct":0.1268,"qty":31,"delta_qty":31,"entry_price":412.77,"stop_loss":405.79,"take_profit":null,"action":"BUY","confidence":0.78,"opportunity_score":78,"one_sentence_reason":"TSM is breaking out as the sector leader in its group with momentum 100, bullish EMA, rising slope, and strong sentiment score — clean continuation setup."},"CUE":{"target_pct":0.1239,"qty":329,"delta_qty":329,"entry_price":38.00,"stop_loss":37.05,"take_profit":null,"action":"BUY","confidence":0.74,"opportunity_score":76,"one_sentence_reason":"CUE is the theme leader in its bucket with momentum 95, +10% intraday, bullish EMA, and rising volume — strong continuation with remaining upside."},"NVDA":{"target_pct":0.1217,"qty":61,"delta_qty":61,"entry_price":201.27,"stop_loss":198.11,"take_profit":null,"action":"BUY","confidence":0.75,"opportunity_score":75,"one_sentence_reason":"NVDA passes the continuation gate with momentum 100, bullish EMA, price above VWAP, and rising volume — strong remaining upside in the ai_data_center theme alongside AMD."},"CNSP":{"target_pct":0.1233,"qty":1593,"delta_qty":1593,"entry_price":7.81,"stop_loss":7.62,"take_profit":null,"action":"BUY","confidence":0.72,"opportunity_score":74,"one_sentence_reason":"CNSP shows strong continuation with momentum 95, +14% intraday, bullish EMA, price well above VWAP, and rising volume in an uncorrelated sector bucket."},"GBTG":{"target_pct":0.0,"qty":0,"delta_qty":-2109,"entry_price":9.38,"stop_loss":null,"take_profit":null,"action":"EXIT","confidence":0.85,"opportunity_score":25,"one_sentence_reason":"GBTG is fading with bearish EMA, at day low, falling recent trend, and momentum score of only 8 — multiple higher-scoring fresh candidates offer far better remaining upside."},"INTC":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":112.75,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.0,"opportunity_score":45,"one_sentence_reason":null,"reason_code":"peer_outranked"},"BLZE":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":7.38,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.0,"opportunity_score":15,"one_sentence_reason":null,"reason_code":"score_below_floor"},"EVER":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":21.76,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.0,"opportunity_score":10,"one_sentence_reason":null,"reason_code":"score_below_floor"},"STRL":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":845.0,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.0,"opportunity_score":62,"one_sentence_reason":null,"reason_code":"sector_capped"},"SMCI":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":33.145,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.0,"opportunity_score":65,"one_sentence_reason":null,"reason_code":"sector_capped"},"DGXX":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":5.7,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.0,"opportunity_score":60,"one_sentence_reason":null,"reason_code":"earnings_blackout"},"BITO":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":11.205,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.0,"opportunity_score":12,"one_sentence_reason":null,"reason_code":"score_below_floor"},"SOXS":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":10.1814,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.0,"opportunity_score":5,"one_sentence_reason":null,"reason_code":"score_below_floor"},"ASML":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":1515.57,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.0,"opportunity_score":50,"one_sentence_reason":null,"reason_code":"peer_outranked"},"AVGO":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":430.7,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.0,"opportunity_score":18,"one_sentence_reason":null,"reason_code":"peer_outranked"},"BE":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":288.77,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.0,"opportunity_score":14,"one_sentence_reason":null,"reason_code":"peer_outranked"},"DELL":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":225.0,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.0,"opportunity_score":64,"one_sentence_reason":null,"reason_code":"sector_capped"},"ETN":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":416.19,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.0,"opportunity_score":14,"one_sentence_reason":null,"reason_code":"peer_outranked"},"FIX":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":1977.825,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.0,"opportunity_score":17,"one_sentence_reason":null,"reason_code":"peer_outranked"},"GEV":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":1076.57,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.0,"opportunity_score":13,"one_sentence_reason":null,"reason_code":"peer_outranked"},"MRVL":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":173.8575,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.0,"opportunity_score":62,"one_sentence_reason":null,"reason_code":"sector_capped"},"MU":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":661.66,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.0,"opportunity_score":22,"one_sentence_reason":null,"reason_code":"score_below_floor"},"PWR":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":769.665,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.0,"opportunity_score":18,"one_sentence_reason":null,"reason_code":"peer_outranked"},"QCOM":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":193.87,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.0,"opportunity_score":20,"one_sentence_reason":null,"reason_code":"peer_outranked"},"SNDK":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":1415.89,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.0,"opportunity_score":16,"one_sentence_reason":null,"reason_code":"score_below_floor"},"STX":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":770.335,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.0,"opportunity_score":19,"one_sentence_reason":null,"reason_code":"score_below_floor"},"VRT":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":347.88,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.0,"opportunity_score":20,"one_sentence_reason":null,"reason_code":"peer_outranked"},"WDC":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":463.495,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.0,"opportunity_score":17,"one_sentence_reason":null,"reason_code":"score_below_floor"},"SKK":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":6.3367,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.0,"opportunity_score":58,"one_sentence_reason":null,"reason_code":"sector_capped"},"WGS":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":33.21,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.0,"opportunity_score":5,"one_sentence_reason":null,"reason_code":"score_below_floor"},"BRBR":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":10.03,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.0,"opportunity_score":6,"one_sentence_reason":null,"reason_code":"score_below_floor"},"AVNW":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":15.86,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.0,"opportunity_score":48,"one_sentence_reason":null,"reason_code":"score_below_floor"},"AAPL":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":282.98,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.0,"opportunity_score":63,"one_sentence_reason":null,"reason_code":"sector_capped"},"AMZN":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":274.4,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.0,"opportunity_score":55,"one_sentence_reason":null,"reason_code":"score_below_floor"},"AVLN":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":26.48,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.0,"opportunity_score":10,"one_sentence_reason":null,"reason_code":"score_below_floor"},"AXTX":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":44.55,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.0,"opportunity_score":8,"one_sentence_reason":null,"reason_code":"score_below_floor"},"BAND":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":47.06,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.0,"opportunity_score":16,"one_sentence_reason":null,"reason_code":"score_below_floor"},"BHC":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":5.64,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.0,"opportunity_score":12,"one_sentence_reason":null,"reason_code":"score_below_floor"},"COIN":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":197.54,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.0,"opportunity_score":10,"one_sentence_reason":null,"reason_code":"earnings_blackout"},"CYTK":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":76.19,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.0,"opportunity_score":17,"one_sentence_reason":null,"reason_code":"score_below_floor"},"ELPW":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":6.3759,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.0,"opportunity_score":5,"one_sentence_reason":null,"reason_code":"score_below_floor"},"F":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":12.145,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.0,"opportunity_score":52,"one_sentence_reason":null,"reason_code":"score_below_floor"},"GOOGL":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":395.37,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.0,"opportunity_score":58,"one_sentence_reason":null,"reason_code":"score_below_floor"},"HCAI":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":15.44,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.0,"opportunity_score":48,"one_sentence_reason":null,"reason_code":"score_below_floor"},"JPM":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":314.03,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.0,"opportunity_score":55,"one_sentence_reason":null,"reason_code":"score_below_floor"},"LLY":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":990.125,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.0,"opportunity_score":28,"one_sentence_reason":null,"reason_code":"score_below_floor"},"MARA":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":12.8636,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.0,"opportunity_score":60,"one_sentence_reason":null,"reason_code":"earnings_blackout"},"META":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":599.375,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.0,"opportunity_score":10,"one_sentence_reason":null,"reason_code":"score_below_floor"},"MSFT":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":407.28,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.0,"opportunity_score":12,"one_sentence_reason":null,"reason_code":"score_below_floor"}},...}
+
+Wait - I need to double-check the "Other" sector cap. TSM is "Other" sector, CUE is "Other" sector, CNSP is "Other" sector = 3. That's exactly at the cap. ✓
+
+ai_data_center theme: AMD (ai_data_center), TSM (ai_data_center), NVDA (ai_data_center) = 3. At cap. Weight = 0.1315+0.1268+0.1217 = 0.38 < 0.50 ✓
+
+other theme: CUE (other), CNSP (other) = 2 ✓
+
+Information Technology sector: AMD, NVDA = 2 ✓
+
+All caps satisfied ✓
+
+Anti-stagnation check: GBTG (held, not selected) → EXIT ✓. Fresh candidates included: AMD, TSM, CUE, NVDA, CNSP (all fresh) ✓.
+
+Lowest selected score = 74 (CNSP). Fresh candidates within 5 points: STRL=65 (no), MARA=60 (no). Actually the rule says "when any new candidate has score >= lowest_selected - 5 = 69". STRL=62, SMCI=65, DELL=64, MRVL=62, AAPL=63 — none above 69 that aren't already selected. So anti-stagnation is satisfied since all selected are fresh anyway.
+
+Actually wait - SMCI scores 65 in my opportunity scoring. The lowest selected is CNSP at 74. 74-5=69. SMCI=65 < 69. No violation.
+
+Let me also verify INTC has must_justify=true. Since I'm not selecting INTC, I just PASS it with peer_outranked. No issue.
+
+ASML has must_justify=true — PASS with peer_outranked. ✓
+AVGO has must_justify=true — PASS with peer_outranked. ✓
+
+Now let me write the final clean JSON:
+
+{"portfolio_thesis":"Rotating entirely out of stagnant GBTG (fading momentum, bearish EMA, at day low, momentum score 8) into five high-conviction momentum leaders: AMD (peer/sector/theme leader, momentum 100, strong continuation), TSM (breaking out, sector leader, momentum 100), CUE (theme leader, +10% intraday, momentum 95), NVDA (clean continuation above VWAP, momentum 100), and CNSP (strong intraday continuation, momentum 95). SPY absorbs ~32% as liquid parking while the five positions capture the day's strongest setups across diversified sectors and themes.","spy_target_pct":0.3179,"cash_target_pct":0.0549,"spy_decision":{"target_pct":0.3179,"action":"REDUCE","opportunity_score":45,"one_sentence_reason":"SPY reduced from 75% to 32% to fund five high-conviction momentum entries while retaining liquid parking for uninvested capital."},"spy_vs_cash_reasoning":"Excess uninvested capital parks in SPY per discipline; only minimal cash reserve held beyond the 5% floor.","selected_positions":["AMD","TSM","CUE","NVDA","CNSP"],"target_weights":{"AMD":0.1315,"TSM":0.1268,"CUE":0.1239,"NVDA":0.1217,"CNSP":0.1233},"per_symbol":{"AMD":{"target_pct":0.1315,"qty":31,"delta_qty":31,"entry_price":428.19,"stop_loss":417.87,"take_profit":null,"action":"BUY","confidence":0.82,"opportunity_score":82,"one_sentence_reason":"AMD is the peer, sector, and theme leader with momentum score 100, strong continuation above VWAP, bullish EMA, and rising volume — best remaining upside in the semiconductor space."},"TSM":{"target_pct":0.1268,"qty":31,"delta_qty":31,"entry_price":412.77,"stop_loss":405.79,"take_profit":null,"action":"BUY","confidence":0.78,"opportunity_score":78,"one_sentence_reason":"TSM is breaking out as the sector leader with momentum 100, bullish EMA, rising slope, and strong sentiment — clean continuation setup with remaining upside."},"CUE":{"target_pct":0.1239,"qty":329,"delta_qty":329,"entry_price":38.00,"stop_loss":37.05,"take_profit":null,"action":"BUY","confidence":0.74,"opportunity_score":76,"one_sentence_reason":"CUE is the theme leader in its bucket with momentum 95, +10% intraday, bullish EMA, and rising volume — strong continuation with remaining upside in an uncorrelated sector."},"NVDA":{"target_pct":0.1217,"qty":61,"delta_qty":61,"entry_price":201.27,"stop_loss":198.11,"take_profit":null,"action":"BUY","confidence":0.75,"opportunity_score":75,"one_sentence_reason":"NVDA passes the continuation gate with momentum 100, bullish EMA, price above VWAP, and rising volume — strong remaining upside in the ai_data_center theme."},"CNSP":{"target_pct":0.1233,"qty":1593,"delta_qty":1593,"entry_price":7.81,"stop_loss":7.62,"take_profit":null,"action":"BUY","confidence":0.72,"opportunity_score":74,"one_sentence_reason":"CNSP shows strong continuation with momentum 95, +14% intraday, bullish EMA, price well above VWAP, and rising volume in an uncorrelated sector bucket."},"GBTG":{"target_pct":0.0,"qty":0,"delta_qty":-2109,"entry_price":9.38,"stop_loss":null,"take_profit":null,"action":"EXIT","confidence":0.85,"opportunity_score":25,"one_sentence_reason":"GBTG is fading with bearish EMA, at day low, falling recent trend, and momentum score of only 8 — five higher-scoring fresh candidates offer far better remaining upside."},"INTC":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":112.75,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.0,"opportunity_score":45,"one_sentence_reason":null,"reason_code":"peer_outranked"},"BLZE":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":7.38,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.0,"opportunity_score":15,"one_sentence_reason":null,"reason_code":"score_below_floor"},"EVER":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":21.76,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.0,"opportunity_score":10,"one_sentence_reason":null,"reason_code":"score_below_floor"},"STRL":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":845.0,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.0,"opportunity_score":62,"one_sentence_reason":null,"reason_code":"sector_capped"},"SMCI":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":33.145,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.0,"opportunity_score":65,"one_sentence_reason":null,"reason_code":"sector_capped"},"DGXX":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":5.7,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.0,"opportunity_score":60,"one_sentence_reason":null,"reason_code":"earnings_blackout"},"BITO":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":11.205,"stop_loss

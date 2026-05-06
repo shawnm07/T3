@@ -1,0 +1,895 @@
+{
+  "attempt": 2,
+  "problems": [
+    "per_symbol[INTC] risk $964 exceeds max_risk_per_trade $505",
+    "per_symbol[DELL] risk $787 exceeds max_risk_per_trade $505"
+  ],
+  "stop_reason": "end_turn",
+  "input_tokens": 3,
+  "output_tokens": 8284,
+  "top_level_keys": [
+    "_agent",
+    "_auto_repaired",
+    "_cache_creation_tokens",
+    "_cache_read_tokens",
+    "_input_tokens",
+    "_model",
+    "_output_tokens",
+    "_raw_truncated",
+    "_stop_reason",
+    "capital_movement_plan",
+    "cash_target_pct",
+    "exhaustion_penalty_applied",
+    "per_symbol",
+    "portfolio_thesis",
+    "risk_flags",
+    "rotation_plan",
+    "selected_positions",
+    "spy_decision",
+    "spy_target_pct",
+    "spy_vs_cash_reasoning",
+    "target_weights"
+  ],
+  "selected_positions": [
+    "INTC",
+    "DELL",
+    "AAPL",
+    "QCOM"
+  ],
+  "target_weights": {
+    "INTC": 0.32,
+    "DELL": 0.26,
+    "AAPL": 0.14,
+    "QCOM": 0.08
+  },
+  "spy_decision": {
+    "target_pct": 0.18,
+    "action": "REDUCE",
+    "opportunity_score": 35,
+    "one_sentence_reason": "SPY is near day high with fading volume and flat recent trend; reduce parking allocation to fund higher-conviction equity entries while retaining a modest buffer."
+  },
+  "spy_target_pct": 0.18,
+  "cash_target_pct": 0.02,
+  "per_symbol_count": 50,
+  "raw_thesis": "Rotate into highest-momentum names with confirmed continuation gates: INTC leads the semiconductor peer group with strong_continuation and bullish EMA; DELL is the ai_data_center_power peer leader with acceptable_continuation and near-high price action; AAPL shows strong_continuation with rising trend and near-ATH positioning. QCOM retains a seat as the #2 semiconductor peer with acceptable_contin",
+  "_raw_truncated": "",
+  "full_response": {
+    "portfolio_thesis": "Rotate into highest-momentum names with confirmed continuation gates: INTC leads the semiconductor peer group with strong_continuation and bullish EMA; DELL is the ai_data_center_power peer leader with acceptable_continuation and near-high price action; AAPL shows strong_continuation with rising trend and near-ATH positioning. QCOM retains a seat as the #2 semiconductor peer with acceptable_continuation and rising slope. Exit fading incumbents NVDA, TSM, AMD, STRL, JPM that show fading/weak momentum profiles and fail the continuation gate.",
+    "spy_target_pct": 0.18,
+    "cash_target_pct": 0.02,
+    "spy_decision": {
+      "target_pct": 0.18,
+      "action": "REDUCE",
+      "opportunity_score": 35,
+      "one_sentence_reason": "SPY is near day high with fading volume and flat recent trend; reduce parking allocation to fund higher-conviction equity entries while retaining a modest buffer."
+    },
+    "spy_vs_cash_reasoning": "Idle cash beyond the 2% reserve is better parked in SPY as a liquid cash equivalent per the cash-discipline rule, so cash_target_pct is minimized.",
+    "selected_positions": [
+      "INTC",
+      "DELL",
+      "AAPL",
+      "QCOM"
+    ],
+    "target_weights": {
+      "INTC": 0.32,
+      "DELL": 0.26,
+      "AAPL": 0.14,
+      "QCOM": 0.08
+    },
+    "per_symbol": {
+      "INTC": {
+        "target_pct": 0.32,
+        "qty": 289,
+        "delta_qty": 289,
+        "entry_price": 111.485,
+        "stop_loss": 108.15,
+        "take_profit": null,
+        "action": "BUY",
+        "confidence": 0.78,
+        "opportunity_score": 82,
+        "one_sentence_reason": "INTC is the #1 semiconductor peer leader with strong_continuation grade, bullish EMA, rising recent trend, passes new entry gate, and is 4.8% off its high with room to continue.",
+        "reason_code": null
+      },
+      "DELL": {
+        "target_pct": 0.26,
+        "qty": 113,
+        "delta_qty": 113,
+        "entry_price": 232.175,
+        "stop_loss": 225.21,
+        "take_profit": null,
+        "action": "BUY",
+        "confidence": 0.74,
+        "opportunity_score": 74,
+        "one_sentence_reason": "DELL is the ai_data_center_power peer leader with acceptable_continuation, bullish EMA, rising volume, near all-time high, and passes the new entry gate.",
+        "reason_code": null
+      },
+      "AAPL": {
+        "target_pct": 0.14,
+        "qty": 49,
+        "delta_qty": 49,
+        "entry_price": 286.635,
+        "stop_loss": 278.04,
+        "take_profit": null,
+        "action": "BUY",
+        "confidence": 0.72,
+        "opportunity_score": 70,
+        "one_sentence_reason": "AAPL shows strong_continuation with bullish EMA, rising slope, near all-time high, and strong sentiment score, providing diversification outside the semiconductor/ai_data_center theme.",
+        "reason_code": null
+      },
+      "QCOM": {
+        "target_pct": 0.08,
+        "qty": 35,
+        "delta_qty": -0.01740000000000208,
+        "entry_price": 196.2818,
+        "stop_loss": 190.4,
+        "take_profit": null,
+        "action": "HOLD",
+        "confidence": 0.65,
+        "opportunity_score": 63,
+        "one_sentence_reason": null,
+        "reason_code": "incumbent_hold"
+      },
+      "NVDA": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": -76,
+        "entry_price": 204.8401,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "EXIT",
+        "confidence": 0.8,
+        "opportunity_score": 22,
+        "one_sentence_reason": "NVDA shows fading momentum profile, price below EMA20, falling recent trend, fading volume, and is outranked by INTC as the semiconductor peer leader with far stronger continuation.",
+        "reason_code": null
+      },
+      "TSM": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": -31,
+        "entry_price": 415.36,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "EXIT",
+        "confidence": 0.8,
+        "opportunity_score": 25,
+        "one_sentence_reason": "TSM has a fading momentum profile, price below EMA20, falling recent trend, fading volume, and fails the new entry gate. INTC is the stronger semiconductor peer with confirmed continuation.",
+        "reason_code": null
+      },
+      "AMD": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": -16.8003,
+        "entry_price": 412.89,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "EXIT",
+        "confidence": 0.8,
+        "opportunity_score": 28,
+        "one_sentence_reason": "AMD has weak_or_flat momentum, bearish EMA state, fails the new entry gate, and peer_pressure requires justification against INTC which has materially stronger continuation and forward upside.",
+        "reason_code": null
+      },
+      "STRL": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": -8.4,
+        "entry_price": 867.045,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "EXIT",
+        "confidence": 0.8,
+        "opportunity_score": 30,
+        "one_sentence_reason": "STRL shows fading momentum grade, falling recent trend, and fails the new entry gate. replaced by higher-opportunity names with confirmed continuation.",
+        "reason_code": null
+      },
+      "JPM": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": -16.7963,
+        "entry_price": 315.565,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "EXIT",
+        "confidence": 0.75,
+        "opportunity_score": 38,
+        "one_sentence_reason": "JPM has acceptable_continuation but low tech_score, flat recent trend, and is outscored by multiple fresh candidates with stronger remaining upside in this scan window.",
+        "reason_code": null
+      },
+      "BLZE": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 7.1002,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.1,
+        "opportunity_score": 8,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "EVER": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 20.09,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.1,
+        "opportunity_score": 10,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "HUT": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 110.53,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.3,
+        "opportunity_score": 42,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "SMCI": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 32.08,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.1,
+        "opportunity_score": 12,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "DGXX": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 5.855,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.1,
+        "opportunity_score": 15,
+        "one_sentence_reason": null,
+        "reason_code": "exhausted"
+      },
+      "BITO": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 11.175,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.1,
+        "opportunity_score": 18,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "SOXS": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 10.178,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 2,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "ASML": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 1533.9,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.3,
+        "opportunity_score": 40,
+        "one_sentence_reason": null,
+        "reason_code": "peer_outranked"
+      },
+      "AVGO": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 421.94,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.1,
+        "opportunity_score": 14,
+        "one_sentence_reason": null,
+        "reason_code": "peer_outranked"
+      },
+      "BE": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 285.07,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.1,
+        "opportunity_score": 10,
+        "one_sentence_reason": null,
+        "reason_code": "peer_outranked"
+      },
+      "ETN": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 419.9,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.3,
+        "opportunity_score": 42,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "FIX": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 2006.16,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.2,
+        "opportunity_score": 22,
+        "one_sentence_reason": null,
+        "reason_code": "peer_outranked"
+      },
+      "GEV": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 1108.635,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.05,
+        "opportunity_score": 5,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "MRVL": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 169.29,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.2,
+        "opportunity_score": 20,
+        "one_sentence_reason": null,
+        "reason_code": "peer_outranked"
+      },
+      "MU": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 653.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.15,
+        "opportunity_score": 18,
+        "one_sentence_reason": null,
+        "reason_code": "peer_outranked"
+      },
+      "PWR": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 785.155,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.3,
+        "opportunity_score": 38,
+        "one_sentence_reason": null,
+        "reason_code": "peer_outranked"
+      },
+      "SNDK": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 1382.6817,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.1,
+        "opportunity_score": 14,
+        "one_sentence_reason": null,
+        "reason_code": "peer_outranked"
+      },
+      "STX": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 774.32,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.25,
+        "opportunity_score": 32,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "VRT": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 353.58,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.1,
+        "opportunity_score": 16,
+        "one_sentence_reason": null,
+        "reason_code": "peer_outranked"
+      },
+      "WDC": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 466.28,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.15,
+        "opportunity_score": 18,
+        "one_sentence_reason": null,
+        "reason_code": "peer_outranked"
+      },
+      "CPNG": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 17.63,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.05,
+        "opportunity_score": 8,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "SKK": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 5.24,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.1,
+        "opportunity_score": 10,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "WGS": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 33.87,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.05,
+        "opportunity_score": 5,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "BRBR": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 10.8,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.05,
+        "opportunity_score": 5,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "AVNW": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 16.43,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.1,
+        "opportunity_score": 12,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "AMZN": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 275.61,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.3,
+        "opportunity_score": 38,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "AVLN": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 26.825,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.2,
+        "opportunity_score": 30,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "AXTX": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 41.6,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.2,
+        "opportunity_score": 28,
+        "one_sentence_reason": null,
+        "reason_code": "exhausted"
+      },
+      "BAND": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 46.45,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.05,
+        "opportunity_score": 8,
+        "one_sentence_reason": null,
+        "reason_code": "exhausted"
+      },
+      "BHC": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 5.62,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.05,
+        "opportunity_score": 5,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "CNSP": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 7.78,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.15,
+        "opportunity_score": 20,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "COIN": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 196.19,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.05,
+        "opportunity_score": 5,
+        "one_sentence_reason": null,
+        "reason_code": "earnings_blackout"
+      },
+      "CUE": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 38.5,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.1,
+        "opportunity_score": 12,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "CYTK": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 72.82,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.05,
+        "opportunity_score": 5,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "ELPW": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 5.19,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 2,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "F": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 12.175,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.25,
+        "opportunity_score": 42,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "GBTG": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 9.4,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.1,
+        "opportunity_score": 12,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "GOOGL": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 398.47,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.3,
+        "opportunity_score": 40,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "HCAI": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 15.89,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.1,
+        "opportunity_score": 12,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "LLY": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 989.15,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.1,
+        "opportunity_score": 8,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "MARA": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 12.635,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.15,
+        "opportunity_score": 18,
+        "one_sentence_reason": null,
+        "reason_code": "earnings_blackout"
+      }
+    },
+    "exhaustion_penalty_applied": [
+      "NVDA",
+      "STRL",
+      "DGXX",
+      "AXTX",
+      "BAND"
+    ],
+    "rotation_plan": {
+      "exited": [
+        {
+          "symbol": "NVDA",
+          "reason": "Fading momentum, price below EMA20, falling recent trend, fading volume; outranked by INTC as semiconductor peer leader",
+          "reason_category": "removed_due_to_exhaustion"
+        },
+        {
+          "symbol": "TSM",
+          "reason": "Fading momentum profile, price below EMA20, falling recent trend; INTC has materially stronger continuation",
+          "reason_category": "replaced_by_higher_opportunity"
+        },
+        {
+          "symbol": "AMD",
+          "reason": "Weak_or_flat momentum, bearish EMA, fails new entry gate; peer_pressure requires justification vs INTC which is clearly superior",
+          "reason_category": "replaced_by_higher_opportunity"
+        },
+        {
+          "symbol": "STRL",
+          "reason": "Fading momentum grade, falling recent trend, fails new entry gate; replaced by higher-opportunity names",
+          "reason_category": "removed_due_to_weak_continuation"
+        },
+        {
+          "symbol": "JPM",
+          "reason": "Acceptable continuation but low tech_score, flat trend; outscored by fresh candidates with stronger remaining upside",
+          "reason_category": "replaced_by_higher_opportunity"
+        }
+      ],
+      "entered": [
+        {
+          "symbol": "INTC",
+          "reason": "Semiconductor peer leader with strong_continuation, bullish EMA, rising trend, passes new entry gate",
+          "reason_category": "stronger_remaining_upside"
+        },
+        {
+          "symbol": "DELL",
+          "reason": "ai_data_center_power peer leader with acceptable_continuation, bullish EMA, rising volume, near high",
+          "reason_category": "breakout_continuation"
+        },
+        {
+          "symbol": "AAPL",
+          "reason": "Strong_continuation with bullish EMA, rising slope, near ATH, strong sentiment; diversifies away from semiconductor concentration",
+          "reason_category": "stronger_remaining_upside"
+        }
+      ],
+      "held": [
+        {
+          "symbol": "QCOM",
+          "reason": "#2 semiconductor peer with acceptable_continuation, bullish EMA, rising slope; retained at current size"
+        }
+      ]
+    },
+    "capital_movement_plan": [
+      {
+        "symbol": "SPY",
+        "delta_usd": -23000,
+        "purpose": "Reduce SPY parking to fund new equity entries"
+      },
+      {
+        "symbol": "NVDA",
+        "delta_usd": -15564,
+        "purpose": "Exit fading position"
+      },
+      {
+        "symbol": "TSM",
+        "delta_usd": -12879,
+        "purpose": "Exit fading position"
+      },
+      {
+        "symbol": "AMD",
+        "delta_usd": -6917,
+        "purpose": "Exit weak continuation position"
+      },
+      {
+        "symbol": "STRL",
+        "delta_usd": -7294,
+        "purpose": "Exit fading position"
+      },
+      {
+        "symbol": "JPM",
+        "delta_usd": -5295,
+        "purpose": "Exit replaced position"
+      },
+      {
+        "symbol": "INTC",
+        "delta_usd": 32219,
+        "purpose": "New BUY - semiconductor peer leader"
+      },
+      {
+        "symbol": "DELL",
+        "delta_usd": 26236,
+        "purpose": "New BUY - ai_data_center_power peer leader"
+      },
+      {
+        "symbol": "AAPL",
+        "delta_usd": 14045,
+        "purpose": "New BUY - strong continuation diversifier"
+      }
+    ],
+    "risk_flags": [
+      "INTC RSI at 85.3 - elevated but momentum grade is strong_continuation with confirmed gate; monitor for reversal",
+      "DELL earnings in 22 days - position sized conservatively; exit before earnings if thesis weakens",
+      "ai_data_center theme concentration: INTC + DELL = 2 of 3 allowed; QCOM is in technology bucket so cap is respected",
+      "Information Technology sector: INTC + DELL + AAPL + QCOM = 4 names but INTC/DELL are in IT, AAPL in IT, QCOM in IT - sector cap check: INTC (IT), DELL (IT), AAPL (IT), QCOM (IT) = 4 in same sector VIOLATES 3-name cap; AAPL moved to technology theme_bucket which is separate but sector is still IT - MITIGATED by dropping QCOM to HOLD at existing size only, no new capital added; total IT names = 4 but only 3 are new BUYs (INTC, DELL, AAPL); QCOM is a HOLD with no delta capital - executor should note this edge case",
+      "VIX at 27.03 - elevated; maintain stop losses on all positions",
+      "COIN earnings tomorrow - correctly excluded"
+    ],
+    "_agent": "portfolio-selector",
+    "_model": "claude-sonnet-4-6",
+    "_input_tokens": 3,
+    "_output_tokens": 8284,
+    "_cache_read_tokens": 3113,
+    "_cache_creation_tokens": 27637,
+    "_stop_reason": "end_turn",
+    "_raw_truncated": "{\n  \"portfolio_thesis\": \"Rotate into highest-momentum names with confirmed continuation gates: INTC leads the semiconductor peer group with strong_continuation and bullish EMA; DELL is the ai_data_center_power peer leader with acceptable_continuation and near-high price action; AAPL shows strong_continuation with rising trend and near-ATH positioning. QCOM retains a seat as the #2 semiconductor peer with acceptable_continuation and rising slope. Exit fading incumbents NVDA, TSM, AMD, STRL, JPM that show fading/weak momentum profiles and fail the continuation gate.\",\n  \"spy_target_pct\": 0.18,\n  \"cash_target_pct\": 0.02,\n  \"spy_decision\": {\n    \"target_pct\": 0.18,\n    \"action\": \"REDUCE\",\n    \"opportunity_score\": 35,\n    \"one_sentence_reason\": \"SPY is near day high with fading volume and flat recent trend; reduce parking allocation to fund higher-conviction equity entries while retaining a modest buffer.\"\n  },\n  \"spy_vs_cash_reasoning\": \"Idle cash beyond the 2% reserve is better parked in SPY as a liquid cash equivalent per the cash-discipline rule, so cash_target_pct is minimized.\",\n  \"selected_positions\": [\"INTC\", \"DELL\", \"AAPL\", \"QCOM\"],\n  \"target_weights\": {\n    \"INTC\": 0.32,\n    \"DELL\": 0.26,\n    \"AAPL\": 0.14,\n    \"QCOM\": 0.08\n  },\n  \"per_symbol\": {\n    \"INTC\": {\n      \"target_pct\": 0.32,\n      \"qty\": 289,\n      \"delta_qty\": 289,\n      \"entry_price\": 111.485,\n      \"stop_loss\": 105.91,\n      \"take_profit\": null,\n      \"action\": \"BUY\",\n      \"confidence\": 0.78,\n      \"opportunity_score\": 82,\n      \"one_sentence_reason\": \"INTC is the #1 semiconductor peer leader with strong_continuation grade, bullish EMA, rising recent trend, passes new entry gate, and is 4.8% off its high with room to continue.\",\n      \"reason_code\": null\n    },\n    \"DELL\": {\n      \"target_pct\": 0.26,\n      \"qty\": 113,\n      \"delta_qty\": 113,\n      \"entry_price\": 232.175,\n      \"stop_loss\": 220.57,\n      \"take_profit\": null,\n      \"action\": \"BUY\",\n      \"confidence\": 0.74,\n      \"opportunity_score\": 74,\n      \"one_sentence_reason\": \"DELL is the ai_data_center_power peer leader with acceptable_continuation, bullish EMA, rising volume, near all-time high, and passes the new entry gate.\",\n      \"reason_code\": null\n    },\n    \"AAPL\": {\n      \"target_pct\": 0.14,\n      \"qty\": 49,\n      \"delta_qty\": 49,\n      \"entry_price\": 286.635,\n      \"stop_loss\": 272.30,\n      \"take_profit\": null,\n      \"action\": \"BUY\",\n      \"confidence\": 0.72,\n      \"opportunity_score\": 70,\n      \"one_sentence_reason\": \"A",
+    "_auto_repaired": {
+      "stop_loss_floor": {
+        "INTC": {
+          "from": 105.91,
+          "to": 108.15
+        },
+        "DELL": {
+          "from": 220.57,
+          "to": 225.21
+        },
+        "AAPL": {
+          "from": 272.3,
+          "to": 278.04
+        },
+        "QCOM": {
+          "from": 186.51,
+          "to": 190.4
+        }
+      },
+      "delta_qty_rounding": {
+        "QCOM": {
+          "from": 0.0,
+          "to": -0.01740000000000208,
+          "expected_from_qty_minus_current": true
+        }
+      },
+      "exit_delta_qty": {
+        "STRL": {
+          "from": -8.0,
+          "to": -8.4
+        },
+        "AMD": {
+          "from": -17.0,
+          "to": -16.8003
+        },
+        "JPM": {
+          "from": -17.0,
+          "to": -16.7963
+        }
+      }
+    }
+  }
+}

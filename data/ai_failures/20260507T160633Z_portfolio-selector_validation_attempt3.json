@@ -1,0 +1,848 @@
+{
+  "attempt": 3,
+  "problems": [
+    "spy_decision.one_sentence_reason missing"
+  ],
+  "stop_reason": "end_turn",
+  "input_tokens": 3,
+  "output_tokens": 7755,
+  "top_level_keys": [
+    "_agent",
+    "_auto_repaired",
+    "_cache_creation_tokens",
+    "_cache_read_tokens",
+    "_input_tokens",
+    "_model",
+    "_output_tokens",
+    "_raw_truncated",
+    "_stop_reason",
+    "capital_movement_plan",
+    "cash_target_pct",
+    "exhaustion_penalty_applied",
+    "per_symbol",
+    "portfolio_thesis",
+    "risk_flags",
+    "rotation_plan",
+    "selected_positions",
+    "spy_decision",
+    "spy_target_pct",
+    "spy_vs_cash_reasoning",
+    "target_weights"
+  ],
+  "selected_positions": [
+    "QCOM",
+    "TSM",
+    "SMCI"
+  ],
+  "target_weights": {
+    "QCOM": 0.5,
+    "TSM": 0.25,
+    "SMCI": 0.15
+  },
+  "spy_decision": {
+    "target_pct": 0.08,
+    "action": "HOLD",
+    "opportunity_score": 42,
+    "one_sentence_reason": null
+  },
+  "spy_target_pct": 0.08,
+  "cash_target_pct": 0.02,
+  "per_symbol_count": 50,
+  "raw_thesis": "QCOM is breaking out with momentum score 100, rising volume, and strong continuation signals \u2014 the clear top pick. TSM offers strong continuation with bullish EMA and rising slope as the semiconductor sector's second-best setup. SMCI leads the ai_data_center_power peer group with strong continuation and passes the new entry gate, providing diversification into a different theme bucket. These three",
+  "_raw_truncated": "",
+  "full_response": {
+    "portfolio_thesis": "QCOM is breaking out with momentum score 100, rising volume, and strong continuation signals \u2014 the clear top pick. TSM offers strong continuation with bullish EMA and rising slope as the semiconductor sector's second-best setup. SMCI leads the ai_data_center_power peer group with strong continuation and passes the new entry gate, providing diversification into a different theme bucket. These three names span technology and ai_data_center themes with genuine remaining upside into the next scan.",
+    "spy_target_pct": 0.08,
+    "cash_target_pct": 0.02,
+    "spy_decision": {
+      "target_pct": 0.08,
+      "action": "HOLD",
+      "opportunity_score": 42,
+      "one_sentence_reason": null
+    },
+    "spy_vs_cash_reasoning": "SPY is held as liquid cash equivalent at ~8% given neutral macro regime and VIX at 27; minimal cash reserve beyond SPY is warranted.",
+    "selected_positions": [
+      "QCOM",
+      "TSM",
+      "SMCI"
+    ],
+    "target_weights": {
+      "QCOM": 0.5,
+      "TSM": 0.25,
+      "SMCI": 0.15
+    },
+    "per_symbol": {
+      "QCOM": {
+        "target_pct": 0.5,
+        "qty": 228,
+        "delta_qty": 228,
+        "entry_price": 221.75,
+        "stop_loss": 219.53,
+        "take_profit": null,
+        "action": "BUY",
+        "confidence": 0.88,
+        "opportunity_score": 92,
+        "one_sentence_reason": "QCOM is breaking out with momentum score 100, rising volume, bullish EMA, price +8.8% above VWAP, and is the #1 semiconductor peer leader with the strongest continuation setup in the entire pool.",
+        "stop_clamped": true
+      },
+      "TSM": {
+        "target_pct": 0.25,
+        "qty": 60,
+        "delta_qty": 60,
+        "entry_price": 419.34,
+        "stop_loss": 410.92,
+        "take_profit": null,
+        "action": "BUY",
+        "confidence": 0.82,
+        "opportunity_score": 78,
+        "one_sentence_reason": "TSM has momentum score 91 with strong continuation, bullish EMA, rising slope, price above VWAP, and passes the new entry gate as the #1 ranked name in its sector \u2014 though QCOM is the stronger semiconductor peer, TSM's distinct foundry exposure and cleaner intraday trend justify selection alongside QCOM given the theme cap allows both.",
+        "stop_clamped": true
+      },
+      "SMCI": {
+        "target_pct": 0.15,
+        "qty": 429,
+        "delta_qty": 429,
+        "entry_price": 35.335,
+        "stop_loss": 34.28,
+        "take_profit": null,
+        "action": "BUY",
+        "confidence": 0.75,
+        "opportunity_score": 72,
+        "one_sentence_reason": "SMCI leads the ai_data_center_power peer group with momentum score 79, strong continuation grade, bullish EMA, price above VWAP, and passes the new entry gate, offering the best remaining upside in the ai_data_center theme bucket."
+      },
+      "AAPL": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": -19.95505,
+        "entry_price": 289.86,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "EXIT",
+        "confidence": 0.72,
+        "opportunity_score": 28,
+        "one_sentence_reason": "Rotated out: AAPL scored 28 vs QCOM 92/TSM 78/SMCI 72. exit-arbiter already reduced with confidence 0.58 citing lost momentum, bearish EMA, fading volume, and price below VWAP \u2014 new candidates materially outrank this position on forward upside.",
+        "exit_reason": "rotated: QCOM scored 92, TSM 78, SMCI 72 vs AAPL 28 despite arbiter reduce at 0.58"
+      },
+      "TSLA": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": -9.99e-07,
+        "entry_price": 410.72,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "EXIT",
+        "confidence": 0.78,
+        "opportunity_score": 38,
+        "one_sentence_reason": "TSLA's near-zero position (fractional share residual) scores 38 with weak_or_flat momentum, fading volume, and fails the new entry gate \u2014 all three selected names offer materially higher remaining upside.",
+        "exit_reason": "replaced_by_higher_opportunity"
+      },
+      "STFS": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 8.155,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.15,
+        "opportunity_score": 12,
+        "one_sentence_reason": null,
+        "reason_code": "exhausted"
+      },
+      "EVC": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 7.16,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.1,
+        "opportunity_score": 8,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "OSS": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 14.92,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.12,
+        "opportunity_score": 15,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "ERNA": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 6.75,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.08,
+        "opportunity_score": 10,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "SMCX": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 18.31,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.25,
+        "opportunity_score": 32,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "FLNC": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 17.3101,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.1,
+        "opportunity_score": 14,
+        "one_sentence_reason": null,
+        "reason_code": "exhausted"
+      },
+      "AAON": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 136.0452,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.1,
+        "opportunity_score": 10,
+        "one_sentence_reason": null,
+        "reason_code": "earnings_blackout"
+      },
+      "NVDA": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 213.39,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.35,
+        "opportunity_score": 48,
+        "one_sentence_reason": null,
+        "reason_code": "peer_outranked"
+      },
+      "INTC": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 112.04,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.1,
+        "opportunity_score": 12,
+        "one_sentence_reason": null,
+        "reason_code": "peer_outranked"
+      },
+      "NOK": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 12.375,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.08,
+        "opportunity_score": 8,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "BITO": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 10.9299,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.05,
+        "opportunity_score": 6,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "SNAP": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 6.095,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.15,
+        "opportunity_score": 20,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "SOXS": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 10.11,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.05,
+        "opportunity_score": 5,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "AMD": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 410.9,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.1,
+        "opportunity_score": 14,
+        "one_sentence_reason": null,
+        "reason_code": "peer_outranked"
+      },
+      "ASML": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 1533.17,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.12,
+        "opportunity_score": 16,
+        "one_sentence_reason": null,
+        "reason_code": "peer_outranked"
+      },
+      "AVGO": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 421.34,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.15,
+        "opportunity_score": 22,
+        "one_sentence_reason": null,
+        "reason_code": "peer_outranked"
+      },
+      "BE": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 273.56,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.08,
+        "opportunity_score": 10,
+        "one_sentence_reason": null,
+        "reason_code": "peer_outranked"
+      },
+      "DELL": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 235.5895,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.3,
+        "opportunity_score": 42,
+        "one_sentence_reason": null,
+        "reason_code": "peer_outranked"
+      },
+      "ETN": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 406.2,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.05,
+        "opportunity_score": 8,
+        "one_sentence_reason": null,
+        "reason_code": "peer_outranked"
+      },
+      "FIX": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 1940.49,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.12,
+        "opportunity_score": 18,
+        "one_sentence_reason": null,
+        "reason_code": "peer_outranked"
+      },
+      "GEV": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 1083.57,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.08,
+        "opportunity_score": 10,
+        "one_sentence_reason": null,
+        "reason_code": "peer_outranked"
+      },
+      "MRVL": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 165.7,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.08,
+        "opportunity_score": 10,
+        "one_sentence_reason": null,
+        "reason_code": "peer_outranked"
+      },
+      "MU": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 661.25,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.15,
+        "opportunity_score": 20,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "PWR": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 757.3,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.25,
+        "opportunity_score": 35,
+        "one_sentence_reason": null,
+        "reason_code": "peer_outranked"
+      },
+      "SNDK": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 1351.955,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.1,
+        "opportunity_score": 14,
+        "one_sentence_reason": null,
+        "reason_code": "peer_outranked"
+      },
+      "STX": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 759.44,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.08,
+        "opportunity_score": 10,
+        "one_sentence_reason": null,
+        "reason_code": "peer_outranked"
+      },
+      "VRT": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 344.57,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.1,
+        "opportunity_score": 12,
+        "one_sentence_reason": null,
+        "reason_code": "peer_outranked"
+      },
+      "WDC": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 463.49,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.08,
+        "opportunity_score": 10,
+        "one_sentence_reason": null,
+        "reason_code": "peer_outranked"
+      },
+      "PRIM": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 108.46,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.1,
+        "opportunity_score": 14,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "SMCZ": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 12.7386,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.05,
+        "opportunity_score": 5,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "AMZN": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 273.43,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.12,
+        "opportunity_score": 18,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "AVLN": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 26.235,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.05,
+        "opportunity_score": 8,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "AVNW": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 16.8675,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.05,
+        "opportunity_score": 6,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "AXTX": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 48.95,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.2,
+        "opportunity_score": 28,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "BAND": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 48.55,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.2,
+        "opportunity_score": 30,
+        "one_sentence_reason": null,
+        "reason_code": "exhausted"
+      },
+      "BHC": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 5.715,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.18,
+        "opportunity_score": 25,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "BRBR": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 11.35,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.12,
+        "opportunity_score": 16,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "CNSP": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 7.0559,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.08,
+        "opportunity_score": 10,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "COIN": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 195.01,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.1,
+        "opportunity_score": 12,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "CPNG": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 17.515,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.05,
+        "opportunity_score": 5,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "CUE": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 34.4,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.28,
+        "opportunity_score": 38,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "CYTK": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 74.905,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.22,
+        "opportunity_score": 32,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "DGXX": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 5.8228,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.08,
+        "opportunity_score": 10,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "ELPW": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 7.47,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.2,
+        "opportunity_score": 28,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "F": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 12.195,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.05,
+        "opportunity_score": 6,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      }
+    },
+    "exhaustion_penalty_applied": [
+      "STFS",
+      "BAND",
+      "FLNC"
+    ],
+    "rotation_plan": {
+      "exited": [
+        {
+          "symbol": "AAPL",
+          "reason": "Momentum lost, bearish EMA, fading volume, price below VWAP; exit-arbiter already reduced; QCOM/TSM/SMCI all score materially higher on remaining upside",
+          "reason_category": "replaced_by_higher_opportunity"
+        },
+        {
+          "symbol": "TSLA",
+          "reason": "Fractional residual position with weak_or_flat momentum, fading volume, fails new entry gate; all three selected names offer superior forward setups",
+          "reason_category": "replaced_by_higher_opportunity"
+        }
+      ],
+      "entered": [
+        {
+          "symbol": "QCOM",
+          "reason": "Momentum score 100, breaking out, rising volume, bullish EMA, #1 semiconductor peer leader",
+          "reason_category": "breakout_continuation"
+        },
+        {
+          "symbol": "TSM",
+          "reason": "Momentum score 91, strong continuation, bullish EMA, rising slope, passes new entry gate",
+          "reason_category": "stronger_remaining_upside"
+        },
+        {
+          "symbol": "SMCI",
+          "reason": "Momentum score 79, strong continuation, #1 ai_data_center_power peer, passes new entry gate, bullish EMA",
+          "reason_category": "stronger_remaining_upside"
+        }
+      ],
+      "held": []
+    },
+    "capital_movement_plan": [
+      {
+        "symbol": "AAPL",
+        "delta_usd": -5775.39,
+        "purpose": "EXIT full position, rotate to higher-opportunity names"
+      },
+      {
+        "symbol": "TSLA",
+        "delta_usd": 0.0,
+        "purpose": "EXIT fractional residual position"
+      },
+      {
+        "symbol": "QCOM",
+        "delta_usd": 50559.0,
+        "purpose": "New BUY \u2014 top momentum breakout"
+      },
+      {
+        "symbol": "TSM",
+        "delta_usd": 25160.4,
+        "purpose": "New BUY \u2014 strong continuation semiconductor"
+      },
+      {
+        "symbol": "SMCI",
+        "delta_usd": 15158.7,
+        "purpose": "New BUY \u2014 ai_data_center_power peer leader"
+      }
+    ],
+    "risk_flags": [
+      "QCOM at 50% max position \u2014 full cap deployed; monitor for reversal given RSI 83.7 and intraday +14.8%",
+      "AAON blocked: earnings_research_score -0.429 with earnings_days_until=0 \u2014 hard PASS per policy",
+      "NVDA has peer_pressure.must_justify=true vs QCOM; QCOM selected as stronger peer instead",
+      "TSM has peer_pressure.must_justify=true vs QCOM; TSM selected for distinct foundry exposure and theme diversification",
+      "VIX at 27.11 \u2014 elevated; position sizing conservative with 2% cash reserve maintained",
+      "AAPL exit despite no exit-arbiter HOLD (arbiter action was reduce at 0.58); rotation justified by opportunity score delta (QCOM 92 vs AAPL 28)"
+    ],
+    "_agent": "portfolio-selector",
+    "_model": "claude-sonnet-4-6",
+    "_input_tokens": 3,
+    "_output_tokens": 7755,
+    "_cache_read_tokens": 4126,
+    "_cache_creation_tokens": 28385,
+    "_stop_reason": "end_turn",
+    "_raw_truncated": "{\n  \"portfolio_thesis\": \"QCOM is breaking out with momentum score 100, rising volume, and strong continuation signals \u2014 the clear top pick. TSM offers strong continuation with bullish EMA and rising slope as the semiconductor sector's second-best setup. SMCI leads the ai_data_center_power peer group with strong continuation and passes the new entry gate, providing diversification into a different theme bucket. These three names span technology and ai_data_center themes with genuine remaining upside into the next scan.\",\n  \"spy_target_pct\": 0.08,\n  \"cash_target_pct\": 0.02,\n  \"spy_decision\": {\n    \"target_pct\": 0.08,\n    \"action\": \"HOLD\",\n    \"opportunity_score\": 42,\n    \"one_sentence_reason\": null\n  },\n  \"spy_vs_cash_reasoning\": \"SPY is held as liquid cash equivalent at ~8% given neutral macro regime and VIX at 27; minimal cash reserve beyond SPY is warranted.\",\n  \"selected_positions\": [\"QCOM\", \"TSM\", \"SMCI\"],\n  \"target_weights\": {\n    \"QCOM\": 0.50,\n    \"TSM\": 0.25,\n    \"SMCI\": 0.15\n  },\n  \"per_symbol\": {\n    \"QCOM\": {\n      \"target_pct\": 0.50,\n      \"qty\": 228,\n      \"delta_qty\": 228,\n      \"entry_price\": 221.75,\n      \"stop_loss\": 210.66,\n      \"take_profit\": null,\n      \"action\": \"BUY\",\n      \"confidence\": 0.88,\n      \"opportunity_score\": 92,\n      \"one_sentence_reason\": \"QCOM is breaking out with momentum score 100, rising volume, bullish EMA, price +8.8% above VWAP, and is the #1 semiconductor peer leader with the strongest continuation setup in the entire pool.\"\n    },\n    \"TSM\": {\n      \"target_pct\": 0.25,\n      \"qty\": 60,\n      \"delta_qty\": 60,\n      \"entry_price\": 419.34,\n      \"stop_loss\": 399.39,\n      \"take_profit\": null,\n      \"action\": \"BUY\",\n      \"confidence\": 0.82,\n      \"opportunity_score\": 78,\n      \"one_sentence_reason\": \"TSM has momentum score 91 with strong continuation, bullish EMA, rising slope, price above VWAP, and passes the new entry gate as the #1 ranked name in its sector \u2014 though QCOM is the stronger semiconductor peer, TSM's distinct foundry exposure and cleaner intraday trend justify selection alongside QCOM given the theme cap allows both.\"\n    },\n    \"SMCI\": {\n      \"target_pct\": 0.15,\n      \"qty\": 429,\n      \"delta_qty\": 429,\n      \"entry_price\": 35.335,\n      \"stop_loss\": 33.57,\n      \"take_profit\": null,\n      \"action\": \"BUY\",\n      \"confidence\": 0.75,\n      \"opportunity_score\": 72,\n      \"one_sentence_reason\": \"SMCI leads the ai_data_center_power peer group with momentum score 79, strong continuation grade, bullish EMA",
+    "_auto_repaired": {
+      "stop_loss_floor": {
+        "QCOM": {
+          "from": 210.66,
+          "to": 215.1
+        },
+        "TSM": {
+          "from": 399.39,
+          "to": 406.76
+        },
+        "SMCI": {
+          "from": 33.57,
+          "to": 34.28
+        }
+      },
+      "stop_risk_clamp": {
+        "QCOM": {
+          "from_stop": 215.1,
+          "to_stop": 219.53,
+          "from_risk_usd": 1516.2,
+          "to_risk_usd": 506.16,
+          "cap_usd": 505.46
+        },
+        "TSM": {
+          "from_stop": 406.76,
+          "to_stop": 410.92,
+          "from_risk_usd": 754.8,
+          "to_risk_usd": 505.2,
+          "cap_usd": 505.46
+        }
+      },
+      "exit_delta_qty": {
+        "TSLA": {
+          "from": -1.0,
+          "to": -9.99e-07
+        },
+        "AAPL": {
+          "from": -20.0,
+          "to": -19.95505
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,901 @@
+{
+  "attempt": 1,
+  "problems": [
+    "per_symbol[FLNC].delta_qty 1085.0 inconsistent with qty 434.584065 minus current_qty 0.0",
+    "per_symbol[BHC].delta_qty 2605.0 inconsistent with qty 1391.593016 minus current_qty 0.0"
+  ],
+  "stop_reason": "end_turn",
+  "input_tokens": 28573,
+  "output_tokens": 8679,
+  "top_level_keys": [
+    "_agent",
+    "_auto_repaired",
+    "_cache_creation_tokens",
+    "_cache_read_tokens",
+    "_input_tokens",
+    "_model",
+    "_output_tokens",
+    "_raw_truncated",
+    "_stop_reason",
+    "_validation_warnings",
+    "capital_movement_plan",
+    "cash_target_pct",
+    "exhaustion_penalty_applied",
+    "per_symbol",
+    "portfolio_thesis",
+    "risk_flags",
+    "rotation_plan",
+    "selected_positions",
+    "spy_decision",
+    "spy_target_pct",
+    "spy_vs_cash_reasoning",
+    "target_weights"
+  ],
+  "selected_positions": [
+    "NVDA",
+    "FLNC",
+    "BHC",
+    "CYTK",
+    "DGXX"
+  ],
+  "target_weights": {
+    "NVDA": 0.38,
+    "FLNC": 0.08,
+    "BHC": 0.08,
+    "CYTK": 0.13,
+    "DGXX": 0.07
+  },
+  "spy_decision": {
+    "target_pct": 0.05,
+    "action": "HOLD",
+    "opportunity_score": 28,
+    "one_sentence_reason": null
+  },
+  "spy_target_pct": 0.05,
+  "cash_target_pct": 0.21,
+  "per_symbol_count": 50,
+  "raw_thesis": "NVDA remains the highest-scoring held position with strong continuation momentum, rising volume, and price near VWAP \u2014 hold and size appropriately. FLNC and BHC offer the best fresh upside: FLNC is a confirmed breakout with strong_continuation grade and massive relative volume (6.6x 20-day), while BHC is breaking out with a perfect momentum score of 100 and bullish EMA. CYTK and DGXX provide diver",
+  "_raw_truncated": "",
+  "full_response": {
+    "portfolio_thesis": "NVDA remains the highest-scoring held position with strong continuation momentum, rising volume, and price near VWAP \u2014 hold and size appropriately. FLNC and BHC offer the best fresh upside: FLNC is a confirmed breakout with strong_continuation grade and massive relative volume (6.6x 20-day), while BHC is breaking out with a perfect momentum score of 100 and bullish EMA. CYTK and DGXX provide diversification with strong_continuation setups outside the tech/AI cluster. BAND is exited per exit-arbiter reduce signal and deteriorating momentum.",
+    "spy_target_pct": 0.05,
+    "cash_target_pct": 0.21,
+    "spy_decision": {
+      "target_pct": 0.05,
+      "action": "HOLD",
+      "opportunity_score": 28,
+      "one_sentence_reason": null
+    },
+    "spy_vs_cash_reasoning": "SPY is held as a liquid cash proxy at minimal weight; idle cash beyond reserve is parked in SPY rather than dead cash given the neutral macro regime.",
+    "selected_positions": [
+      "NVDA",
+      "FLNC",
+      "BHC",
+      "CYTK",
+      "DGXX"
+    ],
+    "target_weights": {
+      "NVDA": 0.38,
+      "FLNC": 0.08,
+      "BHC": 0.08,
+      "CYTK": 0.13,
+      "DGXX": 0.07
+    },
+    "per_symbol": {
+      "NVDA": {
+        "target_pct": 0.38,
+        "qty": 180,
+        "delta_qty": 40.440799999999996,
+        "entry_price": 212.33,
+        "stop_loss": 209.67,
+        "take_profit": null,
+        "action": "INCREASE",
+        "confidence": 0.78,
+        "opportunity_score": 72,
+        "one_sentence_reason": "NVDA is the semiconductor peer leader with strong_continuation momentum (score 89), rising volume, price above VWAP, and a bullish intraday slope \u2014 increasing to full conviction size given 13 days to earnings and continued AI demand tailwinds.",
+        "reason_code": null
+      },
+      "FLNC": {
+        "target_pct": 0.08,
+        "qty": 434.584065,
+        "delta_qty": 1085,
+        "entry_price": 18.5243,
+        "stop_loss": 17.97,
+        "take_profit": null,
+        "action": "BUY",
+        "confidence": 0.76,
+        "opportunity_score": 78,
+        "one_sentence_reason": "FLNC passes the continuation gate with strong_continuation grade (score 95), bullish EMA, rising trend, 6.6x 20-day volume ratio, and 8.6% intraday gain with price above VWAP \u2014 a confirmed breakout with substantial remaining upside.",
+        "reason_code": null
+      },
+      "BHC": {
+        "target_pct": 0.08,
+        "qty": 1391.593016,
+        "delta_qty": 2605,
+        "entry_price": 5.785,
+        "stop_loss": 5.73,
+        "take_profit": null,
+        "action": "BUY",
+        "confidence": 0.72,
+        "opportunity_score": 64,
+        "one_sentence_reason": "BHC has a perfect momentum score of 100 (breaking_out classification), bullish EMA, price at day high with rising volume, and passes the new entry gate \u2014 a clean breakout setup with minimal distance from high.",
+        "reason_code": null
+      },
+      "CYTK": {
+        "target_pct": 0.13,
+        "qty": 175,
+        "delta_qty": 175,
+        "entry_price": 74.625,
+        "stop_loss": 73.25,
+        "take_profit": null,
+        "action": "BUY",
+        "confidence": 0.7,
+        "opportunity_score": 62,
+        "one_sentence_reason": "CYTK passes the continuation gate with strong_continuation grade (score 81), price above VWAP, rising trend and volume (2x 20-day ratio), and bullish EMA state \u2014 strong biotech setup with no near-term earnings risk.",
+        "reason_code": null
+      },
+      "DGXX": {
+        "target_pct": 0.07,
+        "qty": 1170,
+        "delta_qty": 1170,
+        "entry_price": 6.015,
+        "stop_loss": 5.91,
+        "take_profit": null,
+        "action": "BUY",
+        "confidence": 0.65,
+        "opportunity_score": 60,
+        "one_sentence_reason": "DGXX has strong_continuation momentum (score 95), bullish EMA, rising trend and volume (1.54x 20-day), and passes the new entry gate \u2014 sized conservatively at illiquid cap given price below $20 and 7 days to earnings.",
+        "reason_code": null
+      },
+      "BAND": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": -117.1488,
+        "entry_price": 48.17,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "EXIT",
+        "confidence": 0.72,
+        "opportunity_score": 18,
+        "one_sentence_reason": "BAND is exited: exit-arbiter issued a reduce at 0.62 confidence citing lost momentum, EMA is bearish, recent trend is falling with fading volume, RSI at 91 signals exhaustion, and opportunity score of 18 is far below all selected positions.",
+        "reason_code": null
+      },
+      "STFS": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 7.42,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 12,
+        "one_sentence_reason": null,
+        "reason_code": "exhausted"
+      },
+      "EVC": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 7.075,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 8,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "OSS": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 14.72,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 22,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "ERNA": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 7.59,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 38,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "SMCX": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 16.33,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 8,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "AAON": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 130.015,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 10,
+        "one_sentence_reason": null,
+        "reason_code": "earnings_blackout"
+      },
+      "SMCI": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 33.3899,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 18,
+        "one_sentence_reason": null,
+        "reason_code": "peer_outranked"
+      },
+      "INTC": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 110.95,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 20,
+        "one_sentence_reason": null,
+        "reason_code": "peer_outranked"
+      },
+      "NOK": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 12.21,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 12,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "BITO": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 10.915,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 14,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "AAL": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 12.99,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 14,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "SNAP": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 5.94,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 16,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "SOXS": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 10.6399,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 10,
+        "one_sentence_reason": null,
+        "reason_code": "exhausted"
+      },
+      "AMD": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 406.05,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 24,
+        "one_sentence_reason": null,
+        "reason_code": "peer_outranked"
+      },
+      "ASML": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 1512.8044,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 18,
+        "one_sentence_reason": null,
+        "reason_code": "peer_outranked"
+      },
+      "AVGO": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 414.385,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 16,
+        "one_sentence_reason": null,
+        "reason_code": "peer_outranked"
+      },
+      "BE": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 263.41,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 10,
+        "one_sentence_reason": null,
+        "reason_code": "exhausted"
+      },
+      "DELL": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 229.805,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 16,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "ETN": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 401.37,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 8,
+        "one_sentence_reason": null,
+        "reason_code": "exhausted"
+      },
+      "FIX": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 1925.555,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 14,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "GEV": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 1056.53,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 10,
+        "one_sentence_reason": null,
+        "reason_code": "exhausted"
+      },
+      "MRVL": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 161.35,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 14,
+        "one_sentence_reason": null,
+        "reason_code": "peer_outranked"
+      },
+      "MU": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 643.21,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 22,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "PWR": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 747.565,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 16,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "QCOM": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 204.46,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 32,
+        "one_sentence_reason": null,
+        "reason_code": "peer_outranked"
+      },
+      "SNDK": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 1325.5301,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 24,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "STX": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 751.33,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 12,
+        "one_sentence_reason": null,
+        "reason_code": "peer_outranked"
+      },
+      "TSM": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 411.44,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 20,
+        "one_sentence_reason": null,
+        "reason_code": "peer_outranked"
+      },
+      "VRT": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 340.6401,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 18,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "WDC": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 456.61,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 16,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "PRIM": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 107.11,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 10,
+        "one_sentence_reason": null,
+        "reason_code": "exhausted"
+      },
+      "SMCZ": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 14.165,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 12,
+        "one_sentence_reason": null,
+        "reason_code": "exhausted"
+      },
+      "AAPL": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 288.77,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 18,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "AMZN": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 271.93,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 20,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "AVLN": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 26.075,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 30,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "AVNW": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 16.465,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 6,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "AXTX": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 45.07,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 18,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "BRBR": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 11.17,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 5,
+        "one_sentence_reason": null,
+        "reason_code": "exhausted"
+      },
+      "CNSP": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 6.9703,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 10,
+        "one_sentence_reason": null,
+        "reason_code": "exhausted"
+      },
+      "COIN": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 192.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 14,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "CPNG": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 17.33,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 5,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "CUE": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 33.595,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 12,
+        "one_sentence_reason": null,
+        "reason_code": "exhausted"
+      },
+      "ELPW": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 7.155,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 12,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "F": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 12.1,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 8,
+        "one_sentence_reason": null,
+        "reason_code": "exhausted"
+      }
+    },
+    "exhaustion_penalty_applied": [
+      "BAND",
+      "STFS",
+      "AAON",
+      "BE",
+      "ETN",
+      "GEV",
+      "SOXS",
+      "PRIM",
+      "SMCZ",
+      "BRBR",
+      "CUE",
+      "CNSP",
+      "F"
+    ],
+    "rotation_plan": {
+      "exited": [
+        {
+          "symbol": "BAND",
+          "reason": "Exit-arbiter issued reduce at 0.62 confidence; momentum grade fading (score 0), RSI at 91 signals exhaustion, EMA bearish, recent trend falling with fading volume \u2014 opportunity score 18 vs lowest selected 60.",
+          "reason_category": "removed_due_to_exhaustion"
+        }
+      ],
+      "entered": [
+        {
+          "symbol": "FLNC",
+          "reason": "Strong_continuation breakout with 6.6x volume, bullish EMA, price above VWAP, highest opportunity score in pool at 78.",
+          "reason_category": "breakout_continuation"
+        },
+        {
+          "symbol": "BHC",
+          "reason": "Perfect momentum score 100, breaking_out classification, bullish EMA, rising volume \u2014 clean breakout entry.",
+          "reason_category": "breakout_continuation"
+        },
+        {
+          "symbol": "CYTK",
+          "reason": "Strong_continuation grade with rising volume and price above VWAP \u2014 diversifying into biotech with strong forward setup.",
+          "reason_category": "stronger_remaining_upside"
+        },
+        {
+          "symbol": "DGXX",
+          "reason": "Strong_continuation momentum with bullish EMA and rising volume \u2014 anti-stagnation fresh entry replacing BAND.",
+          "reason_category": "anti_stagnation_inclusion"
+        }
+      ],
+      "held": [
+        {
+          "symbol": "NVDA",
+          "reason": "Semiconductor peer leader with strong_continuation momentum, rising volume, price above VWAP \u2014 increasing position size."
+        }
+      ]
+    },
+    "capital_movement_plan": [
+      {
+        "symbol": "BAND",
+        "delta_usd": -5642,
+        "purpose": "Exit exhausted position per arbiter reduce signal"
+      },
+      {
+        "symbol": "NVDA",
+        "delta_usd": 8493,
+        "purpose": "Increase to full conviction size on continuation"
+      },
+      {
+        "symbol": "FLNC",
+        "delta_usd": 20094,
+        "purpose": "New breakout entry \u2014 strong continuation confirmed"
+      },
+      {
+        "symbol": "BHC",
+        "delta_usd": 15070,
+        "purpose": "New breakout entry \u2014 perfect momentum score"
+      },
+      {
+        "symbol": "CYTK",
+        "delta_usd": 13059,
+        "purpose": "New continuation entry \u2014 diversification into biotech"
+      },
+      {
+        "symbol": "DGXX",
+        "delta_usd": 7038,
+        "purpose": "New continuation entry \u2014 illiquid cap applied"
+      }
+    ],
+    "risk_flags": [
+      "DGXX earnings in 7 days \u2014 sized at illiquid cap 7%; monitor for pre-earnings volatility",
+      "BHC is illiquid (price $5.79) \u2014 capped at 15% with tight stop; fractional stop orders require day TIF",
+      "FLNC had a 25.8% gap from prior close \u2014 monitoring for gap exhaustion; strong volume confirms continuation",
+      "NVDA earnings in 13 days \u2014 position sized below 40% max; will reassess as earnings approach",
+      "Portfolio has 4 fresh entries this scan \u2014 starter sizing applied; scale up on next scan if continuation persists",
+      "Theme concentration: FLNC, BHC, CYTK, DGXX all in 'other' theme bucket \u2014 verify executor does not flag theme cap violation (NVDA is ai_data_center, so other bucket has 4 names which exceeds theme cap of 3)"
+    ],
+    "_agent": "portfolio-selector",
+    "_model": "claude-sonnet-4-6",
+    "_input_tokens": 28573,
+    "_output_tokens": 8679,
+    "_cache_read_tokens": 0,
+    "_cache_creation_tokens": 4126,
+    "_stop_reason": "end_turn",
+    "_raw_truncated": "{\n  \"portfolio_thesis\": \"NVDA remains the highest-scoring held position with strong continuation momentum, rising volume, and price near VWAP \u2014 hold and size appropriately. FLNC and BHC offer the best fresh upside: FLNC is a confirmed breakout with strong_continuation grade and massive relative volume (6.6x 20-day), while BHC is breaking out with a perfect momentum score of 100 and bullish EMA. CYTK and DGXX provide diversification with strong_continuation setups outside the tech/AI cluster. BAND is exited per exit-arbiter reduce signal and deteriorating momentum.\",\n  \"spy_target_pct\": 0.05,\n  \"cash_target_pct\": 0.02,\n  \"spy_decision\": {\n    \"target_pct\": 0.05,\n    \"action\": \"HOLD\",\n    \"opportunity_score\": 28,\n    \"one_sentence_reason\": null\n  },\n  \"spy_vs_cash_reasoning\": \"SPY is held as a liquid cash proxy at minimal weight; idle cash beyond reserve is parked in SPY rather than dead cash given the neutral macro regime.\",\n  \"selected_positions\": [\"NVDA\", \"FLNC\", \"BHC\", \"CYTK\", \"DGXX\"],\n  \"target_weights\": {\n    \"NVDA\": 0.38,\n    \"FLNC\": 0.20,\n    \"BHC\": 0.15,\n    \"CYTK\": 0.13,\n    \"DGXX\": 0.07\n  },\n  \"per_symbol\": {\n    \"NVDA\": {\n      \"target_pct\": 0.38,\n      \"qty\": 180,\n      \"delta_qty\": 40,\n      \"entry_price\": 212.33,\n      \"stop_loss\": 209.67,\n      \"take_profit\": null,\n      \"action\": \"INCREASE\",\n      \"confidence\": 0.78,\n      \"opportunity_score\": 72,\n      \"one_sentence_reason\": \"NVDA is the semiconductor peer leader with strong_continuation momentum (score 89), rising volume, price above VWAP, and a bullish intraday slope \u2014 increasing to full conviction size given 13 days to earnings and continued AI demand tailwinds.\",\n      \"reason_code\": null\n    },\n    \"FLNC\": {\n      \"target_pct\": 0.20,\n      \"qty\": 1085,\n      \"delta_qty\": 1085,\n      \"entry_price\": 18.5243,\n      \"stop_loss\": 17.79,\n      \"take_profit\": null,\n      \"action\": \"BUY\",\n      \"confidence\": 0.76,\n      \"opportunity_score\": 78,\n      \"one_sentence_reason\": \"FLNC passes the continuation gate with strong_continuation grade (score 95), bullish EMA, rising trend, 6.6x 20-day volume ratio, and 8.6% intraday gain with price above VWAP \u2014 a confirmed breakout with substantial remaining upside.\",\n      \"reason_code\": null\n    },\n    \"BHC\": {\n      \"target_pct\": 0.15,\n      \"qty\": 2605,\n      \"delta_qty\": 2605,\n      \"entry_price\": 5.785,\n      \"stop_loss\": 5.73,\n      \"take_profit\": null,\n      \"action\": \"BUY\",\n      \"confidence\": 0.72,\n      \"opportunity_score\": 64,\n      \"one_sentenc",
+    "_auto_repaired": {
+      "illiquid_clamp": {
+        "FLNC": {
+          "from": 0.2,
+          "to": 0.08,
+          "price": 18.485,
+          "adv": 81666641.59045926
+        },
+        "BHC": {
+          "from": 0.15,
+          "to": 0.08,
+          "price": null,
+          "adv": 9456725.785622597
+        }
+      },
+      "delta_qty_rounding": {
+        "NVDA": {
+          "from": 40.0,
+          "to": 40.440799999999996,
+          "expected_from_qty_minus_current": true
+        }
+      },
+      "stop_loss_floor": {
+        "FLNC": {
+          "from": 17.79,
+          "to": 17.97
+        }
+      },
+      "allocation_total": {
+        "from": {
+          "target_weights": {
+            "NVDA": 0.38,
+            "FLNC": 0.08,
+            "BHC": 0.08,
+            "CYTK": 0.13,
+            "DGXX": 0.07
+          },
+          "spy_target_pct": 0.05,
+          "cash_target_pct": 0.02,
+          "total": 0.81
+        },
+        "to": {
+          "target_weights": {
+            "NVDA": 0.38,
+            "FLNC": 0.08,
+            "BHC": 0.08,
+            "CYTK": 0.13,
+            "DGXX": 0.07
+          },
+          "spy_target_pct": 0.05,
+          "cash_target_pct": 0.21,
+          "total": 1.0
+        }
+      },
+      "exit_delta_qty": {
+        "BAND": {
+          "from": -117.0,
+          "to": -117.1488
+        }
+      }
+    },
+    "_validation_warnings": [
+      "spy_decision.one_sentence_reason missing"
+    ]
+  }
+}

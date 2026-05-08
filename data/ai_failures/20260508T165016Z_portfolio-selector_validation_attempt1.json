@@ -1,0 +1,837 @@
+{
+  "attempt": 1,
+  "problems": [
+    "per_symbol[SNDK] BUY blocked: distance_from_high=-0.001 < 0.040 with volume_trend=flat (chasing exhausted move)",
+    "per_symbol[AMD] BUY blocked: distance_from_high=-0.003 < 0.040 with volume_trend=fading (chasing exhausted move)"
+  ],
+  "stop_reason": "end_turn",
+  "input_tokens": 28282,
+  "output_tokens": 8141,
+  "top_level_keys": [
+    "_agent",
+    "_auto_repaired",
+    "_cache_creation_tokens",
+    "_cache_read_tokens",
+    "_input_tokens",
+    "_model",
+    "_output_tokens",
+    "_raw_truncated",
+    "_stop_reason",
+    "capital_movement_plan",
+    "cash_target_pct",
+    "exhaustion_penalty_applied",
+    "per_symbol",
+    "portfolio_thesis",
+    "risk_flags",
+    "rotation_plan",
+    "selected_positions",
+    "spy_decision",
+    "spy_target_pct",
+    "spy_vs_cash_reasoning",
+    "target_weights"
+  ],
+  "selected_positions": [
+    "MU",
+    "SNDK",
+    "AVGO",
+    "AMD"
+  ],
+  "target_weights": {
+    "MU": 0.42,
+    "SNDK": 0.26,
+    "AVGO": 0.16,
+    "AMD": 0.06
+  },
+  "spy_decision": {
+    "target_pct": 0.08,
+    "action": "REDUCE",
+    "opportunity_score": 42,
+    "one_sentence_reason": "SPY is near intraday high with fading volume and flat recent trend; reducing to fund higher-conviction equity positions while retaining a small buffer."
+  },
+  "spy_target_pct": 0.08,
+  "cash_target_pct": 0.02,
+  "per_symbol_count": 49,
+  "raw_thesis": "Memory/storage is in a clear breakout (MU +12%, SNDK +13%) with strong continuation momentum and rising volume \u2014 the highest-conviction opportunity in the pool. AVGO is breaking out as the semiconductor peer leader with strong_continuation and rising volume. AMD offers acceptable_continuation with rising trend and passes the entry gate. NVDA is held but scores below the top-3 on forward upside and",
+  "_raw_truncated": "",
+  "full_response": {
+    "portfolio_thesis": "Memory/storage is in a clear breakout (MU +12%, SNDK +13%) with strong continuation momentum and rising volume \u2014 the highest-conviction opportunity in the pool. AVGO is breaking out as the semiconductor peer leader with strong_continuation and rising volume. AMD offers acceptable_continuation with rising trend and passes the entry gate. NVDA is held but scores below the top-3 on forward upside and faces peer pressure from AVGO; it exits to fund higher-scoring names.",
+    "spy_target_pct": 0.08,
+    "cash_target_pct": 0.02,
+    "spy_decision": {
+      "target_pct": 0.08,
+      "action": "REDUCE",
+      "opportunity_score": 42,
+      "one_sentence_reason": "SPY is near intraday high with fading volume and flat recent trend; reducing to fund higher-conviction equity positions while retaining a small buffer."
+    },
+    "spy_vs_cash_reasoning": "Tape is favorable so idle capital parks in SPY rather than cash, keeping market exposure while freeing weight for selected positions.",
+    "selected_positions": [
+      "MU",
+      "SNDK",
+      "AVGO",
+      "AMD"
+    ],
+    "target_weights": {
+      "MU": 0.42,
+      "SNDK": 0.26,
+      "AVGO": 0.16,
+      "AMD": 0.06
+    },
+    "per_symbol": {
+      "MU": {
+        "target_pct": 0.42,
+        "qty": 58,
+        "delta_qty": 58,
+        "entry_price": 738.72,
+        "stop_loss": 729.92,
+        "take_profit": null,
+        "action": "BUY",
+        "confidence": 0.88,
+        "opportunity_score": 92,
+        "one_sentence_reason": "MU is the sector and theme leader with strong_continuation momentum, rising volume, +12.4% intraday, breaking out to near all-time intraday high with VWAP +4.65% \u2014 highest remaining upside in the pool.",
+        "stop_clamped": true
+      },
+      "SNDK": {
+        "target_pct": 0.26,
+        "qty": 17,
+        "delta_qty": 17,
+        "entry_price": 1521.63,
+        "stop_loss": 1491.59,
+        "take_profit": null,
+        "action": "BUY",
+        "confidence": 0.82,
+        "opportunity_score": 83,
+        "one_sentence_reason": "SNDK is the #2 memory/storage peer with strong_continuation, +12.9% intraday, rising trend, near intraday high, and passes the new entry gate \u2014 strong continuation alongside MU's breakout.",
+        "stop_clamped": true
+      },
+      "AVGO": {
+        "target_pct": 0.16,
+        "qty": 38,
+        "delta_qty": 38,
+        "entry_price": 429.93,
+        "stop_loss": 417.04,
+        "take_profit": null,
+        "action": "BUY",
+        "confidence": 0.78,
+        "opportunity_score": 78,
+        "one_sentence_reason": "AVGO is the semiconductor peer leader with strong_continuation, breaking out with rising volume, bullish EMA, and rising trend \u2014 best forward setup in the semiconductor group."
+      },
+      "AMD": {
+        "target_pct": 0.06,
+        "qty": 13,
+        "delta_qty": 13,
+        "entry_price": 443.835,
+        "stop_loss": 430.52,
+        "take_profit": null,
+        "action": "BUY",
+        "confidence": 0.68,
+        "opportunity_score": 72,
+        "one_sentence_reason": "AMD passes the new entry gate with acceptable_continuation, bullish EMA, rising trend, and +7.5% intraday \u2014 peer_pressure from AVGO noted but AMD's own setup clears the quality gates with distinct forward upside."
+      },
+      "NVDA": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": -126,
+        "entry_price": 215.89,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "EXIT",
+        "confidence": 0.8,
+        "opportunity_score": 48,
+        "one_sentence_reason": "NVDA scores 48 vs MU 92/SNDK 83/AVGO 78 \u2014 weak_or_flat momentum, fading volume, near intraday high with no continuation, and peer_pressure from AVGO. rotating to higher-scoring names (rotated: MU 92, SNDK 83, AVGO 78 vs NVDA 48).",
+        "exit_reason": "rotated: MU scored 92, SNDK 83, AVGO 78 vs NVDA 48; NVDA has weak_or_flat momentum, fading volume, and does not pass new entry gate"
+      },
+      "ATRA": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 5,
+        "one_sentence_reason": null,
+        "reason_code": "fading momentum, bearish EMA, near low, score_below_floor"
+      },
+      "INOD": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 28,
+        "one_sentence_reason": null,
+        "reason_code": "fading grade, bearish EMA, new_entry_gate_not_confirmed"
+      },
+      "AGL": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 12,
+        "one_sentence_reason": null,
+        "reason_code": "weak_or_flat, negative mover, new_entry_gate_not_confirmed"
+      },
+      "SOXS": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 2,
+        "one_sentence_reason": null,
+        "reason_code": "inverse ETF, fading, near low, score_below_floor"
+      },
+      "INTC": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 22,
+        "one_sentence_reason": null,
+        "reason_code": "fading grade, new_entry_gate_not_confirmed, peer_outranked by AVGO"
+      },
+      "IREN": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 10,
+        "one_sentence_reason": null,
+        "reason_code": "fading, bearish EMA, new_entry_gate_not_confirmed"
+      },
+      "BITO": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 8,
+        "one_sentence_reason": null,
+        "reason_code": "weak_or_flat, bearish EMA, new_entry_gate_not_confirmed"
+      },
+      "AGIG": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 18,
+        "one_sentence_reason": null,
+        "reason_code": "illiquid, negative numeric_combined_score, score_below_floor"
+      },
+      "ASML": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 15,
+        "one_sentence_reason": null,
+        "reason_code": "weak_or_flat, bearish EMA, peer_outranked by AVGO"
+      },
+      "BE": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 38,
+        "one_sentence_reason": null,
+        "reason_code": "peer_outranked by PWR, negative mover, sector_capped"
+      },
+      "DELL": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 55,
+        "one_sentence_reason": null,
+        "reason_code": "acceptable_continuation but near high with fading volume, sector_capped ai_data_center"
+      },
+      "ETN": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 8,
+        "one_sentence_reason": null,
+        "reason_code": "fading, bearish EMA, peer_outranked by PWR"
+      },
+      "FIX": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 20,
+        "one_sentence_reason": null,
+        "reason_code": "weak_or_flat, new_entry_gate_not_confirmed, peer_outranked by PWR"
+      },
+      "GEV": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 10,
+        "one_sentence_reason": null,
+        "reason_code": "weak_or_flat, new_entry_gate_not_confirmed, peer_outranked by PWR"
+      },
+      "MRVL": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 25,
+        "one_sentence_reason": null,
+        "reason_code": "weak_or_flat, new_entry_gate_not_confirmed, peer_outranked by AVGO"
+      },
+      "PWR": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 58,
+        "one_sentence_reason": null,
+        "reason_code": "strong_continuation but sector_capped Industrials/ai_data_center, lower score than selected names"
+      },
+      "QCOM": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 20,
+        "one_sentence_reason": null,
+        "reason_code": "fading grade, new_entry_gate_not_confirmed, peer_outranked by AVGO"
+      },
+      "SMCI": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 22,
+        "one_sentence_reason": null,
+        "reason_code": "fading grade, new_entry_gate_not_confirmed, peer_outranked by PWR"
+      },
+      "STX": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 42,
+        "one_sentence_reason": null,
+        "reason_code": "peer_outranked by MU, fading volume, lower score"
+      },
+      "TSM": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 18,
+        "one_sentence_reason": null,
+        "reason_code": "weak_or_flat, bearish EMA, new_entry_gate_not_confirmed"
+      },
+      "VRT": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 52,
+        "one_sentence_reason": null,
+        "reason_code": "strong_continuation but sector_capped Industrials/ai_data_center, lower score than selected"
+      },
+      "WDC": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 18,
+        "one_sentence_reason": null,
+        "reason_code": "weak_or_flat, bearish EMA, peer_outranked by MU"
+      },
+      "ALLR": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 15,
+        "one_sentence_reason": null,
+        "reason_code": "fading grade, new_entry_gate_not_confirmed, illiquid"
+      },
+      "CTM": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 8,
+        "one_sentence_reason": null,
+        "reason_code": "fading, bearish EMA, new_entry_gate_not_confirmed, illiquid"
+      },
+      "BHM": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 30,
+        "one_sentence_reason": null,
+        "reason_code": "illiquid, near high with flat volume, score_below_floor for quality"
+      },
+      "ANIP": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 12,
+        "one_sentence_reason": null,
+        "reason_code": "fading, bearish EMA, new_entry_gate_not_confirmed, illiquid"
+      },
+      "AQN": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 5,
+        "one_sentence_reason": null,
+        "reason_code": "fading, bearish EMA, negative mover, illiquid"
+      },
+      "ATLX": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 10,
+        "one_sentence_reason": null,
+        "reason_code": "fading, bearish EMA, new_entry_gate_not_confirmed, illiquid"
+      },
+      "BH": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 5,
+        "one_sentence_reason": null,
+        "reason_code": "fading, bearish EMA, new_entry_gate_not_confirmed, illiquid"
+      },
+      "BBUC": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 22,
+        "one_sentence_reason": null,
+        "reason_code": "earnings_blackout, fading volume, illiquid"
+      },
+      "FSLY": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 5,
+        "one_sentence_reason": null,
+        "reason_code": "fading, negative numeric, av_losers context"
+      },
+      "AAON": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 40,
+        "one_sentence_reason": null,
+        "reason_code": "acceptable_continuation but near high with fading volume, score below selected names"
+      },
+      "AAPL": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 15,
+        "one_sentence_reason": null,
+        "reason_code": "weak_or_flat, bearish EMA, new_entry_gate_not_confirmed"
+      },
+      "AMZN": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 44,
+        "one_sentence_reason": null,
+        "reason_code": "acceptable_continuation but near high with fading volume, lower score than selected"
+      },
+      "AVLN": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 25,
+        "one_sentence_reason": null,
+        "reason_code": "illiquid, fading volume, score_below_floor"
+      },
+      "AVNW": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 3,
+        "one_sentence_reason": null,
+        "reason_code": "fading, bearish EMA, near low, illiquid"
+      },
+      "AXTX": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 8,
+        "one_sentence_reason": null,
+        "reason_code": "fading, bearish EMA, new_entry_gate_not_confirmed"
+      },
+      "BAND": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 28,
+        "one_sentence_reason": null,
+        "reason_code": "illiquid, near high with flat volume, exhausted"
+      },
+      "BHC": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 8,
+        "one_sentence_reason": null,
+        "reason_code": "fading, illiquid, score_below_floor"
+      },
+      "BRBR": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 5,
+        "one_sentence_reason": null,
+        "reason_code": "fading, negative numeric, score_below_floor"
+      },
+      "CNSP": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 12,
+        "one_sentence_reason": null,
+        "reason_code": "fading, illiquid, new_entry_gate_not_confirmed"
+      },
+      "COIN": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 45,
+        "one_sentence_reason": null,
+        "reason_code": "strong_continuation but near high with fading volume, negative sent_score, score below selected"
+      },
+      "CPNG": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 5,
+        "one_sentence_reason": null,
+        "reason_code": "fading, bearish EMA, new_entry_gate_not_confirmed"
+      },
+      "CUE": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 8,
+        "one_sentence_reason": null,
+        "reason_code": "fading, bearish EMA, new_entry_gate_not_confirmed, illiquid"
+      }
+    },
+    "exhaustion_penalty_applied": [
+      "NVDA",
+      "BAND",
+      "AMZN"
+    ],
+    "rotation_plan": {
+      "exited": [
+        {
+          "symbol": "NVDA",
+          "reason": "Weak_or_flat momentum, fading volume, near intraday high with no continuation; opportunity score 48 vs MU 92/SNDK 83/AVGO 78; rotating to memory breakout leaders",
+          "reason_category": "replaced_by_higher_opportunity"
+        }
+      ],
+      "entered": [
+        {
+          "symbol": "MU",
+          "reason": "Sector and theme leader, strong_continuation, +12.4% intraday breakout with rising volume",
+          "reason_category": "breakout_continuation"
+        },
+        {
+          "symbol": "SNDK",
+          "reason": "Memory/storage #2 peer, strong_continuation, +12.9% intraday with rising trend",
+          "reason_category": "breakout_continuation"
+        },
+        {
+          "symbol": "AVGO",
+          "reason": "Semiconductor peer leader, strong_continuation, breaking out with rising volume",
+          "reason_category": "stronger_remaining_upside"
+        },
+        {
+          "symbol": "AMD",
+          "reason": "Acceptable_continuation, passes entry gate, bullish EMA, rising trend, diversification from memory concentration",
+          "reason_category": "stronger_remaining_upside"
+        }
+      ],
+      "held": []
+    },
+    "capital_movement_plan": [
+      {
+        "symbol": "NVDA",
+        "delta_usd": -27163,
+        "purpose": "Exit held position to fund breakout leaders"
+      },
+      {
+        "symbol": "SPY",
+        "delta_usd": -8000,
+        "purpose": "Reduce SPY parking to fund equity positions"
+      },
+      {
+        "symbol": "MU",
+        "delta_usd": 42886,
+        "purpose": "New BUY \u2014 memory breakout leader"
+      },
+      {
+        "symbol": "SNDK",
+        "delta_usd": 25868,
+        "purpose": "New BUY \u2014 memory/storage #2 continuation"
+      },
+      {
+        "symbol": "AVGO",
+        "delta_usd": 16337,
+        "purpose": "New BUY \u2014 semiconductor peer leader breakout"
+      },
+      {
+        "symbol": "AMD",
+        "delta_usd": 5770,
+        "purpose": "New BUY \u2014 diversifying semi exposure, acceptable continuation"
+      }
+    ],
+    "risk_flags": [
+      "MU and SNDK are both memory/storage (same peer group) \u2014 concentration risk within ai_data_center theme; both pass diversification cap (2 of 3 allowed in theme)",
+      "MU at +12.4% intraday \u2014 momentum chase risk; stop set at ~5% below current",
+      "SNDK at $1521/share \u2014 large notional per share, only 17 shares at 26% weight",
+      "AMD has peer_pressure from AVGO noted; selected on own setup merits",
+      "VIX at 27.08 \u2014 elevated; positions sized conservatively"
+    ],
+    "_agent": "portfolio-selector",
+    "_model": "claude-sonnet-4-6",
+    "_input_tokens": 28282,
+    "_output_tokens": 8141,
+    "_cache_read_tokens": 0,
+    "_cache_creation_tokens": 5431,
+    "_stop_reason": "end_turn",
+    "_raw_truncated": "{\n  \"portfolio_thesis\": \"Memory/storage is in a clear breakout (MU +12%, SNDK +13%) with strong continuation momentum and rising volume \u2014 the highest-conviction opportunity in the pool. AVGO is breaking out as the semiconductor peer leader with strong_continuation and rising volume. AMD offers acceptable_continuation with rising trend and passes the entry gate. NVDA is held but scores below the top-3 on forward upside and faces peer pressure from AVGO; it exits to fund higher-scoring names.\",\n  \"spy_target_pct\": 0.08,\n  \"cash_target_pct\": 0.02,\n  \"spy_decision\": {\n    \"target_pct\": 0.08,\n    \"action\": \"REDUCE\",\n    \"opportunity_score\": 42,\n    \"one_sentence_reason\": \"SPY is near intraday high with fading volume and flat recent trend; reducing to fund higher-conviction equity positions while retaining a small buffer.\"\n  },\n  \"spy_vs_cash_reasoning\": \"Tape is favorable so idle capital parks in SPY rather than cash, keeping market exposure while freeing weight for selected positions.\",\n  \"selected_positions\": [\"MU\", \"SNDK\", \"AVGO\", \"AMD\"],\n  \"target_weights\": {\n    \"MU\": 0.42,\n    \"SNDK\": 0.26,\n    \"AVGO\": 0.16,\n    \"AMD\": 0.06\n  },\n  \"per_symbol\": {\n    \"MU\": {\n      \"target_pct\": 0.42,\n      \"qty\": 58,\n      \"delta_qty\": 58,\n      \"entry_price\": 738.72,\n      \"stop_loss\": 700.78,\n      \"take_profit\": null,\n      \"action\": \"BUY\",\n      \"confidence\": 0.88,\n      \"opportunity_score\": 92,\n      \"one_sentence_reason\": \"MU is the sector and theme leader with strong_continuation momentum, rising volume, +12.4% intraday, breaking out to near all-time intraday high with VWAP +4.65% \u2014 highest remaining upside in the pool.\"\n    },\n    \"SNDK\": {\n      \"target_pct\": 0.26,\n      \"qty\": 17,\n      \"delta_qty\": 17,\n      \"entry_price\": 1521.63,\n      \"stop_loss\": 1430.0,\n      \"take_profit\": null,\n      \"action\": \"BUY\",\n      \"confidence\": 0.82,\n      \"opportunity_score\": 83,\n      \"one_sentence_reason\": \"SNDK is the #2 memory/storage peer with strong_continuation, +12.9% intraday, rising trend, near intraday high, and passes the new entry gate \u2014 strong continuation alongside MU's breakout.\"\n    },\n    \"AVGO\": {\n      \"target_pct\": 0.16,\n      \"qty\": 38,\n      \"delta_qty\": 38,\n      \"entry_price\": 429.93,\n      \"stop_loss\": 408.0,\n      \"take_profit\": null,\n      \"action\": \"BUY\",\n      \"confidence\": 0.78,\n      \"opportunity_score\": 78,\n      \"one_sentence_reason\": \"AVGO is the semiconductor peer leader with strong_continuation, breaking out with rising volume, bullish EMA, ",
+    "_auto_repaired": {
+      "stop_loss_floor": {
+        "MU": {
+          "from": 700.78,
+          "to": 716.56
+        },
+        "SNDK": {
+          "from": 1430.0,
+          "to": 1475.99
+        },
+        "AVGO": {
+          "from": 408.0,
+          "to": 417.04
+        },
+        "AMD": {
+          "from": 421.0,
+          "to": 430.52
+        }
+      },
+      "stop_risk_clamp": {
+        "MU": {
+          "from_stop": 716.56,
+          "to_stop": 729.92,
+          "from_risk_usd": 1285.28,
+          "to_risk_usd": 510.4,
+          "cap_usd": 510.62
+        },
+        "SNDK": {
+          "from_stop": 1475.99,
+          "to_stop": 1491.59,
+          "from_risk_usd": 775.88,
+          "to_risk_usd": 510.68,
+          "cap_usd": 510.62
+        }
+      }
+    }
+  }
+}

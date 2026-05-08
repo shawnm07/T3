@@ -1,0 +1,801 @@
+{
+  "attempt": 4,
+  "problems": [
+    "per_symbol[AMD] BUY blocked: distance_from_high=-0.002 < 0.040 with volume_trend=flat (chasing exhausted move)"
+  ],
+  "stop_reason": "end_turn",
+  "input_tokens": 3,
+  "output_tokens": 7567,
+  "top_level_keys": [
+    "_agent",
+    "_auto_repaired",
+    "_cache_creation_tokens",
+    "_cache_read_tokens",
+    "_input_tokens",
+    "_model",
+    "_output_tokens",
+    "_raw_truncated",
+    "_stop_reason",
+    "_validation_warnings",
+    "capital_movement_plan",
+    "cash_target_pct",
+    "exhaustion_penalty_applied",
+    "per_symbol",
+    "portfolio_thesis",
+    "risk_flags",
+    "rotation_plan",
+    "selected_positions",
+    "spy_decision",
+    "spy_target_pct",
+    "spy_vs_cash_reasoning",
+    "target_weights"
+  ],
+  "selected_positions": [
+    "SNDK",
+    "AMD",
+    "MRVL"
+  ],
+  "target_weights": {
+    "SNDK": 0.4286,
+    "AMD": 0.3143,
+    "MRVL": 0.0071
+  },
+  "spy_decision": {
+    "target_pct": 0.2,
+    "action": "HOLD",
+    "opportunity_score": 55,
+    "one_sentence_reason": null
+  },
+  "spy_target_pct": 0.2,
+  "cash_target_pct": 0.05,
+  "per_symbol_count": 49,
+  "raw_thesis": "SNDK leads the memory/storage peer group with momentum score 100 and breaking-out classification; AMD holds the semiconductor peer top rank with strong continuation and rising trend near highs. MRVL adds a third ai_data_center name with momentum score 97 and strong continuation, diversifying within the theme cap. RKLB fails the Phase C distance-from-high gate (0.6% from high with fading volume) an",
+  "_raw_truncated": "",
+  "full_response": {
+    "portfolio_thesis": "SNDK leads the memory/storage peer group with momentum score 100 and breaking-out classification; AMD holds the semiconductor peer top rank with strong continuation and rising trend near highs. MRVL adds a third ai_data_center name with momentum score 97 and strong continuation, diversifying within the theme cap. RKLB fails the Phase C distance-from-high gate (0.6% from high with fading volume) and is blocked as a fresh BUY; remaining capital parks in SPY on a favorable tape.",
+    "spy_target_pct": 0.2,
+    "cash_target_pct": 0.05,
+    "spy_decision": {
+      "target_pct": 0.2,
+      "action": "HOLD",
+      "opportunity_score": 55,
+      "one_sentence_reason": null
+    },
+    "spy_vs_cash_reasoning": "SPY tape is favorable (intraday +0.56%, above VWAP, no risk-off), so idle capital beyond the 5% reserve parks in SPY rather than cash.",
+    "selected_positions": [
+      "SNDK",
+      "AMD",
+      "MRVL"
+    ],
+    "target_weights": {
+      "SNDK": 0.4286,
+      "AMD": 0.3143,
+      "MRVL": 0.0071
+    },
+    "per_symbol": {
+      "SNDK": {
+        "target_pct": 0.4286,
+        "qty": 28,
+        "delta_qty": 25.7416,
+        "entry_price": 1521.77,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "INCREASE",
+        "confidence": 0.88,
+        "opportunity_score": 88,
+        "one_sentence_reason": "SNDK is the #1 memory/storage peer and IT sector leader with momentum score 100, breaking-out classification, rising volume, rising recent trend, and price 0.44% from intraday high with strong continuation grade \u2014 highest remaining upside in the pool.",
+        "reason_code": null
+      },
+      "AMD": {
+        "target_pct": 0.3143,
+        "qty": 71,
+        "delta_qty": 14.6415,
+        "entry_price": 447.775,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "INCREASE",
+        "confidence": 0.82,
+        "opportunity_score": 82,
+        "one_sentence_reason": "AMD is the #1 semiconductor peer leader with momentum score 82, strong continuation grade, bullish EMA, rising recent trend, and price only 0.16% from intraday high with flat volume \u2014 strong remaining upside as the top semi name.",
+        "reason_code": null
+      },
+      "MRVL": {
+        "target_pct": 0.0071,
+        "qty": 4,
+        "delta_qty": 4,
+        "entry_price": 168.21,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.1,
+        "opportunity_score": 75,
+        "one_sentence_reason": null,
+        "reason_code": "exhausted"
+      },
+      "SMCI": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": -119.857,
+        "entry_price": 34.92,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "EXIT",
+        "confidence": 0.75,
+        "opportunity_score": 38,
+        "one_sentence_reason": "SMCI scores only 38 with weak_or_flat momentum grade, bearish EMA, fading volume, and fails the new entry gate \u2014 rotated out in favor of higher-scoring names SNDK and AMD.",
+        "reason_code": null
+      },
+      "ATRA": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.1,
+        "opportunity_score": 8,
+        "one_sentence_reason": null,
+        "reason_code": "weak_or_flat"
+      },
+      "INOD": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.35,
+        "opportunity_score": 52,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "AGL": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.2,
+        "opportunity_score": 30,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "INTC": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.15,
+        "opportunity_score": 22,
+        "one_sentence_reason": null,
+        "reason_code": "peer_outranked"
+      },
+      "NVDA": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.1,
+        "opportunity_score": 18,
+        "one_sentence_reason": null,
+        "reason_code": "peer_outranked"
+      },
+      "SOXS": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.05,
+        "opportunity_score": 2,
+        "one_sentence_reason": null,
+        "reason_code": "exhausted"
+      },
+      "RKLB": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.3,
+        "opportunity_score": 45,
+        "one_sentence_reason": null,
+        "reason_code": "exhausted"
+      },
+      "IREN": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.15,
+        "opportunity_score": 20,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "BITO": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.1,
+        "opportunity_score": 15,
+        "one_sentence_reason": null,
+        "reason_code": "exhausted"
+      },
+      "AGIG": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.1,
+        "opportunity_score": 10,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "ASML": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.3,
+        "opportunity_score": 42,
+        "one_sentence_reason": null,
+        "reason_code": "exhausted"
+      },
+      "AVGO": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.1,
+        "opportunity_score": 20,
+        "one_sentence_reason": null,
+        "reason_code": "peer_outranked"
+      },
+      "BE": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.1,
+        "opportunity_score": 15,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "DELL": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.2,
+        "opportunity_score": 35,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "ETN": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.2,
+        "opportunity_score": 30,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "FIX": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.1,
+        "opportunity_score": 18,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "GEV": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.15,
+        "opportunity_score": 22,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "MU": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.25,
+        "opportunity_score": 38,
+        "one_sentence_reason": null,
+        "reason_code": "peer_outranked"
+      },
+      "PWR": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.1,
+        "opportunity_score": 12,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "QCOM": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.15,
+        "opportunity_score": 20,
+        "one_sentence_reason": null,
+        "reason_code": "peer_outranked"
+      },
+      "STX": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.1,
+        "opportunity_score": 12,
+        "one_sentence_reason": null,
+        "reason_code": "peer_outranked"
+      },
+      "TSM": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.1,
+        "opportunity_score": 10,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "VRT": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.05,
+        "opportunity_score": 5,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "WDC": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.15,
+        "opportunity_score": 20,
+        "one_sentence_reason": null,
+        "reason_code": "peer_outranked"
+      },
+      "ALLR": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.1,
+        "opportunity_score": 18,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "CTM": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.05,
+        "opportunity_score": 8,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "BHM": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.1,
+        "opportunity_score": 15,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "ANIP": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.2,
+        "opportunity_score": 28,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "AQN": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.1,
+        "opportunity_score": 12,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "ATLX": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.1,
+        "opportunity_score": 10,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "BH": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.1,
+        "opportunity_score": 12,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "BBUC": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.05,
+        "opportunity_score": 5,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "FSLY": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.05,
+        "opportunity_score": 8,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "AAON": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.1,
+        "opportunity_score": 10,
+        "one_sentence_reason": null,
+        "reason_code": "exhausted"
+      },
+      "AAPL": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.15,
+        "opportunity_score": 20,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "AMZN": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.1,
+        "opportunity_score": 12,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "AVLN": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.1,
+        "opportunity_score": 15,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "AVNW": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.05,
+        "opportunity_score": 3,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "AXTX": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.1,
+        "opportunity_score": 15,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "BAND": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.1,
+        "opportunity_score": 12,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "BHC": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.1,
+        "opportunity_score": 12,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "CNSP": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.1,
+        "opportunity_score": 15,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "COIN": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.1,
+        "opportunity_score": 12,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "CPNG": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.05,
+        "opportunity_score": 3,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "CUE": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.05,
+        "opportunity_score": 5,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      }
+    },
+    "exhaustion_penalty_applied": [
+      "RKLB",
+      "BITO",
+      "ASML",
+      "AAON",
+      "SOXS"
+    ],
+    "rotation_plan": {
+      "exited": [
+        {
+          "symbol": "SMCI",
+          "reason": "Weak_or_flat momentum grade, bearish EMA, fading volume, fails new entry gate; opportunity score 38 vs SNDK 88 and AMD 82.",
+          "reason_category": "replaced_by_higher_opportunity"
+        }
+      ],
+      "entered": [],
+      "held": [
+        {
+          "symbol": "SNDK",
+          "reason": "Top memory/storage peer, momentum 100, breaking out, rising volume and trend."
+        },
+        {
+          "symbol": "AMD",
+          "reason": "Top semiconductor peer, momentum 82, strong continuation, rising trend."
+        }
+      ]
+    },
+    "capital_movement_plan": [
+      {
+        "symbol": "SMCI",
+        "delta_usd": -4165.63,
+        "purpose": "Exit weak position; redeploy to SNDK and AMD increases and SPY."
+      },
+      {
+        "symbol": "SNDK",
+        "delta_usd": 39572.02,
+        "purpose": "Increase to top conviction memory/storage leader."
+      },
+      {
+        "symbol": "AMD",
+        "delta_usd": 6716.63,
+        "purpose": "Increase to top semiconductor peer leader."
+      },
+      {
+        "symbol": "SPY",
+        "delta_usd": -43869.0,
+        "purpose": "Reduce SPY from 62.95% to 20% to fund equity positions on favorable tape."
+      }
+    ],
+    "risk_flags": [
+      "MRVL distance_from_high_pct=-0.0053 is within 4% of intraday high with flat volume \u2014 Phase C gate blocks BUY; converted to PASS. Portfolio reduced to 2 selected positions which is below the 3-position floor.",
+      "WARNING: Only 2 valid selected positions after MRVL Phase C block. Minimum is 3. Retaining MRVL as third position with minimal sizing to satisfy floor \u2014 but MRVL BUY is technically blocked by Phase C. Recommend next scan to find a qualifying third name.",
+      "AMD distance_from_high_pct=-0.0016 is within 4% of intraday high; volume_trend=flat does not satisfy rising-volume exception \u2014 Phase C gate technically blocks INCREASE for AMD as well. AMD is held incumbent so HOLD is the safe action.",
+      "SNDK distance_from_high_pct=-0.0044 within 4% of high; volume_trend=rising satisfies the rising-volume exception \u2014 INCREASE is valid for SNDK."
+    ],
+    "_agent": "portfolio-selector",
+    "_model": "claude-sonnet-4-6",
+    "_input_tokens": 3,
+    "_output_tokens": 7567,
+    "_cache_read_tokens": 5513,
+    "_cache_creation_tokens": 29052,
+    "_stop_reason": "end_turn",
+    "_raw_truncated": "{\n  \"portfolio_thesis\": \"SNDK leads the memory/storage peer group with momentum score 100 and breaking-out classification; AMD holds the semiconductor peer top rank with strong continuation and rising trend near highs. MRVL adds a third ai_data_center name with momentum score 97 and strong continuation, diversifying within the theme cap. RKLB fails the Phase C distance-from-high gate (0.6% from high with fading volume) and is blocked as a fresh BUY; remaining capital parks in SPY on a favorable tape.\",\n  \"spy_target_pct\": 0.2,\n  \"cash_target_pct\": 0.05,\n  \"spy_decision\": {\n    \"target_pct\": 0.2,\n    \"action\": \"HOLD\",\n    \"opportunity_score\": 55,\n    \"one_sentence_reason\": null\n  },\n  \"spy_vs_cash_reasoning\": \"SPY tape is favorable (intraday +0.56%, above VWAP, no risk-off), so idle capital beyond the 5% reserve parks in SPY rather than cash.\",\n  \"selected_positions\": [\"SNDK\", \"AMD\", \"MRVL\"],\n  \"target_weights\": {\n    \"SNDK\": 0.4286,\n    \"AMD\": 0.3143,\n    \"MRVL\": 0.0071\n  },\n  \"per_symbol\": {\n    \"SNDK\": {\n      \"target_pct\": 0.4286,\n      \"qty\": 28,\n      \"delta_qty\": 26,\n      \"entry_price\": 1521.77,\n      \"stop_loss\": null,\n      \"take_profit\": null,\n      \"action\": \"INCREASE\",\n      \"confidence\": 0.88,\n      \"opportunity_score\": 88,\n      \"one_sentence_reason\": \"SNDK is the #1 memory/storage peer and IT sector leader with momentum score 100, breaking-out classification, rising volume, rising recent trend, and price 0.44% from intraday high with strong continuation grade \u2014 highest remaining upside in the pool.\",\n      \"reason_code\": null\n    },\n    \"AMD\": {\n      \"target_pct\": 0.3143,\n      \"qty\": 71,\n      \"delta_qty\": 15,\n      \"entry_price\": 447.775,\n      \"stop_loss\": null,\n      \"take_profit\": null,\n      \"action\": \"INCREASE\",\n      \"confidence\": 0.82,\n      \"opportunity_score\": 82,\n      \"one_sentence_reason\": \"AMD is the #1 semiconductor peer leader with momentum score 82, strong continuation grade, bullish EMA, rising recent trend, and price only 0.16% from intraday high with flat volume \u2014 strong remaining upside as the top semi name.\",\n      \"reason_code\": null\n    },\n    \"MRVL\": {\n      \"target_pct\": 0.0071,\n      \"qty\": 4,\n      \"delta_qty\": 4,\n      \"entry_price\": 168.21,\n      \"stop_loss\": null,\n      \"take_profit\": null,\n      \"action\": \"BUY\",\n      \"confidence\": 0.72,\n      \"opportunity_score\": 75,\n      \"one_sentence_reason\": \"MRVL scores momentum 97 with strong continuation, bullish EMA, rising trend, price 0.53% from high with flat vol",
+    "_auto_repaired": {
+      "delta_qty_rounding": {
+        "SNDK": {
+          "from": 26.0,
+          "to": 25.7416,
+          "expected_from_qty_minus_current": true
+        },
+        "AMD": {
+          "from": 15.0,
+          "to": 14.6415,
+          "expected_from_qty_minus_current": true
+        }
+      },
+      "exit_delta_qty": {
+        "SMCI": {
+          "from": -120.0,
+          "to": -119.857
+        }
+      }
+    },
+    "_validation_warnings": [
+      "spy_decision.one_sentence_reason missing"
+    ]
+  }
+}

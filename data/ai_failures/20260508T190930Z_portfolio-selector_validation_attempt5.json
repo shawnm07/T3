@@ -1,0 +1,853 @@
+{
+  "attempt": 5,
+  "problems": [
+    "per_symbol[AMD] BUY blocked: distance_from_high=-0.002 < 0.040 with volume_trend=flat (chasing exhausted move)",
+    "per_symbol[MRVL] BUY blocked: distance_from_high=-0.005 < 0.040 with volume_trend=flat (chasing exhausted move)"
+  ],
+  "stop_reason": "end_turn",
+  "input_tokens": 3,
+  "output_tokens": 8266,
+  "top_level_keys": [
+    "_agent",
+    "_auto_repaired",
+    "_cache_creation_tokens",
+    "_cache_read_tokens",
+    "_input_tokens",
+    "_model",
+    "_output_tokens",
+    "_raw_truncated",
+    "_stop_reason",
+    "capital_movement_plan",
+    "cash_target_pct",
+    "exhaustion_penalty_applied",
+    "per_symbol",
+    "portfolio_thesis",
+    "risk_flags",
+    "rotation_plan",
+    "selected_positions",
+    "spy_decision",
+    "spy_target_pct",
+    "spy_vs_cash_reasoning",
+    "target_weights"
+  ],
+  "selected_positions": [
+    "SNDK",
+    "AMD",
+    "MRVL"
+  ],
+  "target_weights": {
+    "SNDK": 0.4,
+    "AMD": 0.291667,
+    "MRVL": 0.083333
+  },
+  "spy_decision": {
+    "target_pct": 0.27,
+    "action": "REDUCE",
+    "opportunity_score": 45,
+    "one_sentence_reason": "SPY tape is favorable but flat near VWAP with fading volume; reduce from 63% to 27% to deploy capital into higher-conviction equity names while retaining meaningful liquid buffer."
+  },
+  "spy_target_pct": 0.225,
+  "cash_target_pct": 0.0,
+  "per_symbol_count": 49,
+  "raw_thesis": "SNDK leads the memory/storage peer group with momentum score 100 and breaking-out classification; AMD holds the semiconductor peer top spot with strong continuation and rising trend near highs. MRVL adds a third ai_data_center name with momentum score 97 and strong continuation, clearing all quality gates. RKLB fails the distance-from-high gate (0.6% from high with fading volume) and is excluded; ",
+  "_raw_truncated": "",
+  "full_response": {
+    "portfolio_thesis": "SNDK leads the memory/storage peer group with momentum score 100 and breaking-out classification; AMD holds the semiconductor peer top spot with strong continuation and rising trend near highs. MRVL adds a third ai_data_center name with momentum score 97 and strong continuation, clearing all quality gates. RKLB fails the distance-from-high gate (0.6% from high with fading volume) and is excluded; SMCI exits as weak_or_flat momentum with peer pressure from DELL.",
+    "spy_target_pct": 0.225,
+    "cash_target_pct": 0.0,
+    "spy_decision": {
+      "target_pct": 0.27,
+      "action": "REDUCE",
+      "opportunity_score": 45,
+      "one_sentence_reason": "SPY tape is favorable but flat near VWAP with fading volume; reduce from 63% to 27% to deploy capital into higher-conviction equity names while retaining meaningful liquid buffer."
+    },
+    "spy_vs_cash_reasoning": "SPY tape is favorable (not bearish), so excess idle capital parks in SPY rather than cash; only the 5% minimum reserve stays in cash.",
+    "selected_positions": [
+      "SNDK",
+      "AMD",
+      "MRVL"
+    ],
+    "target_weights": {
+      "SNDK": 0.4,
+      "AMD": 0.291667,
+      "MRVL": 0.083333
+    },
+    "per_symbol": {
+      "SNDK": {
+        "target_pct": 0.4,
+        "qty": 3,
+        "delta_qty": 0.7416,
+        "entry_price": 1521.77,
+        "stop_loss": 1476.12,
+        "take_profit": null,
+        "action": "INCREASE",
+        "confidence": 0.88,
+        "opportunity_score": 88,
+        "one_sentence_reason": "SNDK is the #1 memory/storage peer and sector leader with momentum score 100, breaking-out classification, rising volume, rising recent trend, and price well above VWAP (+3.7%), offering the strongest remaining upside in the portfolio.",
+        "reason_code": null
+      },
+      "AMD": {
+        "target_pct": 0.291667,
+        "qty": 80,
+        "delta_qty": 23.6415,
+        "entry_price": 447.775,
+        "stop_loss": 441.4,
+        "take_profit": null,
+        "action": "INCREASE",
+        "confidence": 0.83,
+        "opportunity_score": 82,
+        "one_sentence_reason": "AMD is the #1 semiconductor peer leader with momentum score 82, strong_continuation grade, rising recent trend, bullish EMA state, and price above VWAP (+2.5%), supporting continued upside into the next scan.",
+        "reason_code": null,
+        "stop_clamped": true
+      },
+      "MRVL": {
+        "target_pct": 0.083333,
+        "qty": 60,
+        "delta_qty": 60,
+        "entry_price": 168.21,
+        "stop_loss": 163.17,
+        "take_profit": null,
+        "action": "BUY",
+        "confidence": 0.74,
+        "opportunity_score": 76,
+        "one_sentence_reason": "MRVL clears all quality gates with momentum score 97 (strong_continuation), passes_new_entry_gate=true, bullish EMA, rising recent trend, price above VWAP (+1.2%), and distance from high of 0.53% offset by rising recent slope \u2014 stronger peer AMD is already held at higher weight, and MRVL's own setup justifies a starter position for diversification within the ai_data_center theme.",
+        "reason_code": null
+      },
+      "SMCI": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": -119.857,
+        "entry_price": 34.92,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "EXIT",
+        "confidence": 0.8,
+        "opportunity_score": 32,
+        "one_sentence_reason": "SMCI scores 32 vs SNDK 88 and AMD 82. weak_or_flat momentum, bearish EMA, fading volume, and peer pressure from DELL make continued holding inferior to redeploying capital into higher-scoring names.",
+        "reason_code": null
+      },
+      "ATRA": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 8,
+        "one_sentence_reason": null,
+        "reason_code": "weak_or_flat; bearish EMA; price below VWAP; new_entry_gate_not_confirmed"
+      },
+      "INOD": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 52,
+        "one_sentence_reason": null,
+        "reason_code": "recent_trend=flat; RSI 85.9 overbought; distance_from_high 7.6% with flat slope limits near-term upside"
+      },
+      "AGL": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 38,
+        "one_sentence_reason": null,
+        "reason_code": "negative_mover_penalty; illiquid; recent_trend=flat"
+      },
+      "INTC": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 28,
+        "one_sentence_reason": null,
+        "reason_code": "peer_outranked; weak_or_flat; bearish EMA; new_entry_gate_not_confirmed"
+      },
+      "NVDA": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 22,
+        "one_sentence_reason": null,
+        "reason_code": "peer_outranked; weak_or_flat; bearish EMA; new_entry_gate_not_confirmed"
+      },
+      "SOXS": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 2,
+        "one_sentence_reason": null,
+        "reason_code": "fading; bearish; inverse ETF not suitable for long momentum strategy"
+      },
+      "RKLB": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 55,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor; distance_from_high=-0.006 < 0.040 with fading volume; Phase C hard PASS"
+      },
+      "IREN": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 20,
+        "one_sentence_reason": null,
+        "reason_code": "weak_or_flat; new_entry_gate_not_confirmed; fading volume"
+      },
+      "BITO": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 30,
+        "one_sentence_reason": null,
+        "reason_code": "exhausted; near_high with falling recent_trend and flat volume; illiquid"
+      },
+      "AGIG": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 18,
+        "one_sentence_reason": null,
+        "reason_code": "illiquid; negative tech_score; sub-penny liquidity risk"
+      },
+      "ASML": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 68,
+        "one_sentence_reason": null,
+        "reason_code": "distance_from_high=-0.0012 < 0.040 with rising volume \u2014 rising volume exemption applies but ai_data_center theme already at 3-name cap with SNDK+AMD+MRVL"
+      },
+      "AVGO": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 30,
+        "one_sentence_reason": null,
+        "reason_code": "selector_rotation_rebuy_cooldown; rotated out 56 min ago with score 38; rebuy requires score>=90"
+      },
+      "BE": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 18,
+        "one_sentence_reason": null,
+        "reason_code": "fading; peer_outranked; new_entry_gate_not_confirmed"
+      },
+      "DELL": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 48,
+        "one_sentence_reason": null,
+        "reason_code": "acceptable_continuation but fading volume; sector_capped; lower score than selected names"
+      },
+      "ETN": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 44,
+        "one_sentence_reason": null,
+        "reason_code": "flat recent_trend; low tech_score; sector_capped industrials"
+      },
+      "FIX": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 25,
+        "one_sentence_reason": null,
+        "reason_code": "weak_or_flat; peer_outranked; new_entry_gate_not_confirmed"
+      },
+      "GEV": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 35,
+        "one_sentence_reason": null,
+        "reason_code": "peer_outranked; must_justify not met; lower score than selected"
+      },
+      "MU": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 52,
+        "one_sentence_reason": null,
+        "reason_code": "peer_outranked by SNDK; must_justify not met; fading volume near high"
+      },
+      "PWR": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 12,
+        "one_sentence_reason": null,
+        "reason_code": "fading; bearish EMA; new_entry_gate_not_confirmed"
+      },
+      "QCOM": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 28,
+        "one_sentence_reason": null,
+        "reason_code": "weak_or_flat; bearish EMA; peer_outranked; new_entry_gate_not_confirmed"
+      },
+      "STX": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 15,
+        "one_sentence_reason": null,
+        "reason_code": "peer_outranked by SNDK; weak_or_flat; bearish EMA"
+      },
+      "TSM": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 10,
+        "one_sentence_reason": null,
+        "reason_code": "fading; bearish EMA; peer_outranked"
+      },
+      "VRT": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 5,
+        "one_sentence_reason": null,
+        "reason_code": "gap_only; fading; bearish EMA; new_entry_gate_not_confirmed"
+      },
+      "WDC": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 25,
+        "one_sentence_reason": null,
+        "reason_code": "peer_outranked by SNDK; weak_or_flat; new_entry_gate_not_confirmed"
+      },
+      "ALLR": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 22,
+        "one_sentence_reason": null,
+        "reason_code": "weak_or_flat; bearish EMA; illiquid; new_entry_gate_not_confirmed"
+      },
+      "CTM": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 8,
+        "one_sentence_reason": null,
+        "reason_code": "fading; bearish EMA; illiquid; new_entry_gate_not_confirmed"
+      },
+      "BHM": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 20,
+        "one_sentence_reason": null,
+        "reason_code": "flat; illiquid; extremely low volume ratio 0.048"
+      },
+      "ANIP": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 38,
+        "one_sentence_reason": null,
+        "reason_code": "illiquid; earnings_days_until=0; negative mover intraday; score below selected names"
+      },
+      "AQN": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 20,
+        "one_sentence_reason": null,
+        "reason_code": "illiquid; negative mover; earnings_days_until=0; bearish tech_score"
+      },
+      "ATLX": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 15,
+        "one_sentence_reason": null,
+        "reason_code": "fading; illiquid; new_entry_gate_not_confirmed"
+      },
+      "BH": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 12,
+        "one_sentence_reason": null,
+        "reason_code": "fading; illiquid; earnings_days_until=0; new_entry_gate_not_confirmed"
+      },
+      "BBUC": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 5,
+        "one_sentence_reason": null,
+        "reason_code": "weak_or_flat; bearish EMA; negative mover; illiquid; earnings_days_until=0"
+      },
+      "FSLY": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 12,
+        "one_sentence_reason": null,
+        "reason_code": "weak_or_flat; illiquid; av_losers context; new_entry_gate_not_confirmed"
+      },
+      "AAON": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 10,
+        "one_sentence_reason": null,
+        "reason_code": "fading; bearish EMA; new_entry_gate_not_confirmed"
+      },
+      "AAPL": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 30,
+        "one_sentence_reason": null,
+        "reason_code": "weak_or_flat; new_entry_gate_not_confirmed; sector_capped"
+      },
+      "AMZN": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 12,
+        "one_sentence_reason": null,
+        "reason_code": "fading; bearish EMA; new_entry_gate_not_confirmed"
+      },
+      "AVLN": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 18,
+        "one_sentence_reason": null,
+        "reason_code": "weak_or_flat; illiquid; extremely low volume ratio 0.092; new_entry_gate_not_confirmed"
+      },
+      "AVNW": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 3,
+        "one_sentence_reason": null,
+        "reason_code": "weak_or_flat; bearish EMA; negative mover; illiquid"
+      },
+      "AXTX": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 18,
+        "one_sentence_reason": null,
+        "reason_code": "weak_or_flat; new_entry_gate_not_confirmed; price below VWAP"
+      },
+      "BAND": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 20,
+        "one_sentence_reason": null,
+        "reason_code": "weak_or_flat; bearish EMA; illiquid; new_entry_gate_not_confirmed"
+      },
+      "BHC": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 22,
+        "one_sentence_reason": null,
+        "reason_code": "illiquid; falling recent_trend; low tech_score"
+      },
+      "CNSP": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 18,
+        "one_sentence_reason": null,
+        "reason_code": "weak_or_flat; illiquid; extremely low volume ratio 0.035; new_entry_gate_not_confirmed"
+      },
+      "COIN": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 12,
+        "one_sentence_reason": null,
+        "reason_code": "fading; new_entry_gate_not_confirmed; low tech_score"
+      },
+      "CPNG": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 4,
+        "one_sentence_reason": null,
+        "reason_code": "fading; bearish EMA; negative mover; new_entry_gate_not_confirmed"
+      },
+      "CUE": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 6,
+        "one_sentence_reason": null,
+        "reason_code": "fading; bearish EMA; illiquid; new_entry_gate_not_confirmed"
+      }
+    },
+    "exhaustion_penalty_applied": [
+      "BITO",
+      "RKLB"
+    ],
+    "rotation_plan": {
+      "exited": [
+        {
+          "symbol": "SMCI",
+          "reason": "Weak_or_flat momentum score 21, bearish EMA, fading volume, peer pressure from DELL; opportunity score 32 vs SNDK 88 and AMD 82 makes continued holding clearly inferior.",
+          "reason_category": "replaced_by_higher_opportunity"
+        }
+      ],
+      "entered": [
+        {
+          "symbol": "MRVL",
+          "reason": "Strong_continuation momentum score 97, passes_new_entry_gate, bullish EMA, rising trend, price above VWAP \u2014 strongest fresh candidate clearing all Phase C quality gates.",
+          "reason_category": "stronger_remaining_upside"
+        }
+      ],
+      "held": [
+        {
+          "symbol": "SNDK",
+          "reason": "Sector and peer leader, momentum score 100, breaking_out, rising volume, rising trend \u2014 highest opportunity score in pool; increased to build conviction."
+        },
+        {
+          "symbol": "AMD",
+          "reason": "Semiconductor peer leader, momentum score 82, strong_continuation, rising trend, bullish EMA, price above VWAP \u2014 second highest score; increased position."
+        }
+      ]
+    },
+    "capital_movement_plan": [
+      {
+        "symbol": "SMCI",
+        "delta_usd": -4166,
+        "purpose": "Exit weak incumbent; redeploy to higher-conviction names"
+      },
+      {
+        "symbol": "SNDK",
+        "delta_usd": 1522,
+        "purpose": "Add 1 share to increase conviction in top-ranked name"
+      },
+      {
+        "symbol": "AMD",
+        "delta_usd": 10747,
+        "purpose": "Add ~24 shares to increase conviction in semiconductor leader"
+      },
+      {
+        "symbol": "MRVL",
+        "delta_usd": 10093,
+        "purpose": "New starter position in strong_continuation semiconductor name"
+      },
+      {
+        "symbol": "SPY",
+        "delta_usd": -36774,
+        "purpose": "Reduce SPY from 63% to 27% to fund equity positions"
+      }
+    ],
+    "risk_flags": [
+      "MRVL distance_from_high=0.53% is tight but rising volume and strong momentum score 97 satisfy Phase C gate via volume exemption \u2014 monitor for exhaustion next scan",
+      "AMD near intraday high (distance 0.16%) with flat volume \u2014 apply exhaustion watch next scan if volume does not pick up",
+      "SNDK distance_from_high=0.44% with rising volume \u2014 Phase C gate satisfied; watch for volume fade",
+      "ai_data_center theme at 3-name cap (SNDK+AMD+MRVL); no further additions permitted this scan",
+      "Information Technology sector at 3-name cap (SNDK+AMD+MRVL); no further additions permitted"
+    ],
+    "_agent": "portfolio-selector",
+    "_model": "claude-sonnet-4-6",
+    "_input_tokens": 3,
+    "_output_tokens": 8266,
+    "_cache_read_tokens": 5513,
+    "_cache_creation_tokens": 29052,
+    "_stop_reason": "end_turn",
+    "_raw_truncated": "{\n  \"portfolio_thesis\": \"SNDK leads the memory/storage peer group with momentum score 100 and breaking-out classification; AMD holds the semiconductor peer top spot with strong continuation and rising trend near highs. MRVL adds a third ai_data_center name with momentum score 97 and strong continuation, clearing all quality gates. RKLB fails the distance-from-high gate (0.6% from high with fading volume) and is excluded; SMCI exits as weak_or_flat momentum with peer pressure from DELL.\",\n  \"spy_target_pct\": 0.27,\n  \"cash_target_pct\": 0.05,\n  \"spy_decision\": {\n    \"target_pct\": 0.27,\n    \"action\": \"REDUCE\",\n    \"opportunity_score\": 45,\n    \"one_sentence_reason\": \"SPY tape is favorable but flat near VWAP with fading volume; reduce from 63% to 27% to deploy capital into higher-conviction equity names while retaining meaningful liquid buffer.\"\n  },\n  \"spy_vs_cash_reasoning\": \"SPY tape is favorable (not bearish), so excess idle capital parks in SPY rather than cash; only the 5% minimum reserve stays in cash.\",\n  \"selected_positions\": [\"SNDK\", \"AMD\", \"MRVL\"],\n  \"target_weights\": {\n    \"SNDK\": 0.4800,\n    \"AMD\": 0.3500,\n    \"MRVL\": 0.1000\n  },\n  \"per_symbol\": {\n    \"SNDK\": {\n      \"target_pct\": 0.4800,\n      \"qty\": 3,\n      \"delta_qty\": 1,\n      \"entry_price\": 1521.77,\n      \"stop_loss\": 1476.0,\n      \"take_profit\": null,\n      \"action\": \"INCREASE\",\n      \"confidence\": 0.88,\n      \"opportunity_score\": 88,\n      \"one_sentence_reason\": \"SNDK is the #1 memory/storage peer and sector leader with momentum score 100, breaking-out classification, rising volume, rising recent trend, and price well above VWAP (+3.7%), offering the strongest remaining upside in the portfolio.\",\n      \"reason_code\": null\n    },\n    \"AMD\": {\n      \"target_pct\": 0.3500,\n      \"qty\": 80,\n      \"delta_qty\": 24,\n      \"entry_price\": 447.775,\n      \"stop_loss\": 433.0,\n      \"take_profit\": null,\n      \"action\": \"INCREASE\",\n      \"confidence\": 0.83,\n      \"opportunity_score\": 82,\n      \"one_sentence_reason\": \"AMD is the #1 semiconductor peer leader with momentum score 82, strong_continuation grade, rising recent trend, bullish EMA state, and price above VWAP (+2.5%), supporting continued upside into the next scan.\",\n      \"reason_code\": null\n    },\n    \"MRVL\": {\n      \"target_pct\": 0.1000,\n      \"qty\": 60,\n      \"delta_qty\": 60,\n      \"entry_price\": 168.21,\n      \"stop_loss\": 163.0,\n      \"take_profit\": null,\n      \"action\": \"BUY\",\n      \"confidence\": 0.74,\n      \"opportunity_score\": 76,\n      \"one",
+    "_auto_repaired": {
+      "stop_loss_floor": {
+        "SNDK": {
+          "from": 1476.0,
+          "to": 1476.12
+        },
+        "AMD": {
+          "from": 433.0,
+          "to": 434.35
+        },
+        "MRVL": {
+          "from": 163.0,
+          "to": 163.17
+        }
+      },
+      "delta_qty_rounding": {
+        "SNDK": {
+          "from": 1.0,
+          "to": 0.7416,
+          "expected_from_qty_minus_current": true
+        },
+        "AMD": {
+          "from": 24.0,
+          "to": 23.6415,
+          "expected_from_qty_minus_current": true
+        }
+      },
+      "stop_risk_clamp": {
+        "AMD": {
+          "from_stop": 434.35,
+          "to_stop": 441.4,
+          "from_risk_usd": 1074.0,
+          "to_risk_usd": 510.0,
+          "cap_usd": 510.33
+        }
+      },
+      "allocation_total": {
+        "from": {
+          "target_weights": {
+            "SNDK": 0.48,
+            "AMD": 0.35,
+            "MRVL": 0.1
+          },
+          "spy_target_pct": 0.27,
+          "cash_target_pct": 0.05,
+          "total": 1.25
+        },
+        "to": {
+          "target_weights": {
+            "SNDK": 0.4,
+            "AMD": 0.291667,
+            "MRVL": 0.083333
+          },
+          "spy_target_pct": 0.225,
+          "cash_target_pct": 0.0,
+          "total": 1.0
+        }
+      },
+      "exit_delta_qty": {
+        "SMCI": {
+          "from": -119.0,
+          "to": -119.857
+        }
+      }
+    }
+  }
+}

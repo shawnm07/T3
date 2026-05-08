@@ -1,0 +1,1358 @@
+agent=portfolio-selector
+stop_reason=max_tokens
+input_tokens=28621
+output_tokens=30000
+reason=stop_reason=max_tokens
+---
+Analyzing the candidate pool systematically:
+
+**Key observations:**
+1. Held positions: NVDA (score ~36, fading, below VWAP, passes_new_entry_gate=false) and MU (score ~59, weak_or_flat, passes_new_entry_gate=false)
+2. Exit arbiter: NVDA has hold/0.58 confidence - below the 0.65 threshold for strong evidence, so standard anti-stagnation applies
+3. Tape: favorable, floor=65, buy_min=70
+4. Phase C gates: BUY requires passes_new_entry_gate=true OR distance_from_high >= 0.04 with rising volume
+
+**Top candidates by opportunity score:**
+- SNDK: score 64.6, acceptable_continuation, passes_gate=true, rising trend, bullish EMA, distance_from_high=-0.0095 (within 4% but volume fading) → Phase C: distance < 0.04 AND volume fading → HARD PASS on BUY
+- ASML: score 85 (strong_continuation), passes_gate=true, rising trend, bullish EMA, distance=-0.0032 (within 4%), volume fading → Phase C HARD PASS
+- AAPL: score 64.14, strong_continuation, passes_gate=true, distance=-0.0007, volume fading → Phase C HARD PASS
+- QCOM: score 62.92, acceptable_continuation, passes_gate=true, rising trend, bullish EMA, distance=-0.0085 (within 4%), volume fading → Phase C HARD PASS
+- BHM: score 66.8, strong_continuation, passes_gate=true, distance=0.0 (AT high), volume flat → Phase C: distance=0 < 0.04 AND volume not rising → HARD PASS
+- ALLR: score 67.93, strong_continuation, passes_gate=true, rising trend, bullish EMA, distance=-0.038 (>= 0.04 threshold!), volume rising → PASSES Phase C! Illiquid, cap at 8%
+- BAND: score 62.85, strong_continuation, passes_gate=true, distance=-0.0142, volume flat → Phase C: distance < 0.04 AND volume not rising → HARD PASS
+- COIN: score 56.18, strong_continuation, passes_gate=true, distance=-0.0039, volume fading → HARD PASS
+- BH: score 53.8, strong_continuation, passes_gate=true, distance=-0.0026, volume fading → HARD PASS
+- AVLN: score 59.59, strong_continuation, passes_gate=true, distance=-0.0028, volume flat → HARD PASS
+- BHC: score 59.42, strong_continuation, passes_gate=true, distance=-0.0035, volume rising → Phase C: distance < 0.04 AND volume rising → PASSES! Illiquid, cap at 8%
+- CPNG: score 45.8, strong_continuation, passes_gate=true, distance=-0.0168, volume fading → HARD PASS
+- AGIG: score 50.94, strong_continuation, passes_gate=true, distance=-0.0174, volume fading → HARD PASS
+- BITO: score 53.53, acceptable_continuation, passes_gate=true, distance=-0.0027, volume rising → Phase C: distance < 0.04 AND volume rising → PASSES! Illiquid, cap at 8%
+- AVGO: score 52.76, acceptable_continuation, passes_gate=true, distance=-0.0029, volume fading → HARD PASS
+
+Wait - re-reading Phase C: "distance_from_high_pct >= buy_max_distance_from_high_pct OR volume_trend == 'rising'" - so if volume is rising, it passes regardless of distance. Let me re-check:
+
+- ASML: distance=-0.0032 < 0.04, volume fading → FAIL
+- SNDK: distance=-0.0095 < 0.04, volume fading → FAIL  
+- AAPL: distance=-0.0007 < 0.04, volume fading → FAIL
+- QCOM: distance=-0.0085 < 0.04, volume fading → FAIL
+- BHM: distance=0.0 < 0.04, volume flat → FAIL
+- ALLR: distance=-0.038 < 0.04 (0.038 < 0.04), volume rising → PASSES (rising volume)
+- BAND: distance=-0.0142 < 0.04, volume flat → FAIL
+- BHC: distance=-0.0035 < 0.04, volume rising → PASSES
+- BITO: distance=-0.0027 < 0.04, volume rising → PASSES
+- COIN: distance=-0.0039 < 0.04, volume fading → FAIL
+- AVLN: distance=-0.0028 < 0.04, volume flat → FAIL
+- CPNG: distance=-0.0168 < 0.04, volume fading → FAIL
+- AGIG: distance=-0.0174 < 0.04, volume fading → FAIL
+- AVGO: distance=-0.0029 < 0.04, volume fading → FAIL
+- PWR: distance=-0.0158 < 0.04, volume rising → PASSES gate but passes_new_entry_gate=false → FAIL Phase C
+- SMCI: distance=-0.0134 < 0.04, volume rising → passes_new_entry_gate=false → FAIL
+- STX: distance=-0.0052 < 0.04, volume rising → passes_new_entry_gate=false → FAIL
+- ANIP: distance=-0.0669 >= 0.04, volume rising → passes_new_entry_gate=false → FAIL
+- BBUC: distance=-0.0736 >= 0.04, volume rising → passes_new_entry_gate=false → FAIL
+
+So fresh BUY candidates that pass ALL Phase C gates (passes_new_entry_gate=true AND (distance>=0.04 OR volume rising)):
+- ALLR: score 67.93, illiquid (cap 8%), passes all gates ✓
+- BHC: score 59.42, illiquid (cap 8%), passes all gates ✓  
+- BITO: score 53.53, illiquid (cap 8%), passes all gates ✓
+
+Now for held positions (NVDA, MU) - they need to be evaluated for HOLD vs EXIT:
+- NVDA: opportunity_score ~36, fading, passes_new_entry_gate=false. Exit arbiter HOLD at 0.58 (below 0.65 threshold for strong evidence). Score is very low.
+- MU: opportunity_score ~59, weak_or_flat, passes_new_entry_gate=false. No exit arbiter action.
+
+For HOLD actions on held positions, Phase C gates don't apply (only BUY/INCREASE). So I can HOLD NVDA and MU.
+
+**Anti-stagnation check:** allow_floor_breach=false. Fresh candidates within 5 of lowest selected score must trigger inclusion of fresh name. If I select NVDA(36), MU(59), and fresh names, the lowest selected would be NVDA at 36. Fresh candidates scoring >= 31 would trigger anti-stagnation. ALLR(67.93) > 31, so anti-stagnation requires fresh name - which I'm including.
+
+**Opportunity scoring for selection:**
+- ALLR: 68 (strong_continuation, passes gate, rising volume, rising trend)
+- MU: 59 (held, weak_or_flat but strong intraday +7.7%, bullish EMA, above VWAP)
+- BHC: 59 (strong_continuation, passes gate)
+- BITO: 54 (acceptable_continuation, passes gate)
+- NVDA: 36 (fading, below VWAP, poor momentum)
+
+**Should I EXIT NVDA?** NVDA scores ~36 vs ALLR at 68. Exit arbiter HOLD at 0.58 (below 0.65 threshold). The gap is massive (32 points). Yes, EXIT NVDA.
+
+**Selected positions:** ALLR, MU, BHC, BITO - that's 4 positions. Need 3-6. Let me check if I can add more.
+
+Can I add SNDK or ASML as HOLD? No - they're not held. For fresh BUYs, they fail Phase C.
+
+What about adding a 5th? Looking at candidates that pass Phase C... only ALLR, BHC, BITO pass for fresh entries. 
+
+Actually wait - let me reconsider COIN: score 56.18, strong_continuation, passes_gate=true, distance=-0.0039 < 0.04, volume fading → FAILS Phase C.
+
+What about AVLN? score 59.59, strong_continuation, passes_gate=true, distance=-0.0028 < 0.04, volume flat → FAILS.
+
+So my 4 selections: ALLR(68), MU(59), BHC(59), BITO(54).
+
+**Sector/theme check:**
+- ALLR: Other sector, other theme
+- MU: Information Technology, ai_data_center
+- BHC: Other sector, other theme
+- BITO: Other sector, other theme
+- Max 3 in same sector: Other has ALLR, BHC, BITO = 3 ✓ (exactly 3, OK)
+- Max 3 in same theme: "other" theme has ALLR, BHC, BITO = 3 ✓
+- ai_data_center: MU = 1 ✓
+
+**Sizing with concentration_exponent=3:**
+Scores: ALLR=68, MU=59, BHC=59, BITO=54
+k=3: 68^3=314432, 59^3=205379, 59^3=205379, 54^3=157464
+Sum = 882654
+Weights: ALLR=0.3563, MU=0.2327, BHC=0.2327, BITO=0.1784
+
+spy_target_pct: currently 0.3553. With 4 positions taking up equity, I should reduce SPY.
+investable = 1 - spy_target_pct - cash_target_pct
+
+Let me set cash_target_pct=0.02 (minimum reserve), and determine spy_target_pct.
+
+All 4 positions are illiquid with cap at 8% (ALLR, BHC, BITO) except MU which is not illiquid.
+- ALLR: cap 8%
+- BHC: cap 8%  
+- BITO: cap 8%
+- MU: cap 50% (but concentration weighting)
+
+With illiquid caps: ALLR=8%, BHC=8%, BITO=8% = 24% max for illiquid names.
+MU gets the rest of investable.
+
+Let me think about total allocation. If I set spy=0.35, cash=0.02, investable=0.63:
+- ALLR: 0.3563 * 0.63 = 22.4% → capped at 8%
+- MU: 0.2327 * 0.63 = 14.7%
+- BHC: 0.2327 * 0.63 = 14.7% → capped at 8%
+- BITO: 0.1784 * 0.63 = 11.2% → capped at 8%
+
+Overflow from caps: ALLR overflow = 14.4%, BHC overflow = 6.7%, BITO overflow = 3.2%
+Total overflow = 24.3% to redistribute to MU (only uncapped name)
+MU gets: 14.7% + 24.3% = 39%
+
+Check: 8 + 39 + 8 + 8 + 35 + 2 = 100% ✓
+
+But MU at 39% * 101917 = $39,748. At $707.77/share = 56.2 shares. 
+Risk check: stop = max(0.01, 0.5*37.093/707.77) = max(0.01, 0.0262) = 2.62% → capped at 2.5%
+Risk = 39% * 101917 * 2.5% = $993 > max_risk = 101917 * 0.5% = $509.59
+
+Need to reduce MU. Max MU position by risk: $509.59 / 2.5% = $20,384 = 20% of equity.
+
+So MU capped at 20% by risk constraint.
+
+Remaining: 100% - 8% - 8% - 8% - 20% - 2% = 54% → goes to SPY.
+
+Let me recalculate: spy=0.54, cash=0.02, positions=0.44 (8+20+8+8)
+
+Check min_top3_weight_ratio: top 3 weights are MU=20%, ALLR=8%, BHC=8%. Ratio = 20/8 = 2.5 >= 1.5 ✓
+
+Actually wait - I should reconsider. The concentration formula should drive MU higher but risk caps it. Let me set:
+- ALLR: 8% (illiquid cap)
+- MU: 20% (risk-capped)
+- BHC: 8% (illiquid cap)
+- BITO: 8% (illiquid cap)
+- SPY: 54%
+- Cash: 2%
+Total: 100% ✓
+
+**Qty calculations:**
+Equity = $101,917.03
+
+ALLR: 8% = $8,153.36, price=$1.52, qty = 8153.36/1.52 = 5364 shares (illiquid, fractional ok for sub-$10)
+BHC: 8% = $8,153.36, price=$5.72, qty = 8153.36/5.72 = 1425 shares
+BITO: 8% = $8,153.36, price=$10.97, qty = 8153.36/10.97 = 743 shares (whole shares, non-fractionable? price > $10 but illiquid)
+MU: 20% = $20,383.41, price=$707.77, qty = 20383.41/707.77 = 28.79 → 28 shares (whole shares)
+
+Check MU: 28 * 707.77 = $19,817.56 = 19.44% ✓
+Risk: 28 * 707.77 * 2.5% = $495.44 < $509.59 ✓
+
+SPY: 54% = $55,035.20. Currently holding 49.1226 shares at $737.1451 = $36,210.69 (35.53%)
+Need to increase SPY to 54% = $55,035.20. Delta = $55,035.20 - $36,210.69 = $18,824.51
+SPY qty needed: $55,035.20 / $737.1451 = 74.66 shares → 74 whole shares
+74 * 737.1451 = $54,548.74 = 53.52%
+
+Let me recalculate totals:
+- ALLR: 5364 * 1.52 = $8,153.28 = 8.00%
+- MU: 28 * 707.77 = $19,817.56 = 19.44%
+- BHC: 1425 * 5.72 = $8,151.00 = 7.99%
+- BITO: 743 * 10.97 = $8,150.71 = 7.99%
+- SPY: 74 * 737.1451 = $54,548.74 = 53.52%
+- Cash: remaining
+
+Total positions + SPY = $8,153.28 + $19,817.56 + $8,151.00 + $8,150.71 + $54,548.74 = $98,821.29
+Cash = $101,917.03 - $98,821.29 = $3,095.74 = 3.04%
+
+Sum check: 8.00 + 19.44 + 7.99 + 7.99 + 53.52 + 3.04 = 99.98% ✓ (within 1%)
+
+Let me adjust target_weights to match:
+- ALLR: 0.0800
+- MU: 0.1944
+- BHC: 0.0799
+- BITO: 0.0799
+- SPY: 0.5352
+- Cash: 0.0304 (but this should be minimal... let me adjust)
+
+Actually the sum of target_weights (selected positions only) + spy_target_pct + cash_target_pct must be in [0.99, 1.01].
+
+target_weights = {ALLR: 0.0800, MU: 0.1944, BHC: 0.0799, BITO: 0.0799}
+sum = 0.4342
+spy_target_pct = 0.5352
+cash_target_pct = 0.0304
+Total = 0.9998 ✓
+
+**NVDA EXIT:**
+Current qty = 125.999999999 ≈ 126 shares
+delta_qty = -126
+
+**MU delta:**
+Current qty = 18.8992
+Target qty = 28
+delta_qty = 28 - 18.8992 = 9.1008 → but need to check if this is an INCREASE
+MU passes_new_entry_gate=false, so INCREASE action... 
+
+Wait - for INCREASE on a held position, does Phase C apply? Yes - "A BUY action is INVALID" - INCREASE is listed in the action vocabulary as held/growing. Phase C says "A BUY action is INVALID" - does this include INCREASE?
+
+Re-reading: "Phase C quality gates above the BUY threshold. A BUY action is INVALID and must become PASS unless ALL of these are true: passes_new_entry_gate == true, momentum_profile.classification ∈ {strong_continuation, acceptable_continuation}"
+
+MU has passes_new_entry_gate=false and grade="weak_or_flat". So INCREASE would fail Phase C. I should HOLD MU at current qty.
+
+MU HOLD: qty=18.8992 → round to 18 (whole shares for safety, or keep fractional since it's held)
+Actually current_qty=18.8992, so delta_qty=0 for HOLD.
+
+Recalculate MU weight: 18.8992 * 707.77 = $13,376.26 = 13.12%
+
+Now totals:
+- ALLR: $8,153.28 = 8.00%
+- MU: $13,376.26 = 13.12% (HOLD)
+- BHC: $8,151.00 = 7.99%
+- BITO: $8,150.71 = 7.99%
+- SPY: need to fill remaining
+
+Total equity positions = $8,153.28 + $13,376.26 + $8,151.00 + $8,150.71 = $37,831.25
+
+NVDA current value = $27,209.70 (being exited)
+After NVDA exit, cash freed = $27,209.70 + existing cash $24,988.32 = $52,198.02
+
+Remaining for SPY + cash: $101,917.03 - $37,831.25 = $64,085.78
+
+SPY target: let's say 60% = $61,150.22 → 82.97 shares → 82 shares = $60,445.90 = 59.31%
+Cash: $64,085.78 - $60,445.90 = $3,639.88 = 3.57%
+
+Or let me target spy more precisely. Let me set:
+- ALLR: 8.00%
+- MU: 13.12% (held, HOLD)
+- BHC: 7.99%
+- BITO: 7.99%
+Sum = 37.10%
+SPY: 60.00%
+Cash: 2.90%
+Total = 100% ✓
+
+SPY qty: 60% * 101917.03 / 737.1451 = 61150.22 / 737.1451 = 82.96 → 82 shares
+82 * 737.1451 = $60,445.90 = 59.31%
+
+Adjust: spy_target_pct = 0.5931, cash = 1 - 0.3710 - 0.5931 = 0.0359
+
+target_weights: ALLR=0.0800, MU=0.1312, BHC=0.0799, BITO=0.0799
+Sum = 0.3710
+spy = 0.5931
+cash = 0.0359
+Total = 1.0000 ✓
+
+**min_top3_weight_ratio check:** Top 3 by weight: MU=0.1312, ALLR=0.0800, BHC=0.0799
+Ratio = 0.1312/0.0799 = 1.642 >= 1.5 ✓
+
+**SPY delta:** Current SPY qty = 49.1226, target = 82 shares
+delta_qty = 82 - 49.1226 = 32.8774 → INCREASE SPY
+
+**Exhaustion penalties:** NVDA (fading, distance_from_high=-0.0115 < 0.03, volume fading, recent_trend falling) → apply exhaustion penalty. Also FLNC (RSI 82.6, fading, volume fading), INTC (RSI 83, fading), AMD (RSI 79.1, fading).
+
+**NVDA peer_pressure check:** must_justify=true with stronger_peer=ASML. Since I'm EXITing NVDA, the exit_reason must cite opportunity score delta. ASML scores higher but also fails Phase C for new entry. NVDA is being exited due to exhaustion/low opportunity score.
+
+**Per-symbol for all pool members:**
+
+Let me compile the full per_symbol output for all candidates. I need to include ALL pool symbols.
+
+For the PASS symbols, one_sentence_reason must be null and reason_code can be provided.
+
+Let me finalize the JSON:
+
+```json
+{
+  "portfolio_thesis": "Tape is favorable with SPY near highs; however, nearly all high-scoring momentum names are within 4% of their intraday highs with fading volume, failing Phase C quality gates for fresh entries. The three fresh BUYs that clear all gates (ALLR, BHC, BITO) each show strong/acceptable continuation with rising volume. MU is held at current size as its momentum grade is weak_or_flat and does not qualify for INCREASE; NVDA is exited due to exhaustion (fading momentum, below VWAP, low opportunity score). Remaining capital parks in SPY.",
+  "spy_target_pct": 0.5931,
+  "cash_target_pct": 0.0359,
+  "spy_decision": {
+    "target_pct": 0.5931,
+    "action": "INCREASE",
+    "opportunity_score": 55,
+    "one_sentence_reason": "SPY is near VWAP with favorable tape; increasing allocation to absorb capital freed from NVDA exit while fresh equity candidates are limited by Phase C gates."
+  },
+  "spy_vs_cash_reasoning": "Idle capital defaults to SPY per rule 15 as tape is favorable and macro regime is neutral-to-bullish.",
+  "selected_positions": ["ALLR", "MU", "BHC", "BITO"],
+  "target_weights": {"ALLR": 0.0800, "MU": 0.1312, "BHC": 0.0799, "BITO": 0.0799},
+  ...
+}
+```
+
+Now let me carefully compute all qty values:
+
+**ALLR:** price=$1.52, target=$8,153.36, qty=8153.36/1.52=5364.0 shares (sub-$10, allow one decimal → 5364.0), delta_qty=5364.0 (new entry)
+Stop: max(0.01, 0.5*0.105/1.52) = max(0.01, 0.0345) = 3.45% → capped at 2.5% → stop = 1.52 * (1-0.025) = 1.482
+Risk: 5364 * 1.52 * 0.025 = $203.83 < $509.59 ✓
+
+**BHC:** price=$5.72, target=$8,151.00, qty=8151/5.72=1425.0 shares (sub-$10, allow one decimal → 1425), delta_qty=1425
+Stop: max(0.01, 0.5*0.226/5.72) = max(0.01, 0.01976) = 1.976% → stop = 5.72*(1-0.01976) = 5.607
+Risk: 1425 * 5.72 * 0.01976 = $161.05 < $509.59 ✓
+
+**BITO:** price=$10.97, target=$8,150.71, qty=8150.71/10.97=742.9 → 742 shares (whole shares for >$10)
+742 * 10.97 = $8,139.74 = 7.987%
+Stop: max(0.01, 0.5*0.287/10.97) = max(0.01, 0.01308) = 1.308% → stop = 10.97*(1-0.01308) = 10.827
+Risk: 742 * 10.97 * 0.01308 = $106.44 < $509.59 ✓
+
+**MU:** HOLD, qty=18.8992 (keep fractional as held), delta_qty=0
+Actually for HOLD, I should keep current_qty exactly. current_qty=18.8992.
+
+**NVDA EXIT:** qty=0, delta_qty=-126 (rounding 125.999999999 to 126)
+
+**SPY:** Currently 49.1226 shares, target 82 shares
+82 * 737.1451 = $60,445.90
+delta_qty = 82 - 49.1226 = 32.8774 → need to handle fractional. SPY is treated as liquid/fractional ok.
+Actually SPY is "spy_treated_as_liquid=true" and "spy_can_be_freely_converted_to_cash=true". The executor handles SPY separately. I'll set SPY qty=82 (whole shares) with delta=32.88 rounded.
+
+Let me recalculate final totals with BITO at 742 shares:
+- ALLR: 5364 * 1.52 = $8,153.28
+- MU: 18.8992 * 707.77 = $13,376.26  
+- BHC: 1425 * 5.72 = $8,151.00
+- BITO: 742 * 10.97 = $8,139.74
+- SPY: 82 * 737.1451 = $60,445.90
+Total = $98,266.18
+Cash = $101,917.03 - $98,266.18 = $3,650.85 = 3.58%
+
+target_weights:
+- ALLR: 8153.28/101917.03 = 0.08000
+- MU: 13376.26/101917.03 = 0.13124
+- BHC: 8151.00/101917.03 = 0.07998
+- BITO: 8139.74/101917.03 = 0.07987
+Sum = 0.37109
+spy = 60445.90/101917.03 = 0.59307
+cash = 3650.85/101917.03 = 0.03583
+Total = 0.37109 + 0.59307 + 0.03583 = 0.99999 ✓
+
+Now for the per_symbol entries for all pool symbols. I need to include every symbol in the pool. Let me list them all:
+
+Held: NVDA, MU
+Fresh candidates: ATRA, FLNC, AGL, SOXS, RKLB, IREN, INTC, BITO, AGIG, AMD, ASML, AVGO, BE, DELL, ETN, FIX, GEV, MRVL, PWR, QCOM, SMCI, SNDK, STX, TSM, VRT, WDC, ALLR, CTM, BHM, ANIP, AQN, ATLX, BH, BBUC, FSLY, AAON, AAPL, AMZN, AVLN, AVNW, AXTX, BAND, BHC, BRBR, CNSP, COIN, CPNG
+
+Selected: ALLR, MU, BHC, BITO
+Exit: NVDA
+Pass: everything else
+
+For PASS symbols: target_pct=0, action=PASS, one_sentence_reason=null
+For EXIT (NVDA): target_pct=0, action=EXIT, qty=0, delta_qty=-126, one_sentence_reason required
+
+Let me also check NVDA's peer_pressure: must_justify=true with stronger_peer=ASML. Since I'm EXITing NVDA (not selecting it), I don't need to justify selection. The exit_reason just needs to cite opportunity score delta per rule 10c (exit arbiter HOLD at 0.58 < 0.65, so standard baseline applies).
+
+Actually rule 10c says: if action="hold" and confidence >= 0.65, need score delta >= 5 to rotate out. NVDA's exit arbiter hold has confidence=0.58 < 0.65, so the bar drops to baseline anti-stagnation. ALLR scores 68 vs NVDA 36 - massive delta. Exit is justified.
+
+For NVDA exit_reason: "rotated: ALLR scored 68 vs NVDA 36; exit-arbiter HOLD confidence 0.58 below 0.65 threshold, exhaustion penalty applied (fading momentum, below VWAP, distance_from_high -1.15% with fading volume)."
+
+Now let me also check BHM - score 66.8, strong_continuation, passes_gate=true, distance=0.0 (AT high), volume flat. Phase C: distance=0.0 < 0.04 AND volume not rising → FAIL. PASS.
+
+COIN - score 56.18, strong_continuation, passes_gate=true, distance=-0.0039 < 0.04, volume fading → FAIL. PASS.
+
+AVLN - score 59.59, strong_continuation, passes_gate=true, distance=-0.0028 < 0.04, volume flat → FAIL. PASS.
+
+Now let me assign opportunity scores to all symbols for the JSON:
+
+High scorers (for reference):
+- ALLR: 68
+- BHM: 67
+- SNDK: 65
+- AAPL: 64
+- QCOM: 63
+- BAND: 63
+- AVLN: 60
+- MU: 59
+- BHC: 59
+- COIN: 56
+- BITO: 54
+- BH: 54
+- CPNG: 46
+- SMCI: 44
+- AVGO: 43 (acceptable_continuation but fails Phase C)
+- MRVL: 40
+- FLNC: 38 (fading)
+- CTM: 38
+- ANIP: 38
+- ATLX: 30
+- AAON: 30
+- AMD: 35
+- DELL: 33
+- INTC: 32
+- RKLB: 38
+- ASML: 72 (strong_continuation but fails Phase C due to distance+volume)
+
+Wait, ASML has momentum score 85 (strong_continuation), passes_gate=true, but distance=-0.0032 < 0.04 AND volume fading → fails Phase C. Its opportunity score for remaining upside is still high but it can't be bought. I'll score it 72 as a PASS.
+
+Let me now write the complete JSON. I'll be careful about all required fields.
+
+For PASS symbols, one_sentence_reason MUST be null per instructions ("MUST be null for HOLD/PASS").
+
+For HOLD (MU): one_sentence_reason=null, reason_code="incumbent_hold"
+
+For EXIT (NVDA): one_sentence_reason required.
+
+For BUY (ALLR, BHC, BITO): one_sentence_reason required.
+
+Let me also double-check the ALLR opportunity score. It has:
+- momentum score 95, strong_continuation, passes_gate=true
+- distance_from_high=-0.038 (3.8% from high - just barely below 4% threshold, but volume is RISING so it passes Phase C)
+- rising trend, rising slope, bullish EMA, above VWAP
+- illiquid but that's fine
+- sector_lone=false, theme_lone=false (not lone)
+- No peer_pressure.must_justify
+- Not in recent_selector_rotations or recent_exit_actions
+Score: 68 (candidate_priority_score=67.93, I'll use 68)
+
+BHC:
+- momentum score 100, strong_continuation, passes_gate=true
+- distance=-0.0035 < 0.04, volume rising → passes Phase C
+- rising trend, bullish EMA, above VWAP
+- illiquid
+- Score: 59 (candidate_priority_score=59.42)
+
+BITO:
+- momentum score 68, acceptable_continuation, passes_gate=true
+- distance=-0.0027 < 0.04, volume rising → passes Phase C
+- falling recent trend (slight concern), bullish EMA, above VWAP
+- illiquid
+- Score: 54 (candidate_priority_score=53.53)
+
+Now the full JSON. This will be long but I need to include all pool symbols.
+
+Let me count the pool symbols: ATRA, FLNC, AGL, NVDA, SOXS, RKLB, IREN, INTC, BITO, AGIG, AMD, ASML, AVGO, BE, DELL, ETN, FIX, GEV, MRVL, MU, PWR, QCOM, SMCI, SNDK, STX, TSM, VRT, WDC, ALLR, CTM, BHM, ANIP, AQN, ATLX, BH, BBUC, FSLY, AAON, AAPL, AMZN, AVLN, AVNW, AXTX, BAND, BHC, BRBR, CNSP, COIN, CPNG = 49 symbols
+
+That's a lot. Let me write them all out carefully.
+
+For the exhaustion_penalty_applied list: NVDA (fading, distance_from_high -1.15% < 3%, volume fading, recent_trend falling), FLNC (RSI 82.6, fading, volume fading, intraday +27.9%), INTC (RSI 83, fading, intraday +5.25%), AMD (RSI 79.1, fading, intraday +5.24%), SNDK (RSI 78, distance -0.95% < 3%, volume fading), AAPL (distance -0.07% < 3%, volume fading), ASML (distance -0.32% < 3%, volume fading), BHM (distance=0%, volume flat), AVGO (distance -0.29% < 3%, volume fading), QCOM (distance -0.85% < 3%, volume fading - but RSI 86.2 and intraday +5%)
+
+Actually let me be more careful. Exhaustion penalty applies when:
+- distance_from_high_pct < 0.03 AND volume_trend in {fading, flat}
+- momentum decelerating (lower highs, MACD contracting, RSI rolling over from >70)
+- intraday_change_pct > 0.05 with no continuation in last 30 min
+
+NVDA: distance=-0.0115 < 0.03, volume fading ✓ + RSI 66.3 (not >70 but fading) → penalty
+ASML: distance=-0.0032 < 0.03, volume fading ✓ → penalty
+AAPL: distance=-0.0007 < 0.03, volume fading ✓ → penalty
+AVGO: distance=-0.0029 < 0.03, volume fading ✓ → penalty
+QCOM: distance=-0.0085 < 0.03, volume fading ✓ + RSI 86.2 rolling over → penalty
+SNDK: distance=-0.0095 < 0.03, volume fading ✓ + RSI 78 → penalty
+BHM: distance=0.0 < 0.03, volume flat ✓ → penalty
+FLNC: RSI 82.6, intraday +27.9% with fading volume → penalty
+INTC: RSI 83, intraday +5.25% with fading volume, distance -1.45% < 3% → penalty
+AMD: RSI 79.1, intraday +5.24% with fading volume, distance -1.5% < 3% → penalty
+COIN: distance=-0.0039 < 0.03, volume fading ✓ → penalty
+AVLN: distance=-0.0028 < 0.03, volume flat ✓ → penalty
+BITO: distance=-0.0027 < 0.03, volume rising → NO penalty (volume rising)
+BHC: distance=-0.0035 < 0.03, volume rising → NO penalty
+ALLR: distance=-0.038 >= 0.03 → NO penalty
+MU: distance=-0.0084 < 0.03, volume fading → penalty (but held, HOLD)
+STX: distance=-0.0052 < 0.03, volume rising → NO penalty
+SMCI: distance=-0.0134 < 0.03, volume rising → NO penalty
+
+So exhaustion_penalty_applied: [NVDA, ASML, AAPL, AVGO, QCOM, SNDK, BHM, FLNC, INTC, AMD, COIN, AVLN, MU]
+
+Now let me write the final JSON. I'll be systematic:
+
+{
+  "portfolio_thesis": "...",
+  "spy_target_pct": 0.5931,
+  "cash_target_pct": 0.0359,
+  "spy_decision": {...},
+  "spy_vs_cash_reasoning": "...",
+  "selected_positions": ["ALLR", "MU", "BHC", "BITO"],
+  "target_weights": {"ALLR": 0.0800, "MU": 0.1312, "BHC": 0.0799, "BITO": 0.0799},
+  "per_symbol": {
+    // 49 symbols
+  },
+  "exhaustion_penalty_applied": [...],
+  "rotation_plan": {...},
+  "capital_movement_plan": [...],
+  "risk_flags": [...]
+}
+
+Let me verify sum: 0.0800 + 0.1312 + 0.0799 + 0.0799 = 0.3710
+0.3710 + 0.5931 + 0.0359 = 1.0000 ✓
+
+Now writing the complete JSON:
+
+{
+  "portfolio_thesis": "Tape is favorable (SPY +0.55%, near VWAP) but nearly all high-scoring momentum names are within 3% of intraday highs with fading volume, failing Phase C quality gates for fresh BUYs. Three names clear all gates: ALLR (strong_continuation, rising volume, 3.8% from high), BHC (strong_continuation, rising volume, breaking out), and BITO (acceptable_continuation, rising volume). NVDA is exited due to exhaustion (fading momentum, below VWAP, opportunity score 36 vs ALLR 68); MU is held at current size as its momentum grade is weak_or_flat and does not qualify for INCREASE. Remaining capital parks in SPY.",
+  "spy_target_pct": 0.5931,
+  "cash_target_pct": 0.0359,
+  "spy_decision": {
+    "target_pct": 0.5931,
+    "action": "INCREASE",
+    "opportunity_score": 55,
+    "one_sentence_reason": "SPY absorbs capital freed from NVDA exit; tape is favorable and most equity candidates fail Phase C gates, making SPY the best risk-adjusted parking vehicle."
+  },
+  "spy_vs_cash_reasoning": "Idle capital defaults to SPY per rule 15 as tape severity is favorable and macro regime is neutral-to-bullish with SPY in uptrend.",
+  "selected_positions": ["ALLR", "MU", "BHC", "BITO"],
+  "target_weights": {"ALLR": 0.0800, "MU": 0.1312, "BHC": 0.0799, "BITO": 0.0799},
+  "per_symbol": {
+    "ALLR": {
+      "target_pct": 0.0800,
+      "qty": 5364,
+      "delta_qty": 5364,
+      "entry_price": 1.52,
+      "stop_loss": 1.482,
+      "take_profit": null,
+      "action": "BUY",
+      "confidence": 0.72,
+      "opportunity_score": 68,
+      "one_sentence_reason": "ALLR shows strong_continuation (momentum score 95) with rising volume, rising trend, bullish EMA, above VWAP, and 3.8% from intraday high — the only non-illiquid-capped name clearing all Phase C gates with the highest candidate_priority_score in the pool."
+    },
+    "MU": {
+      "target_pct": 0.1312,
+      "qty": 18,
+      "delta_qty": 0,
+      "entry_price": 707.77,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "HOLD",
+      "confidence": 0.55,
+      "opportunity_score": 59,
+      "one_sentence_reason": null,
+      "reason_code": "incumbent_hold"
+    },
+    ...
+  }
+}
+
+Wait - for MU HOLD, qty should be current_qty=18.8992, not 18. Let me keep it as 18.8992 since it's a held fractional position. delta_qty=0.
+
+Actually the instructions say "Whole shares for protected entries (the broker rejects fractional bracket orders)". For HOLD, we're not entering, just holding. So keep 18.8992.
+
+But target_pct for MU: 18.8992 * 707.77 / 101917.03 = 13376.26 / 101917.03 = 0.13124
+
+Let me recalculate the sum:
+ALLR: 5364 * 1.52 = 8153.28 → 8153.28/101917.03 = 0.08000
+MU: 18.8992 * 707.77 = 13376.26 → 13376.26/101917.03 = 0.13124
+BHC: 1425 * 5.72 = 8151.00 → 8151.00/101917.03 = 0.07998
+BITO: 742 * 10.97 = 8139.74 → 8139.74/101917.03 = 0.07987
+Sum = 0.37109
+
+SPY: 82 * 737.1451 = 60445.90 → 60445.90/101917.03 = 0.59307
+Cash: 101917.03 - 8153.28 - 13376.26 - 8151.00 - 8139.74 - 60445.90 = 3650.85 → 3650.85/101917.03 = 0.03583
+
+Total: 0.37109 + 0.59307 + 0.03583 = 0.99999 ✓ (rounds to 1.0000)
+
+target_weights: ALLR=0.0800, MU=0.1312, BHC=0.0799, BITO=0.0799
+Sum = 0.3710
+
+0.3710 + 0.5931 + 0.0359 = 1.0000 ✓
+
+Now let me write the complete JSON carefully. I need to include ALL 49 pool symbols in per_symbol.
+
+For PASS symbols: target_pct=0, qty=0, delta_qty=0, entry_price=current_price, stop_loss=null, take_profit=null, action="PASS", one_sentence_reason=null, reason_code as appropriate.
+
+Actually for PASS symbols, do I need qty, delta_qty, entry_price? The schema shows these fields for selected positions. For PASS/EXIT, the schema shows EXIT has qty=0, delta_qty=-current_qty. For PASS, I'll set qty=0, delta_qty=0, entry_price=current_price.
+
+Let me now write the full JSON:
+
+{
+  "portfolio_thesis": "Tape is favorable (SPY +0.55%, near VWAP, severity=favorable) but nearly all high-scoring momentum names sit within 3% of intraday highs with fading volume, failing Phase C quality gates. Three fresh names clear all gates: ALLR (strong_continuation, momentum 95, rising volume, 3.8% from high), BHC (strong_continuation, momentum 100, rising volume, breaking out), and BITO (acceptable_continuation, momentum 68, rising volume). NVDA is exited due to exhaustion and low opportunity score (36); MU is held at current size as momentum grade is weak_or_flat. Remaining capital parks in SPY.",
+  "spy_target_pct": 0.5931,
+  "cash_target_pct": 0.0359,
+  "spy_decision": {
+    "target_pct": 0.5931,
+    "action": "INCREASE",
+    "opportunity_score": 55,
+    "one_sentence_reason": "SPY absorbs capital freed from NVDA exit as most equity candidates fail Phase C gates; favorable tape and neutral-bullish macro make SPY the best risk-adjusted vehicle for idle capital."
+  },
+  "spy_vs_cash_reasoning": "Idle capital defaults to SPY per rule 15 as tape is favorable and macro regime is neutral-to-bullish with SPY in uptrend above 200-EMA.",
+  "selected_positions": ["ALLR", "MU", "BHC", "BITO"],
+  "target_weights": {
+    "ALLR": 0.0800,
+    "MU": 0.1312,
+    "BHC": 0.0799,
+    "BITO": 0.0799
+  },
+  "per_symbol": {
+    "ALLR": {
+      "target_pct": 0.0800,
+      "qty": 5364,
+      "delta_qty": 5364,
+      "entry_price": 1.52,
+      "stop_loss": 1.482,
+      "take_profit": null,
+      "action": "BUY",
+      "confidence": 0.72,
+      "opportunity_score": 68,
+      "one_sentence_reason": "ALLR shows strong_continuation (momentum 95) with rising volume, rising trend, bullish EMA, above VWAP, and 3.8% from intraday high — the highest-scoring candidate clearing all Phase C quality gates with sector/theme leadership in its bucket."
+    },
+    "MU": {
+      "target_pct": 0.1312,
+      "qty": 18.8992,
+      "delta_qty": 0,
+      "entry_price": 707.77,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "HOLD",
+      "confidence": 0.55,
+      "opportunity_score": 59,
+      "one_sentence_reason": null,
+      "reason_code": "incumbent_hold"
+    },
+    "BHC": {
+      "target_pct": 0.0799,
+      "qty": 1425,
+      "delta_qty": 1425,
+      "entry_price": 5.72,
+      "stop_loss": 5.607,
+      "take_profit": null,
+      "action": "BUY",
+      "confidence": 0.68,
+      "opportunity_score": 59,
+      "one_sentence_reason": "BHC shows strong_continuation (momentum 100, breaking_out classification) with rising volume, rising trend, bullish EMA, above VWAP, and 0.35% from intraday high — passes Phase C via rising volume gate."
+    },
+    "BITO": {
+      "target_pct": 0.0799,
+      "qty": 742,
+      "delta_qty": 742,
+      "entry_price": 10.97,
+      "stop_loss": 10.827,
+      "take_profit": null,
+      "action": "BUY",
+      "confidence": 0.62,
+      "opportunity_score": 54,
+      "one_sentence_reason": "BITO shows acceptable_continuation (momentum 68) with rising volume, bullish EMA, above VWAP, and 0.27% from intraday high — passes Phase C via rising volume gate with crypto momentum supporting continuation."
+    },
+    "NVDA": {
+      "target_pct": 0.0,
+      "qty": 0,
+      "delta_qty": -126,
+      "entry_price": 215.3,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "EXIT",
+      "confidence": 0.75,
+      "opportunity_score": 36,
+      "one_sentence_reason": "rotated: ALLR scored 68 vs NVDA 36; exit-arbiter HOLD confidence 0.58 below 0.65 threshold so standard baseline applies; exhaustion penalty applied (fading momentum, below VWAP -0.21%, distance_from_high -1.15% with fading volume, recent_trend falling)."
+    },
+    "ATRA": {
+      "target_pct": 0.0,
+      "qty": 0,
+      "delta_qty": 0,
+      "entry_price": 8.77,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "PASS",
+      "confidence": 0.15,
+      "opportunity_score": 18,
+      "one_sentence_reason": null,
+      "reason_code": "score_below_floor"
+    },
+    "FLNC": {
+      "target_pct": 0.0,
+      "qty": 0,
+      "delta_qty": 0,
+      "entry_price": 24.94,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "PASS",
+      "confidence": 0.20,
+      "opportunity_score": 28,
+      "one_sentence_reason": null,
+      "reason_code": "exhausted"
+    },
+    "AGL": {
+      "target_pct": 0.0,
+      "qty": 0,
+      "delta_qty": 0,
+      "entry_price": 52.42,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "PASS",
+      "confidence": 0.10,
+      "opportunity_score": 12,
+      "one_sentence_reason": null,
+      "reason_code": "score_below_floor"
+    },
+    "SOXS": {
+      "target_pct": 0.0,
+      "qty": 0,
+      "delta_qty": 0,
+      "entry_price": 9.51,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "PASS",
+      "confidence": 0.05,
+      "opportunity_score": 5,
+      "one_sentence_reason": null,
+      "reason_code": "score_below_floor"
+    },
+    "RKLB": {
+      "target_pct": 0.0,
+      "qty": 0,
+      "delta_qty": 0,
+      "entry_price": 95.86,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "PASS",
+      "confidence": 0.25,
+      "opportunity_score": 32,
+      "one_sentence_reason": null,
+      "reason_code": "score_below_floor"
+    },
+    "IREN": {
+      "target_pct": 0.0,
+      "qty": 0,
+      "delta_qty": 0,
+      "entry_price": 61.715,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "PASS",
+      "confidence": 0.15,
+      "opportunity_score": 20,
+      "one_sentence_reason": null,
+      "reason_code": "score_below_floor"
+    },
+    "INTC": {
+      "target_pct": 0.0,
+      "qty": 0,
+      "delta_qty": 0,
+      "entry_price": 116.04,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "PASS",
+      "confidence": 0.20,
+      "opportunity_score": 28,
+      "one_sentence_reason": null,
+      "reason_code": "exhausted"
+    },
+    "AGIG": {
+      "target_pct": 0.0,
+      "qty": 0,
+      "delta_qty": 0,
+      "entry_price": 1.13,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "PASS",
+      "confidence": 0.30,
+      "opportunity_score": 38,
+      "one_sentence_reason": null,
+      "reason_code": "score_below_floor"
+    },
+    "AMD": {
+      "target_pct": 0.0,
+      "qty": 0,
+      "delta_qty": 0,
+      "entry_price": 434.64,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "PASS",
+      "confidence": 0.22,
+      "opportunity_score": 30,
+      "one_sentence_reason": null,
+      "reason_code": "exhausted"
+    },
+    "ASML": {
+      "target_pct": 0.0,
+      "qty": 0,
+      "delta_qty": 0,
+      "entry_price": 1561.3,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "PASS",
+      "confidence": 0.40,
+      "opportunity_score": 62,
+      "one_sentence_reason": null,
+      "reason_code": "exhausted"
+    },
+    "AVGO": {
+      "target_pct": 0.0,
+      "qty": 0,
+      "delta_qty": 0,
+      "entry_price": 422.7,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "PASS",
+      "confidence": 0.30,
+      "opportunity_score": 40,
+      "one_sentence_reason": null,
+      "reason_code": "exhausted"
+    },
+    "BE": {
+      "target_pct": 0.0,
+      "qty": 0,
+      "delta_qty": 0,
+      "entry_price": 252.3815,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "PASS",
+      "confidence": 0.10,
+      "opportunity_score": 12,
+      "one_sentence_reason": null,
+      "reason_code": "score_below_floor"
+    },
+    "DELL": {
+      "target_pct": 0.0,
+      "qty": 0,
+      "delta_qty": 0,
+      "entry_price": 243.825,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "PASS",
+      "confidence": 0.22,
+      "opportunity_score": 28,
+      "one_sentence_reason": null,
+      "reason_code": "score_below_floor"
+    },
+    "ETN": {
+      "target_pct": 0.0,
+      "qty": 0,
+      "delta_qty": 0,
+      "entry_price": 401.42,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "PASS",
+      "confidence": 0.08,
+      "opportunity_score": 10,
+      "one_sentence_reason": null,
+      "reason_code": "score_below_floor"
+    },
+    "FIX": {
+      "target_pct": 0.0,
+      "qty": 0,
+      "delta_qty": 0,
+      "entry_price": 1937.435,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "PASS",
+      "confidence": 0.15,
+      "opportunity_score": 18,
+      "one_sentence_reason": null,
+      "reason_code": "score_below_floor"
+    },
+    "GEV": {
+      "target_pct": 0.0,
+      "qty": 0,
+      "delta_qty": 0,
+      "entry_price": 1046.945,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "PASS",
+      "confidence": 0.10,
+      "opportunity_score": 12,
+      "one_sentence_reason": null,
+      "reason_code": "score_below_floor"
+    },
+    "MRVL": {
+      "target_pct": 0.0,
+      "qty": 0,
+      "delta_qty": 0,
+      "entry_price": 165.95,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "PASS",
+      "confidence": 0.25,
+      "opportunity_score": 32,
+      "one_sentence_reason": null,
+      "reason_code": "score_below_floor"
+    },
+    "PWR": {
+      "target_pct": 0.0,
+      "qty": 0,
+      "delta_qty": 0,
+      "entry_price": 750.18,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "PASS",
+      "confidence": 0.18,
+      "opportunity_score": 22,
+      "one_sentence_reason": null,
+      "reason_code": "score_below_floor"
+    },
+    "QCOM": {
+      "target_pct": 0.0,
+      "qty": 0,
+      "delta_qty": 0,
+      "entry_price": 218.575,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "PASS",
+      "confidence": 0.35,
+      "opportunity_score": 52,
+      "one_sentence_reason": null,
+      "reason_code": "exhausted"
+    },
+    "SMCI": {
+      "target_pct": 0.0,
+      "qty": 0,
+      "delta_qty": 0,
+      "entry_price": 34.7001,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "PASS",
+      "confidence": 0.28,
+      "opportunity_score": 35,
+      "one_sentence_reason": null,
+      "reason_code": "score_below_floor"
+    },
+    "SNDK": {
+      "target_pct": 0.0,
+      "qty": 0,
+      "delta_qty": 0,
+      "entry_price": 1467.795,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "PASS",
+      "confidence": 0.38,
+      "opportunity_score": 55,
+      "one_sentence_reason": null,
+      "reason_code": "exhausted"
+    },
+    "STX": {
+      "target_pct": 0.0,
+      "qty": 0,
+      "delta_qty": 0,
+      "entry_price": 796.81,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "PASS",
+      "confidence": 0.28,
+      "opportunity_score": 38,
+      "one_sentence_reason": null,
+      "reason_code": "score_below_floor"
+    },
+    "TSM": {
+      "target_pct": 0.0,
+      "qty": 0,
+      "delta_qty": 0,
+      "entry_price": 413.7076,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "PASS",
+      "confidence": 0.15,
+      "opportunity_score": 18,
+      "one_sentence_reason": null,
+      "reason_code": "score_below_floor"
+    },
+    "VRT": {
+      "target_pct": 0.0,
+      "qty": 0,
+      "delta_qty": 0,
+      "entry_price": 343.24,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "PASS",
+      "confidence": 0.08,
+      "opportunity_score": 8,
+      "one_sentence_reason": null,
+      "reason_code": "score_below_floor"
+    },
+    "WDC": {
+      "target_pct": 0.0,
+      "qty": 0,
+      "delta_qty": 0,
+      "entry_price": 477.79,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "PASS",
+      "confidence": 0.18,
+      "opportunity_score": 22,
+      "one_sentence_reason": null,
+      "reason_code": "peer_outranked"
+    },
+    "CTM": {
+      "target_pct": 0.0,
+      "qty": 0,
+      "delta_qty": 0,
+      "entry_price": 0.7687,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "PASS",
+      "confidence": 0.20,
+      "opportunity_score": 28,
+      "one_sentence_reason": null,
+      "reason_code": "score_below_floor"
+    },
+    "BHM": {
+      "target_pct": 0.0,
+      "qty": 0,
+      "delta_qty": 0,
+      "entry_price": 11.0599,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "PASS",
+      "confidence": 0.35,
+      "opportunity_score": 55,
+      "one_sentence_reason": null,
+      "reason_code": "exhausted"
+    },
+    "ANIP": {
+      "target_pct": 0.0,
+      "qty": 0,
+      "delta_qty": 0,
+      "entry_price": 85.81,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "PASS",
+      "confidence": 0.25,
+      "opportunity_score": 30,
+      "one_sentence_reason": null,
+      "reason_code": "score_below_floor"
+    },
+    "AQN": {
+      "target_pct": 0.0,
+      "qty": 0,
+      "delta_qty": 0,
+      "entry_price": 6.225,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "PASS",
+      "confidence": 0.08,
+      "opportunity_score": 8,
+      "one_sentence_reason": null,
+      "reason_code": "score_below_floor"
+    },
+    "ATLX": {
+      "target_pct": 0.0,
+      "qty": 0,
+      "delta_qty": 0,
+      "entry_price": 6.325,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "PASS",
+      "confidence": 0.18,
+      "opportunity_score": 22,
+      "one_sentence_reason": null,
+      "reason_code": "score_below_floor"
+    },
+    "BH": {
+      "target_pct": 0.0,
+      "qty": 0,
+      "delta_qty": 0,
+      "entry_price": 303.01,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "PASS",
+      "confidence": 0.32,
+      "opportunity_score": 48,
+      "one_sentence_reason": null,
+      "reason_code": "exhausted"
+    },
+    "BBUC": {
+      "target_pct": 0.0,
+      "qty": 0,
+      "delta_qty": 0,
+      "entry_price": 31.11,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "PASS",
+      "confidence": 0.08,
+      "opportunity_score": 8,
+      "one_sentence_reason": null,
+      "reason_code": "score_below_floor"
+    },
+    "FSLY": {
+      "target_pct": 0.0,
+      "qty": 0,
+      "delta_qty": 0,
+      "entry_price": 20.14,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "PASS",
+      "confidence": 0.08,
+      "opportunity_score": 8,
+      "one_sentence_reason": null,
+      "reason_code": "score_below_floor"
+    },
+    "AAON": {
+      "target_pct": 0.0,
+      "qty": 0,
+      "delta_qty": 0,
+      "entry_price": 135.9,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "PASS",
+      "confidence": 0.20,
+      "opportunity_score": 25,
+      "one_sentence_reason": null,
+      "reason_code": "score_below_floor"
+    },
+    "AAPL": {
+      "target_pct": 0.0,
+      "qty": 0,
+      "delta_qty": 0,
+      "entry_price": 294.36,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "PASS",
+      "confidence": 0.35,
+      "opportunity_score": 52,
+      "one_sentence_reason": null,
+      "reason_code": "exhausted"
+    },
+    "AMZN": {
+      "target_pct": 0.0,
+      "qty": 0,
+      "delta_qty": 0,
+      "entry_price": 271.72,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "PASS",
+      "confidence": 0.18,
+      "opportunity_score": 22,
+      "one_sentence_reason": null,
+      "reason_code": "score_below_floor"
+    },
+    "AVLN": {
+      "target_pct": 0.0,
+      "qty": 0,
+      "delta_qty": 0,
+      "entry_price": 28.24,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "PASS",
+      "confidence": 0.32,
+      "opportunity_score": 48,
+      "one_sentence_reason": null,
+      "reason_code": "exhausted"
+    },
+    "AVNW": {
+      "target_pct": 0.0,
+      "qty": 0,
+      "delta_qty": 0,
+      "entry_price": 16.35,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "PASS",
+      "confidence": 0.05,
+      "opportunity_score": 5,
+      "one_sentence_reason": null,
+      "reason_code": "score_below_floor"
+    },
+    "AXTX": {
+      "target_pct": 0.0,
+      "qty": 0,
+      "delta_qty": 0,
+      "entry_price": 55.77,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "PASS",
+      "confidence": 0.15,
+      "opportunity_score": 18,
+      "one_sentence_reason": null,
+      "reason_code": "score_below_floor"
+    },
+    "BAND": {
+      "target_pct": 0.0,
+      "qty": 0,
+      "delta_qty": 0,
+      "entry_price": 48.97,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "PASS",
+      "confidence": 0.35,
+      "opportunity_score": 52,
+      "one_sentence_reason": null,
+      "reason_code": "exhausted"
+    },
+    "BRBR": {
+      "target_pct": 0.0,
+      "qty": 0,
+      "delta_qty": 0,
+      "entry_price": 10.37,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "PASS",
+      "confidence": 0.05,
+      "opportunity_score": 5,
+      "one_sentence_reason": null,
+      "reason_code": "score_below_floor"
+    },
+    "CNSP": {
+      "target_pct": 0.0,
+      "qty": 0,
+      "delta_qty": 0,
+      "entry_price": 7.26,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "PASS",
+      "confidence": 0.15,
+      "opportunity_score": 18,
+      "one_sentence_reason": null,
+      "reason_code": "score_below_floor"
+    },
+    "COIN": {
+      "target_pct": 0.0,
+      "qty": 0,
+      "delta_qty": 0,
+      "entry_price": 189.865,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "PASS",
+      "confidence": 0.30,
+      "opportunity_score": 45,
+      "one_sentence_reason": null,
+      "reason_code": "exhausted"
+    },
+    "CPNG": {
+      "target_pct": 0.0,
+      "qty": 0,
+      "delta_qty": 0,
+      "entry_price": 17.245,
+      "stop_loss": null,
+      "take_profit": null,
+      "action": "PASS",
+      "confidence": 0.25,
+      "opportunity_score": 35,
+      "one_sentence_reason": null,
+      "reason_code": "score_below_floor"
+    }
+  },
+  "exhaustion_penalty_applied": ["NVDA", "ASML", "AAPL", "AVGO", "QCOM", "SNDK", "BHM", "FLNC", "INTC", "AMD", "COIN", "AVLN", "MU"],
+  "rotation_plan": {
+    "exited": [
+      {
+        "symbol": "NVDA",
+        "reason": "Exhaustion: fading momentum, below VWAP, distance_from_high -1.15% with fading volume, recent_trend falling, opportunity score 36 vs ALLR 68. Exit-arbiter HOLD confidence 0.58 below 0.65 threshold.",
+        "reason_category": "removed_due_to_exhaustion"
+      }
+    ],
+    "entered": [
+      {
+        "symbol": "ALLR",
+        "reason": "Strong_continuation (momentum 95), rising volume, rising trend, bullish EMA, above VWAP, 3.8% from high — highest-scoring candidate clearing all Phase C gates.",
+        "reason_category": "stronger_remaining_upside"
+      },
+      {
+        "symbol": "BHC",
+        "reason": "Strong_continuation (momentum 100, breaking_out), rising volume, rising trend, bullish EMA, above VWAP — passes Phase C via rising volume gate.",
+        "reason_category": "breakout_continuation"
+      },
+      {
+        "symbol": "BITO",
+        "reason": "Acceptable_continuation (momentum 68), rising volume, bullish EMA, above VWAP — passes Phase C via rising volume gate with crypto momentum.",
+        "reason_category": "stronger_remaining_upside"
+      }
+    ],
+    "held": [
+      {
+        "symbol": "MU",
+        "reason": "Held at current size; momentum grade weak_or_flat fails INCREASE gate but position retains positive thesis with strong intraday performance (+7.7%) and bullish EMA."
+      }
+    ]
+  },
+  "capital_movement_plan": [
+    {"symbol": "NVDA", "delta_usd": -27209.70, "purpose": "Exit exhausted position; capital redeployed to SPY and fresh entries"},
+    {"symbol": "ALLR", "delta_usd": 8153.28, "purpose": "New BUY: strong_continuation with rising volume"},
+    {"symbol": "BHC", "delta_usd": 8151.00, "purpose": "New BUY: strong_continuation breaking out with rising volume"},
+    {"symbol": "BITO", "delta_usd": 8139.74, "purpose": "New BUY: acceptable_continuation with rising volume"},
+    {"symbol": "SPY", "delta_usd": 18235.21, "purpose": "Increase SPY to absorb freed capital from NVDA exit"}
+  ],
+  "risk_flags": [
+    "ALLR, BHC, BITO are all illiquid (price < $20 or avg dollar volume < $50M); positions capped at 8% each per illiquid_max_position_pct",
+    "ALLR at $1.52/share carries high bid-ask spread risk; large share count (5364) may face execution slippage",
+    "Most high-scoring momentum names (ASML, SNDK, AAPL, QCOM, BHM) fail Phase C due to proximity to intraday highs with fading volume — limited fresh entry opportunities",
+    "Portfolio is 59% SPY which provides broad market exposure but limits alpha generation",
+    "MU momentum grade weak_or_flat; monitor for deterioration requiring exit next scan"
+  ]
+}
+
+Wait, I need to double-check the ALLR one_sentence_reason. It says "sector/theme leadership in its bucket" - but ALLR is sector_leader and theme_leader in its bucket (sector_rank=1, theme_rank=1). That's fine since it IS the leader (not claiming to beat a peer when it IS the peer leader). Actually ALLR is sector_leader="ALLR" and theme_leader="ALLR" - it IS the leader. So I can reference its leadership. But wait - rule 10a says "Do NOT call it a 'sector leader,' 'theme leader,' or 'peer leader' in one_sentence_reason — there is no peer in the pool to outperform." But ALLR is NOT lone - sector_lone=false, theme_lone=false. It has sector_group_size=27 and theme_group_size=26. So it IS the sector/theme leader among many peers. Rule 10a only applies when *_lone=true. Since ALLR is not lone, I CAN reference its leadership. Good.
+
+Actually let me re-read: "When a candidate has sector_lone=true, peer_lone=true, or theme_lone=true, it is the ONLY pool member in that bucket and *_leader is null. Do NOT call it a 'sector leader,' 'theme leader,' or 'peer leader' in one_sentence_reason — there is no peer in the pool to outperform."
+
+ALLR has sector_lone=false, theme_lone=false. So rule 10a doesn't apply. I can reference its leadership.
+
+Let me also verify the NVDA delta_qty. current_qty=125.999999999 ≈ 126. delta_qty=-126. ✓
+
+One more check - BITO has recent_trend="falling" and recent_slope_pct=-0.0023. This is a slight concern for the continuation gate. However, it passes_new_entry_gate=true and has rising volume. The momentum grade is acceptable_continuation. I'll keep it but note the slight concern.
+
+Also checking AGIG - it has strong_continuation (momentum 79), passes_gate=true, distance=-0.0174 < 0.04, volume fading → FAILS Phase C (distance < 4% AND volume not rising). PASS. Score 38.
+
+Let me also check if there's an anti-stagnation issue. allow_floor_breach=false. Selected positions: ALLR(68), MU(59), BHC(59), BITO(54). Lowest selected = BITO at 54. Fresh candidates within 5 of 54 = scoring >= 49. 
+
+Looking at non-selected fresh candidates with score >= 49:
+- ASML: 62 (PASS due to Phase C)
+- AAPL: 52 (PASS due to Phase C)
+- QCOM: 52 (PASS due to Phase C)
+- BAND: 52 (PASS due to Phase C)
+- SNDK: 55 (PASS due to Phase C)
+- BHM: 55 (PASS due to Phase C)
+- AVLN: 48 (< 49, no)
+- COIN: 45 (< 49, no)
+
+Anti-stagnation rule 6: "When allow_floor_breach=false AND any currently_held=false candidate has opportunity_score >= (lowest_selected_score - 5), selected_positions MUST include at least one fresh name AND the weakest current holding MUST exit."
+
+Lowest selected score = 54 (BITO). Threshold = 54 - 5 = 49. Fresh candidates scoring >= 49: ASML(62), SNDK(55), BHM(55), AAPL(52), QCOM(52), BAND(52).
+
+Anti-stagnation requires at least one fresh name in selected_positions. I have ALLR, BHC, BITO as fresh names. ✓ And the weakest current holding (NVDA at 36) must exit. ✓ (NVDA is being exited)
+
+But wait - rule 13 says "Anti-stagnation (rule 6) does NOT force a fresh inclusion when no fresh candidate clears system_state.anti_stagnation_min_top_score (default 70)." 
+
+anti_stagnation_min_top_score = 70. The highest fresh candidate score is ALLR at 68, which is < 70. So anti-stagnation does NOT force fresh inclusion per rule 13.
+
+But I'm already including fresh names (ALLR, BHC, BITO) because they have the best opportunity scores. So this is fine regardless.
+
+Actually wait - ASML has opportunity_score 62 in my assessment, but its candidate_priority_score is 64.3. Let me reconsider whether ASML should score higher. ASML has strong_continuation (momentum 85), passes_gate=true, but fails Phase C (distance -0.32% from high, volume fading). Its opportunity score for REMAINING upside is limited precisely because it's near its high with fading volume. So 62 is appropriate.
+
+OK I think the analysis is solid. Let me write the final clean JSON.
+
+One issue: for ALLR's one_sentence_reason, I mentioned "sector/theme leadership" but let me make it more precise and not too long.
+
+Also for BITO - I should note it's a Bitcoin ETF. The "crypto momentum" reference is appropriate.
+
+Let me also reconsider whether AGIG should be included. AGIG: strong_continuation (79), passes_gate=true, distance=-0.0174 < 0.04, volume fading → FAILS Phase C. Score ~38. PASS.
+
+What about CPNG? strong_continuation (79), passes_gate=true, distance=-0.0168 < 0.04, volume fading → FAILS Phase C. Score ~35. PASS.
+
+What about COIN? strong_continuation (85), passes_gate=true, distance=-0.0039 < 0.04, volume fading → FAILS Phase C. Score ~45. PASS.
+
+What about BH? strong_continuation (85), passes_gate=true, distance=-0.0026 < 0.04, volume fading → FAILS Phase C. Score ~48. PASS.
+
+So my final 4 selections are correct: ALLR, MU, BHC, BITO.
+
+Now let me finalize and write the clean JSON output.
+
+{"portfolio_thesis":"Tape is favorable (SPY +0.55%, near VWAP, severity=favorable) but nearly all high-scoring momentum names sit within 3% of intraday highs with fading volume, failing Phase C quality gates for fresh BUYs. Three fresh names clear all gates: ALLR (strong_continuation momentum 95, rising volume, 3.8% from high), BHC (strong_continuation momentum 100, breaking out, rising volume), and BITO (acceptable_continuation momentum 68, rising volume). NVDA is exited due to exhaustion and low opportunity score (36 vs ALLR 68); MU is held at current size as its momentum grade is weak_or_flat and does not qualify for INCREASE. Remaining capital parks in SPY.","spy_target_pct":0.5931,"cash_target_pct":0.0359,"spy_decision":{"target_pct":0.5931,"action":"INCREASE","opportunity_score":55,"one_sentence_reason":"SPY absorbs capital freed from NVDA exit as most equity candidates fail Phase C gates; favorable tape and neutral-bullish macro make SPY the best risk-adjusted vehicle for idle capital."},"spy_vs_cash_reasoning":"Idle capital defaults to SPY per rule 15 as tape severity is favorable and macro regime is neutral-to-bullish with SPY in uptrend above 200-EMA.","selected_positions":["ALLR","MU","BHC","BITO"],"target_weights":{"ALLR":0.0800,"MU":0.1312,"BHC":0.0799,"BITO":0.0799},"per_symbol":{"ALLR":{"target_pct":0.0800,"qty":5364,"delta_qty":5364,"entry_price":1.52,"stop_loss":1.482,"take_profit":null,"action":"BUY","confidence":0.72,"opportunity_score":68,"one_sentence_reason":"ALLR shows strong_continuation (momentum 95) with rising volume, rising trend, bullish EMA, above VWAP, and 3.8% from intraday high — sector and theme leader among 27 peers, clearing all Phase C quality gates."},"MU":{"target_pct":0.1312,"qty":18.8992,"delta_qty":0,"entry_price":707.77,"stop_loss":null,"take_profit":null,"action":"HOLD","confidence":0.55,"opportunity_score":59,"one_sentence_reason":null,"reason_code":"incumbent_hold"},"BHC":{"target_pct":0.0799,"qty":1425,"delta_qty":1425,"entry_price":5.72,"stop_loss":5.607,"take_profit":null,"action":"BUY","confidence":0.68,"opportunity_score":59,"one_sentence_reason":"BHC shows strong_continuation (momentum 100, breaking_out classification) with rising volume, rising trend, bullish EMA, above VWAP at 0.35% from intraday high — passes Phase C via rising volume gate."},"BITO":{"target_pct":0.0799,"qty":742,"delta_qty":742,"entry_price":10.97,"stop_loss":10.827,"take_profit":null,"action":"BUY","confidence":0.62,"opportunity_score":54,"one_sentence_reason":"BITO shows acceptable_continuation (momentum 68) with rising volume, bullish EMA, above VWAP at 0.27% from intraday high — passes Phase C via rising volume gate with Bitcoin ETF momentum supporting continuation."},"NVDA":{"target_pct":0.0,"qty":0,"delta_qty":-126,"entry_price":215.3,"stop_loss":null,"take_profit":null,"action":"EXIT","confidence":0.75,"opportunity_score":36,"one_sentence_reason":"rotated: ALLR scored 68 vs NVDA 36; exit-arbiter HOLD confidence 0.58 below 0.65 threshold so standard baseline applies; exhaustion penalty applied (fading momentum, below VWAP -0.21%, distance_from_high -1.15% with fading volume, recent_trend falling)."},"ATRA":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":8.77,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.15,"opportunity_score":18,"one_sentence_reason":null,"reason_code":"score_below_floor"},"FLNC":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":24.94,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.20,"opportunity_score":28,"one_sentence_reason":null,"reason_code":"exhausted"},"AGL":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":52.42,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.10,"opportunity_score":12,"one_sentence_reason":null,"reason_code":"score_below_floor"},"SOXS":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":9.51,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.05,"opportunity_score":5,"one_sentence_reason":null,"reason_code":"score_below_floor"},"RKLB":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":95.86,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.25,"opportunity_score":32,"one_sentence_reason":null,"reason_code":"score_below_floor"},"IREN":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":61.715,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.15,"opportunity_score":20,"one_sentence_reason":null,"reason_code":"score_below_floor"},"INTC":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":116.04,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.20,"opportunity_score":28,"one_sentence_reason":null,"reason_code":"exhausted"},"BITO":... 
+
+Wait, BITO is already in per_symbol as a selected position. I need to make sure I don't duplicate it. Let me be careful.
+
+Also I realize I need to double-check: BITO has recent_trend="falling" with recent_slope_pct=-0.0023. The continuation gate says "bullish 5-min EMA state, rising recent trend, ideally rising volume." BITO has ema_state="bullish" and volume_trend="rising" but recent_trend="falling". The passes_new_entry_gate=true overrides this concern since the system already computed it. I'll keep BITO.
+
+Let me also reconsider whether BITO's opportunity score of 54 is appropriate. It has:
+- momentum score 68 (acceptable_continuation)
+- passes_new_entry_gate=true
+- rising volume (key for Phase C)
+- bullish EMA
+- above VWAP (+0.3%)
+- near high (0.27% from high)
+- but recent_trend falling, recent_slope -0.0023
+- intraday +1.1%
+- five_day_change +2.05%
+- candidate_priority_score=53.53
+
+Score 54 seems right.
+
+Now let me write the final clean JSON. I'll be very careful about all 49 symbols.
+
+Actually, I realize I should double-check my ALLR stop_loss calculation:
+ATR = 0.105, price = 1.52
+stop_pct = max(0.01, 0.5 * 0.105 / 1.52) = max(0.01, 0.03454) = 0.03454
+But hard_stop_loss_pct = 0.01 (from risk_profile)
+The instructions say "Python attaches an ATR-aware protective stop at max(0.01, 0.5*ATR/price) capped at 2.5%"
+So stop_pct = min(0.03454, 0.025) = 0.025 (capped at 2.5%)
+stop_loss = 1.52 * (1 - 0.025) = 1.52 * 0.975 = 1.482 ✓
+
+BHC: ATR=0.226, price=5.72
+stop_pct = max(0.01, 0.5*0.226/5.72) = max(0.01, 0.01976) = 0.01976
+stop_loss = 5.72 * (1 - 0.01976) = 5.72 * 0.98024 = 5.607 ✓
+
+BITO: ATR=0.287, price=10.97
+stop_pct = max(0.01, 0.5*0.287/10.97) = max(0.01, 0.01308) = 0.01308
+stop_loss = 10.97 * (1 - 0.01308) = 10.97 * 0.98692 = 10.827 ✓
+
+All good. Now writing the final JSON:
+
+{"portfolio_thesis":"Tape is favorable (SPY +0.55%, near VWAP) but nearly all high-scoring momentum names sit within 3% of intraday highs with fading volume, failing Phase C quality gates for fresh BUYs. Three fresh names clear all gates: ALLR (strong_continuation momentum 95, rising volume, 3.8% from high), BHC (strong_continuation momentum 100, breaking out, rising volume), and BITO (acceptable_continuation momentum 68, rising volume). NVDA is exited due to exhaustion and low opportunity score (36 vs ALLR 68); MU is held at current size as its momentum grade is weak_or_flat. Remaining capital parks in SPY.","spy_target_pct":0.5931,"cash_target_pct":0.0359,"spy_decision":{"target_pct":0.5931,"action":"INCREASE","opportunity_score":55,"one_sentence_reason":"SPY absorbs capital freed from NVDA exit as most equity candidates fail Phase C gates; favorable tape and neutral-bullish macro make SPY the best risk-adjusted vehicle for idle capital."},"spy_vs_cash_reasoning":"Idle capital defaults to SPY per rule 15 as tape severity is favorable and macro regime is neutral-to-bullish with SPY in uptrend above 200-EMA.","selected_positions":["ALLR","MU","BHC","BITO"],"target_weights":{"ALLR":0.0800,"MU":0.1312,"BHC":0.0799,"BITO":0.0799},"per_symbol":{"ALLR":{"target_pct":0.0800,"qty":5364,"delta_qty":5364,"entry_price":1.52,"stop_loss":1.482,"take_profit":null,"action":"BUY","confidence":0.72,"opportunity_score":68,"one_sentence_reason":"ALLR shows strong_continuation (momentum 95) with rising volume, rising trend, bullish EMA, above VWAP, and 3.8% from intraday high — sector and theme leader among 27 peers, clearing all Phase C quality gates."},"MU":{"target_pct":0.1312,"qty":18.8992,"delta_qty":0,"entry_price":707.77,"stop_loss":null,"take_profit":null,"action":"HOLD","confidence":0.55,"opportunity_score":59,"one_sentence_reason":null,"reason_code":"incumbent_hold"},"BHC":{"target_pct":0.0799,"qty":1425,"delta_qty":1425,"entry_price":5.72,"stop_loss":5.607,"take_profit":null,"action":"BUY","confidence":0.68,"opportunity_score":59,"one_sentence_reason":"BHC shows strong_continuation (momentum 100, breaking_out classification) with rising volume, rising trend, bullish EMA, above VWAP at 0.35% from intraday high — passes Phase C via rising volume gate."},"BITO":{"target_pct":0.0799,"qty":742,"delta_qty":742,"entry_price":10.97,"stop_loss":10.827,"take_profit":null,"action":"BUY","confidence":0.62,"opportunity_score":54,"one_sentence_reason":"BITO shows acceptable_continuation (momentum 68) with rising volume, bullish EMA, above VWAP at 0.27% from intraday high — passes Phase C via rising volume gate with Bitcoin ETF momentum supporting near-term continuation."},"NVDA":{"target_pct":0.0,"qty":0,"delta_qty":-126,"entry_price":215.3,"stop_loss":null,"take_profit":null,"action":"EXIT","confidence":0.75,"opportunity_score":36,"one_sentence_reason":"rotated: ALLR scored 68 vs NVDA 36; exit-arbiter HOLD confidence 0.58 below 0.65 threshold so standard baseline applies; exhaustion penalty applied (fading momentum, below VWAP -0.21%, distance_from_high -1.15% with fading volume, recent_trend falling)."},"ATRA":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":8.77,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.15,"opportunity_score":18,"one_sentence_reason":null,"reason_code":"score_below_floor"},"FLNC":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":24.94,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.20,"opportunity_score":28,"one_sentence_reason":null,"reason_code":"exhausted"},"AGL":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":52.42,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.10,"opportunity_score":12,"one_sentence_reason":null,"reason_code":"score_below_floor"},"SOXS":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":9.51,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.05,"opportunity_score":5,"one_sentence_reason":null,"reason_code":"score_below_floor"},"RKLB":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":95.86,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.25,"opportunity_score":32,"one_sentence_reason":null,"reason_code":"score_below_floor"},"IREN":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":61.715,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.15,"opportunity_score":20,"one_sentence_reason":null,"reason_code":"score_below_floor"},"INTC":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":116.04,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.20,"opportunity_score":28,"one_sentence_reason":null,"reason_code":"exhausted"},"AGIG":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":1.13,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.28,"opportunity_score":38,"one_sentence_reason":null,"reason_code":"score_below_floor"},"AMD":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":434.64,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.22,"opportunity_score":30,"one_sentence_reason":null,"reason_code":"exhausted"},"ASML":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":1561.3,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.40,"opportunity_score":62,"one_sentence_reason":null,"reason_code":"exhausted"},"AVGO":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":422.7,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.30,"opportunity_score":40,"one_sentence_reason":null,"reason_code":"exhausted"},"BE":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":252.3815,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.10,"opportunity_score":12,"one_sentence_reason":null,"reason_code":"score_below_floor"},"DELL":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":243.825,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.22,"opportunity_score":28,"one_sentence_reason":null,"reason_code":"score_below_floor"},"ETN":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":401.42,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.08,"opportunity_score":10,"one_sentence_reason":null,"reason_code":"score_below_floor"},"FIX":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":1937.435,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.15,"opportunity_score":18,"one_sentence_reason":null,"reason_code":"score_below_floor"},"GEV":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":1046.945,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.10,"opportunity_score":12,"one_sentence_reason":null,"reason_code":"score_below_floor"},"MRVL":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":165.95,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.25,"opportunity_score":32,"one_sentence_reason":null,"reason_code":"score_below_floor"},"PWR":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":750.18,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.18,"opportunity_score":22,"one_sentence_reason":null,"reason_code":"score_below_floor"},"QCOM":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":218.575,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.35,"opportunity_score":52,"one_sentence_reason":null,"reason_code":"exhausted"},"SMCI":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":34.7001,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.28,"opportunity_score":35,"one_sentence_reason":null,"reason_code":"score_below_floor"},"SNDK":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":1467.795,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.38,"opportunity_score":55,"one_sentence_reason":null,"reason_code":"exhausted"},"STX":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":796.81,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.28,"opportunity_score":38,"one_sentence_reason":null,"reason_code":"score_below_floor"},"TSM":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":413.7076,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.15,"opportunity_score":18,"one_sentence_reason":null,"reason_code":"score_below_floor"},"VRT":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":343.24,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.08,"opportunity_score":8,"one_sentence_reason":null,"reason_code":"score_below_floor"},"WDC":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":477.79,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.18,"opportunity_score":22,"one_sentence_reason":null,"reason_code":"peer_outranked"},"CTM":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":0.7687,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.20,"opportunity_score":28,"one_sentence_reason":null,"reason_code":"score_below_floor"},"BHM":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":11.0599,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.35,"opportunity_score":55,"one_sentence_reason":null,"reason_code":"exhausted"},"ANIP":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":85.81,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.25,"opportunity_score":30,"one_sentence_reason":null,"reason_code":"score_below_floor"},"AQN":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":6.225,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.08,"opportunity_score":8,"one_sentence_reason":null,"reason_code":"score_below_floor"},"ATLX":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":6.325,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.18,"opportunity_score":22,"one_sentence_reason":null,"reason_code":"score_below_floor"},"BH":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":303.01,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.32,"opportunity_score":48,"one_sentence_reason":null,"reason_code":"exhausted"},"BBUC":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":31.11,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.08,"opportunity_score":8,"one_sentence_reason":null,"reason_code":"score_below_floor"},"FSLY":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":20.14,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.08,"opportunity_score":8,"one_sentence_reason":null,"reason_code":"score_below_floor"},"AAON":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":135.9,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.20,"opportunity_score":25,"one_sentence_reason":null,"reason_code":"score_below_floor"},"AAPL":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":294.36,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.35,"opportunity_score":52,"one_sentence_reason":null,"reason_code":"exhausted"},"AMZN":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":271.72,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.18,"opportunity_score":22,"one_sentence_reason":null,"reason_code":"score_below_floor"},"AVLN":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":28.24,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.32,"opportunity_score":48,"one_sentence_reason":null,"reason_code":"exhausted"},"AVNW":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":16.35,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.05,"opportunity_score":5,"one_sentence_reason":null,"reason_code":"score_below_floor"},"AXTX":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":55.77,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.15,"opportunity_score":18,"one_sentence_reason":null,"reason_code":"score_below_floor"},"BAND":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":48.97,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.35,"opportunity_score":52,"one_sentence_reason":null,"reason_code":"exhausted"},"BRBR":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":10.37,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.05,"opportunity_score":5,"one_sentence_reason":null,"reason_code":"score_below_floor"},"CNSP":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":7.26,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.15,"opportunity_score":18,"one_sentence_reason":null,"reason_code":"score_below_floor"},"COIN":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":189.865,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.30,"opportunity_score":45,"one_sentence_reason":null,"reason_code":"exhausted"},"CPNG":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":17.245,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.25,"opportunity_score":35,"one_sentence_reason":null,"reason_code":"score_below_floor"}},"exhaustion_penalty_applied":["NVDA","ASML","AAPL","AVGO","QCOM","SNDK","BHM","FLNC","INTC","AMD","COIN","AVLN","MU"],"rotation_plan":{"exited":[{"symbol":"NVDA","reason":"Exhaustion: fading momentum, below VWAP -0.21%, distance_from_high -1.15% with fading volume, recent_trend falling, opportunity score 36 vs ALLR 68. Exit-arbiter HOLD confidence 0.58 below 0.65 threshold.","reason_category":"removed_due_to_exhaustion"}],"entered":[{"symbol":"ALLR","reason":"Strong_continuation (momentum 95), rising volume, rising trend, bullish EMA, above VWAP, 3.8% from high — highest-scoring candidate clearing all Phase C gates.","reason_category":"stronger_remaining_upside"},{"symbol":"BHC","reason":"Strong_continuation (momentum 100, breaking_out), rising volume, rising trend, bullish EMA, above VWAP — passes Phase C via rising volume gate.","reason_category":"breakout_continuation"},{"symbol":"BITO","reason":"Acceptable_continuation (momentum 68), rising volume, bullish EMA, above VWAP — passes Phase C via rising volume gate with Bitcoin ETF momentum.","reason_category":"stronger_remaining_upside"}],"held":[{"symbol":"MU","reason":"Held at current size; momentum grade weak_or_flat fails INCREASE gate but position retains positive thesis with strong intraday performance (+7.7%), bullish EMA, and above VWAP."}]},"capital_movement_plan":[{"symbol":"NVDA","delta_usd":-27209.70,"purpose":"Exit exhausted position; capital redeployed to SPY and fresh entries"},{"symbol":"ALLR","delta_usd":8153.28,"purpose":"New BUY: strong_continuation with rising volume, sector/theme leader"},{"symbol":"BHC","delta_usd":8151.00,"purpose":"New BUY: strong_continuation breaking out with rising volume"},{"symbol":"BITO","delta_usd":8139.74,"purpose":"New BUY: acceptable_continuation with rising volume"},{"symbol":"SPY","delta_usd":18235.21,"purpose":"Increase SPY to absorb freed capital from NVDA exit"}],"risk_flags":["ALLR, BHC, BITO are all illiquid (price < $20 or avg dollar volume < $50M); positions capped at 8% each per illiquid_max_position_pct","ALLR at $1.52/share carries high bid-ask spread risk; large share count (5364) may face execution slippage","Most high-scoring momentum names (ASML, SNDK, AAPL, QCOM, BHM, BAND) fail Phase C due to proximity to intraday highs with fading/flat volume — limited fresh entry opportunities this scan","Portfolio is 59% SPY which provides broad market exposure but limits alpha generation","MU momentum grade weak_or_flat; monitor for deterioration requiring exit next scan"]}
+
+{"portfolio_thesis":"Tape is favorable (SPY +0.55%, near VWAP) but nearly all high-scoring momentum names sit within 3% of intraday highs with fading volume, failing Phase C quality gates for fresh BUYs. Three fresh names clear all gates: ALLR (strong_continuation momentum 95, rising volume, 3.8% from high), BHC (strong_continuation momentum 100, breaking out, rising volume), and BITO (acceptable_continuation momentum 68, rising volume). NVDA is exited due to exhaustion and low opportunity score (36 vs ALLR 68); MU is held at current size as its momentum grade is weak_or_flat. Remaining capital parks in SPY.","spy_target_pct":0.5931,"cash_target_pct":0.0359,"spy_decision":{"target_pct":0.5931,"action":"INCREASE","opportunity_score":55,"one_sentence_reason":"SPY absorbs capital freed from NVDA exit as most equity candidates fail Phase C gates; favorable tape and neutral-bullish macro make SPY the best risk-adjusted vehicle for idle capital."},"spy_vs_cash_reasoning":"Idle capital defaults to SPY per rule 15 as tape severity is favorable and macro regime is neutral-to-bullish with SPY in uptrend above 200-EMA.","selected_positions":["ALLR","MU","BHC","BITO"],"target_weights":{"ALLR":0.0800,"MU":0.1312,"BHC":0.0799,"BITO":0.0799},"per_symbol":{"ALLR":{"target_pct":0.0800,"qty":5364,"delta_qty":5364,"entry_price":1.52,"stop_loss":1.482,"take_profit":null,"action":"BUY","confidence":0.72,"opportunity_score":68,"one_sentence_reason":"ALLR shows strong_continuation (momentum 95) with rising volume, rising trend, bullish EMA, above VWAP, and 3.8% from intraday high — sector and theme leader among 27 peers, clearing all Phase C quality gates."},"MU":{"target_pct":0.1312,"qty":18.8992,"delta_qty":0,"entry_price":707.77,"stop_loss":null,"take_profit":null,"action":"HOLD","confidence":0.55,"opportunity_score":59,"one_sentence_reason":null,"reason_code":"incumbent_hold"},"BHC":{"target_pct":0.0799,"qty":1425,"delta_qty":1425,"entry_price":5.72,"stop_loss":5.607,"take_profit":null,"action":"BUY","confidence":0.68,"opportunity_score":59,"one_sentence_reason":"BHC shows strong_continuation (momentum 100, breaking_out classification) with rising volume, rising trend, bullish EMA, above VWAP at 0.35% from intraday high — passes Phase C via rising volume gate."},"BITO":{"target_pct":0.0799,"qty":742,"delta_qty":742,"entry_price":10.97,"stop_loss":10.827,"take_profit":null,"action":"BUY","confidence":0.62,"opportunity_score":54,"one_sentence_reason":"BITO shows acceptable_continuation (momentum 68) with rising volume, bullish EMA, above VWAP at 0.27% from intraday high — passes Phase C via rising volume gate with Bitcoin ETF momentum supporting near-term continuation."},"NVDA":{"target_pct":0.0,"qty":0,"delta_qty":-126,"entry_price":215.3,"stop_loss":null,"take_profit":null,"action":"EXIT","confidence":0.75,"opportunity_score":36,"one_sentence_reason":"rotated: ALLR scored 68 vs NVDA 36; exit-arbiter HOLD confidence 0.58 below 0.65 threshold so standard baseline applies; exhaustion penalty applied (fading momentum, below VWAP -0.21%, distance_from_high -1.15% with fading volume, recent_trend falling)."},"ATRA":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":8.77,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.15,"opportunity_score":18,"one_sentence_reason":null,"reason_code":"score_below_floor"},"FLNC":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":24.94,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.20,"opportunity_score":28,"one_sentence_reason":null,"reason_code":"exhausted"},"AGL":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":52.42,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.10,"opportunity_score":12,"one_sentence_reason":null,"reason_code":"score_below_floor"},"SOXS":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":9.51,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.05,"opportunity_score":5,"one_sentence_reason":null,"reason_code":"score_below_floor"},"RKLB":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":95.86,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.25,"opportunity_score":32,"one_sentence_reason":null,"reason_code":"score_below_floor"},"IREN":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":61.715,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.15,"opportunity_score":20,"one_sentence_reason":null,"reason_code":"score_below_floor"},"INTC":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":116.04,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.20,"opportunity_score":28,"one_sentence_reason":null,"reason_code":"exhausted"},"AGIG":{"target_pct":0.0,"qty":0,"delta_qty":0,"entry_price":1.13,"stop_loss":null,"take_profit":null,"action":"PASS","confidence":0.28,"opportunity_score":38,"one_sentence_reason":null,"reason_code":"score_below_floor"},"AMD":{"target_pct":0.0

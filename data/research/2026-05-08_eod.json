@@ -1,0 +1,59 @@
+{
+  "date": "2026-05-08",
+  "equity": 102861.70837412564,
+  "cash": 5102.67,
+  "daily_return": 0.0253,
+  "daily_vs_spy": 0.0172,
+  "period_return": 0,
+  "period_vs_spy": -0.1433,
+  "spy_daily": 0.0081,
+  "spy_30d": 0.1433,
+  "positions_count": 4,
+  "trades_today": 51,
+  "positions": [
+    {
+      "symbol": "AMD",
+      "side": "PositionSide.LONG",
+      "qty": 56.3585,
+      "avg_entry": 444.3425,
+      "current_price": 455.19,
+      "pnl_pct": 0.0244,
+      "pnl_dollars": 611.35,
+      "market_value": 25653.83,
+      "price_source": "yfinance"
+    },
+    {
+      "symbol": "SMCI",
+      "side": "PositionSide.LONG",
+      "qty": 119.857,
+      "avg_entry": 34.99,
+      "current_price": 35.37,
+      "pnl_pct": 0.0109,
+      "pnl_dollars": 45.55,
+      "market_value": 4239.34,
+      "price_source": "yfinance"
+    },
+    {
+      "symbol": "SNDK",
+      "side": "PositionSide.LONG",
+      "qty": 2.2584,
+      "avg_entry": 1491.9,
+      "current_price": 1562.34,
+      "pnl_pct": 0.0472,
+      "pnl_dollars": 159.08,
+      "market_value": 3528.39,
+      "price_source": "yfinance"
+    },
+    {
+      "symbol": "SPY",
+      "side": "PositionSide.LONG",
+      "qty": 87.233711883,
+      "avg_entry": 735.2373,
+      "current_price": 737.53,
+      "pnl_pct": 0.0031,
+      "pnl_dollars": 200.01,
+      "market_value": 64337.48,
+      "price_source": "yfinance"
+    }
+  ]
+}

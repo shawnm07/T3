@@ -1,0 +1,831 @@
+{
+  "attempt": 2,
+  "problems": [
+    "per_symbol[ANIP_check] not a dict",
+    "per_symbol[CNSP_dup] not a dict",
+    "per_symbol[SNDK] BUY blocked: distance_from_high=-0.006 < 0.040 with volume_trend=flat (chasing exhausted move)",
+    "top-3 weight ratio 1.32 < min_top3_weight_ratio 1.50 (top3=[0.193, 0.155, 0.146]) \u2014 drop the weakest selected name and reallocate to the leaders"
+  ],
+  "stop_reason": "end_turn",
+  "input_tokens": 28549,
+  "output_tokens": 20198,
+  "top_level_keys": [
+    "_agent",
+    "_auto_repaired",
+    "_cache_creation_tokens",
+    "_cache_read_tokens",
+    "_input_tokens",
+    "_model",
+    "_output_tokens",
+    "_raw_truncated",
+    "_stop_reason",
+    "capital_movement_plan",
+    "cash_target_pct",
+    "exhaustion_penalty_applied",
+    "per_symbol",
+    "portfolio_thesis",
+    "risk_flags",
+    "rotation_plan",
+    "selected_positions",
+    "spy_decision",
+    "spy_target_pct",
+    "spy_vs_cash_reasoning",
+    "target_weights"
+  ],
+  "selected_positions": [
+    "AMD",
+    "SNDK",
+    "NVDA",
+    "CNSP",
+    "ANIP"
+  ],
+  "target_weights": {
+    "AMD": 0.155,
+    "SNDK": 0.1461,
+    "NVDA": 0.193,
+    "CNSP": 0.08,
+    "ANIP": 0.0595
+  },
+  "spy_decision": {
+    "target_pct": 0.3664,
+    "action": "HOLD",
+    "opportunity_score": 55,
+    "one_sentence_reason": "SPY absorbs idle capital not deployable to equity positions due to per-trade risk constraints and theme concentration caps."
+  },
+  "spy_target_pct": 0.3664,
+  "cash_target_pct": 0.0,
+  "per_symbol_count": 51,
+  "raw_thesis": "Semiconductor leaders AMD and NVDA anchor the portfolio with top momentum scores and strong continuation setups; SNDK adds memory exposure with peer leadership. CNSP and ANIP provide diversification into the 'Other' sector with strong momentum and rising volume. Heavy SPY allocation absorbs idle capital given risk-constraint-driven position sizing.",
+  "_raw_truncated": "",
+  "full_response": {
+    "portfolio_thesis": "Semiconductor leaders AMD and NVDA anchor the portfolio with top momentum scores and strong continuation setups; SNDK adds memory exposure with peer leadership. CNSP and ANIP provide diversification into the 'Other' sector with strong momentum and rising volume. Heavy SPY allocation absorbs idle capital given risk-constraint-driven position sizing.",
+    "spy_target_pct": 0.3664,
+    "cash_target_pct": 0.0,
+    "spy_decision": {
+      "target_pct": 0.3664,
+      "action": "HOLD",
+      "opportunity_score": 55,
+      "one_sentence_reason": "SPY absorbs idle capital not deployable to equity positions due to per-trade risk constraints and theme concentration caps."
+    },
+    "spy_vs_cash_reasoning": "Tape is favorable (SPY +0.49% intraday, above VWAP) so idle capital parks in SPY rather than cash per rule 15.",
+    "selected_positions": [
+      "AMD",
+      "SNDK",
+      "NVDA",
+      "CNSP",
+      "ANIP"
+    ],
+    "target_weights": {
+      "AMD": 0.155,
+      "SNDK": 0.1461,
+      "NVDA": 0.193,
+      "CNSP": 0.08,
+      "ANIP": 0.0595
+    },
+    "per_symbol": {
+      "AMD": {
+        "target_pct": 0.155,
+        "qty": 36,
+        "delta_qty": 36,
+        "entry_price": 438.97,
+        "stop_loss": 427.87,
+        "take_profit": null,
+        "action": "BUY",
+        "confidence": 0.82,
+        "opportunity_score": 78,
+        "one_sentence_reason": "AMD is the semiconductor peer leader (score 78.36, momentum 100, strong_continuation) with rising volume, bullish EMA, rising trend, and price above VWAP \u2014 highest remaining upside in the pool."
+      },
+      "SNDK": {
+        "target_pct": 0.1461,
+        "qty": 10,
+        "delta_qty": 10,
+        "entry_price": 1490.25,
+        "stop_loss": 1452.99,
+        "take_profit": null,
+        "action": "BUY",
+        "confidence": 0.75,
+        "opportunity_score": 72,
+        "one_sentence_reason": "SNDK leads the memory_storage peer group (score 72.25, momentum 82, strong_continuation) with bullish EMA, rising trend, and strong intraday gain (+10.5%), offering the best remaining upside in memory."
+      },
+      "NVDA": {
+        "target_pct": 0.193,
+        "qty": 91,
+        "delta_qty": -35,
+        "entry_price": 216.35,
+        "stop_loss": 210.94,
+        "take_profit": null,
+        "action": "REDUCE",
+        "confidence": 0.7,
+        "opportunity_score": 72,
+        "one_sentence_reason": "NVDA retains strong momentum (score 91, strong_continuation) but position is trimmed from 126 to 91 shares to comply with ai_data_center 50% theme weight cap and per-trade risk constraints while maintaining meaningful exposure."
+      },
+      "CNSP": {
+        "target_pct": 0.08,
+        "qty": 1104,
+        "delta_qty": 1104,
+        "entry_price": 7.39,
+        "stop_loss": 7.2,
+        "take_profit": null,
+        "action": "BUY",
+        "confidence": 0.72,
+        "opportunity_score": 71,
+        "one_sentence_reason": "CNSP is the sector/theme leader in the 'Other' bucket (score 71.49, momentum 95, strong_continuation) with rising volume, bullish EMA, rising trend, and 5-day gain of +220%, providing diversification outside IT/ai_data_center."
+      },
+      "ANIP": {
+        "target_pct": 0.0595,
+        "qty": 70,
+        "delta_qty": 70,
+        "entry_price": 86.695,
+        "stop_loss": 85.25,
+        "take_profit": null,
+        "action": "BUY",
+        "confidence": 0.7,
+        "opportunity_score": 70,
+        "one_sentence_reason": "ANIP has strong momentum (score 95, strong_continuation) with earnings research score 0.537 (above 0.30 threshold), rising volume, bullish EMA, and rising trend. sized at 75% of illiquid cap per pre-earnings multiplier."
+      },
+      "MU": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": -18.8992,
+        "entry_price": 714.3,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "EXIT",
+        "confidence": 0.78,
+        "opportunity_score": 65,
+        "one_sentence_reason": "MU (score 64.65, acceptable_continuation) is rotated out in favor of AMD (78), SNDK (72), and CNSP (71) which offer materially higher remaining upside. IT sector cap is already filled by AMD, SNDK, and NVDA.",
+        "exit_reason": "replaced_by_higher_opportunity"
+      },
+      "ATRA": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 8.45,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.1,
+        "opportunity_score": 15,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "INOD": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 86.055,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.15,
+        "opportunity_score": 20,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "AGL": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 52.93,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.1,
+        "opportunity_score": 10,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "SOXS": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 9.4001,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.05,
+        "opportunity_score": 5,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "INTC": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 117.73,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.4,
+        "opportunity_score": 58,
+        "one_sentence_reason": null,
+        "reason_code": "exhausted"
+      },
+      "IREN": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 60.865,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.15,
+        "opportunity_score": 18,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "BITO": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 10.9299,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.3,
+        "opportunity_score": 45,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "AGIG": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 1.11,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.05,
+        "opportunity_score": 5,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "ASML": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 1552.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.2,
+        "opportunity_score": 20,
+        "one_sentence_reason": null,
+        "reason_code": "peer_outranked"
+      },
+      "AVGO": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 423.865,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.35,
+        "opportunity_score": 55,
+        "one_sentence_reason": null,
+        "reason_code": "sector_capped"
+      },
+      "BE": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 255.06,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.1,
+        "opportunity_score": 12,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "DELL": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 245.255,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.4,
+        "opportunity_score": 60,
+        "one_sentence_reason": null,
+        "reason_code": "sector_capped"
+      },
+      "ETN": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 402.685,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.3,
+        "opportunity_score": 50,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "FIX": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 1932.45,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.1,
+        "opportunity_score": 12,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "GEV": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 1036.09,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.1,
+        "opportunity_score": 10,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "MRVL": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 166.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.25,
+        "opportunity_score": 38,
+        "one_sentence_reason": null,
+        "reason_code": "exhausted"
+      },
+      "PWR": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 750.17,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.15,
+        "opportunity_score": 20,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "QCOM": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 225.8901,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.35,
+        "opportunity_score": 55,
+        "one_sentence_reason": null,
+        "reason_code": "exhausted"
+      },
+      "SMCI": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 35.19,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.2,
+        "opportunity_score": 25,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "STX": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 789.16,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.15,
+        "opportunity_score": 18,
+        "one_sentence_reason": null,
+        "reason_code": "peer_outranked"
+      },
+      "TSM": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 412.84,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.15,
+        "opportunity_score": 15,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "VRT": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 340.815,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.1,
+        "opportunity_score": 12,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "WDC": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 473.4,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.15,
+        "opportunity_score": 18,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "ALLR": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 1.55,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.25,
+        "opportunity_score": 40,
+        "one_sentence_reason": null,
+        "reason_code": "exhausted"
+      },
+      "CTM": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 0.7849,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.2,
+        "opportunity_score": 35,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "BHM": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 11.0599,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.2,
+        "opportunity_score": 38,
+        "one_sentence_reason": null,
+        "reason_code": "exhausted"
+      },
+      "ANIP_check": null,
+      "AQN": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 6.13,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.1,
+        "opportunity_score": 12,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "ATLX": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 6.16,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.15,
+        "opportunity_score": 20,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "BH": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 301.5,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.2,
+        "opportunity_score": 35,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "BBUC": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 31.485,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.1,
+        "opportunity_score": 10,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "FSLY": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 19.73,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.05,
+        "opportunity_score": 8,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "AAON": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 136.165,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.15,
+        "opportunity_score": 20,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "AAPL": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 292.7,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.2,
+        "opportunity_score": 25,
+        "one_sentence_reason": null,
+        "reason_code": "exhausted"
+      },
+      "AMZN": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 273.01,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.3,
+        "opportunity_score": 48,
+        "one_sentence_reason": null,
+        "reason_code": "exhausted"
+      },
+      "AVLN": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 28.33,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.2,
+        "opportunity_score": 30,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "AVNW": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 16.05,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.05,
+        "opportunity_score": 8,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "AXTX": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 49.845,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.1,
+        "opportunity_score": 12,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "BAND": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 49.02,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.25,
+        "opportunity_score": 42,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "BHC": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 5.77,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.2,
+        "opportunity_score": 30,
+        "one_sentence_reason": null,
+        "reason_code": "exhausted"
+      },
+      "BRBR": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 10.545,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.15,
+        "opportunity_score": 22,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "CNSP_dup": null,
+      "COIN": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 192.01,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.25,
+        "opportunity_score": 40,
+        "one_sentence_reason": null,
+        "reason_code": "exhausted"
+      },
+      "CPNG": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 17.355,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.15,
+        "opportunity_score": 20,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "CUE": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 36.66,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.25,
+        "opportunity_score": 42,
+        "one_sentence_reason": null,
+        "reason_code": "exhausted"
+      }
+    },
+    "exhaustion_penalty_applied": [
+      "AMZN",
+      "QCOM",
+      "COIN",
+      "BHM",
+      "INTC",
+      "ALLR",
+      "CUE",
+      "MRVL",
+      "AAPL",
+      "BHC"
+    ],
+    "rotation_plan": {
+      "exited": [
+        {
+          "symbol": "MU",
+          "reason": "Score 64.65 (acceptable_continuation) replaced by AMD (78), SNDK (72), CNSP (71); IT sector cap filled by AMD/SNDK/NVDA",
+          "reason_category": "replaced_by_higher_opportunity"
+        }
+      ],
+      "entered": [
+        {
+          "symbol": "AMD",
+          "reason": "Semiconductor peer leader, momentum 100, strong_continuation, rising volume and trend",
+          "reason_category": "stronger_remaining_upside"
+        },
+        {
+          "symbol": "SNDK",
+          "reason": "Memory peer leader, momentum 82, strong_continuation, +10.5% intraday",
+          "reason_category": "stronger_remaining_upside"
+        },
+        {
+          "symbol": "CNSP",
+          "reason": "Other-sector leader, momentum 95, strong_continuation, rising volume, diversification",
+          "reason_category": "stronger_remaining_upside"
+        },
+        {
+          "symbol": "ANIP",
+          "reason": "Strong momentum 95, earnings research score 0.537, rising volume, diversification",
+          "reason_category": "stronger_remaining_upside"
+        }
+      ],
+      "held": [
+        {
+          "symbol": "NVDA",
+          "reason": "Momentum 91, strong_continuation, reduced to comply with ai_data_center theme cap and risk constraints"
+        }
+      ]
+    },
+    "capital_movement_plan": [
+      {
+        "symbol": "MU",
+        "delta_usd": -13643.33,
+        "purpose": "Exit to fund higher-scoring names"
+      },
+      {
+        "symbol": "NVDA",
+        "delta_usd": -7572.25,
+        "purpose": "Reduce from 126 to 91 shares for theme cap compliance"
+      },
+      {
+        "symbol": "AMD",
+        "delta_usd": 15802.92,
+        "purpose": "New entry - semiconductor leader"
+      },
+      {
+        "symbol": "SNDK",
+        "delta_usd": 14902.5,
+        "purpose": "New entry - memory leader"
+      },
+      {
+        "symbol": "CNSP",
+        "delta_usd": 8158.56,
+        "purpose": "New entry - diversification"
+      },
+      {
+        "symbol": "ANIP",
+        "delta_usd": 6068.65,
+        "purpose": "New entry - earnings setup"
+      },
+      {
+        "symbol": "SPY",
+        "delta_usd": 1283.12,
+        "purpose": "Increase SPY to absorb idle capital"
+      }
+    ],
+    "risk_flags": [
+      "ai_data_center theme weight at 49.4% of equity (near 50% cap) - monitor",
+      "IT sector at 3-position cap (AMD, SNDK, NVDA)",
+      "NVDA and SNDK both show exhaustion signals (near high, flat volume) but retained due to strong momentum grades",
+      "ANIP earnings today - sized at pre_earnings_size_multiplier 0.75 and illiquid cap 0.08",
+      "Large SPY allocation (36.6%) due to risk-per-trade constraints on high-priced names"
+    ],
+    "_agent": "portfolio-selector",
+    "_model": "claude-sonnet-4-6",
+    "_input_tokens": 28549,
+    "_output_tokens": 20198,
+    "_cache_read_tokens": 5309,
+    "_cache_creation_tokens": 0,
+    "_stop_reason": "end_turn",
+    "_raw_truncated": "Looking at the candidate pool and applying all rules:\n\n**Key observations:**\n- AMD: score 78.36, momentum 100, strong_continuation, passes gate, rising volume, rising trend, sector/peer leader - top pick\n- SNDK: score 72.25, momentum 82, strong_continuation, passes gate, rising trend - strong memory play\n- NVDA: held, score 72.2, momentum 91, strong_continuation, passes gate, exit-arbiter HOLD at 0.58 confidence (below 0.65 threshold so not strong positive evidence)\n- QCOM: score 70.68, momentum 76, strong_continuation, passes gate, rising trend - technology bucket (different from ai_data_center)\n- DELL: score 69.93, momentum 82, strong_continuation, passes gate, rising trend\n- AMZN: score 69.76, momentum 97, strong_continuation, passes gate, near high with rising trend - consumer_discretionary sector (lone)\n- MU: held, score 64.65, momentum 56, acceptable_continuation - weaker than above\n- ANIP: score 70.35, earnings today (days_until=0), research_score=0.537 (>=0.30 so normal entry), momentum 95, strong_continuation, illiquid cap 0.08\n- BHM: score 66.8, illiquid, momentum 97 but distance_from_high=0.0 (AT high) with flat volume - exhaustion penalty applies\n- CNSP: score 71.49, illiquid, momentum 95, distance_from_high=-0.0327, rising volume - passes\n\n**Sector/theme caps:** ai_data_center theme: AMD, SNDK, NVDA, DELL all in ai_data_center \u2192 max 3. Pick top 3: AMD(78.36), SNDK(72.25), NVDA(72.2). DELL(69.93) would be 4th \u2192 excluded.\n\n**IT sector:** AMD, SNDK, NVDA, DELL, QCOM all IT \u2192 max 3. AMD, SNDK, NVDA = 3. QCOM is in \"technology\" theme_bucket but sector is IT \u2192 4th IT name excluded.\n\nWait - QCOM sector is \"Information Technology\" - that's 4th IT name if we include AMD+SNDK+NVDA. Must exclude QCOM.\n\n**Selected:** AMD, SNDK, NVDA (ai_data_center, IT sector - 3 each, at cap), then need non-IT/non-ai_data_center names.\n\nAMZN: Consumer Discretionary, consumer_discretionary theme - passes all gates, score 69.76, momentum 97. Distance from high -0.0013 with flat volume \u2192 exhaustion penalty applies (near high + flat volume). Penalized score ~62. Still above floor but weakened.\n\nANIP: Other sector, other theme, illiquid, earnings today, score 70.35, momentum 95, passes gate. Cap at 0.08.\n\nCNSP: Other sector, other theme, illiquid, score 71.49, momentum 95, passes gate, rising volume, distance -0.0327 (>4% from high so no exhaustion). Cap at 0.08.\n\nAnti-stagnation: lowest selected score among AMD/SNDK/NVDA/CNSP/ANIP is ANIP at ~70.35. Fresh candidates within 5",
+    "_auto_repaired": {
+      "exit_delta_qty": {
+        "MU": {
+          "from": -19.0,
+          "to": -18.8992
+        }
+      }
+    }
+  }
+}

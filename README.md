@@ -1,4 +1,4 @@
-# Trading Bot — Multi-Agent, Alpaca Paper
+# Market Analysis Bot — Multi-Agent, Alpaca Paper
 
 Autonomous trading bot that tries to beat the S&P 500. Runs research multiple
 times a day, trades only on high-conviction multi-signal consensus, risk-sized

@@ -42,11 +42,31 @@ def main() -> int:
             result.synthetic_created, result.skipped_tighter, len(result.errors),
             " (DRY RUN)" if args.dry_run else "",
         )
+        if result.cash_proxy_action:
+            action = result.cash_proxy_action
+            policy = action.get("cash_policy") or result.cash_policy or {}
+            log.info(
+                "cash policy after stop fill: mode=%s action=%s skipped=%s notional=%s",
+                policy.get("mode"),
+                action.get("action"),
+                action.get("skipped"),
+                action.get("notional"),
+            )
         if result.errors:
             for e in result.errors[:20]:
                 log.warning("cycle error: %s", e)
     except Exception as exc:
         log.exception("trailing-stop cycle aborted: %s", exc)
+        try:
+            from src.telegram_notifier import send_alert
+            send_alert(
+                "ERROR",
+                "TrailingStops",
+                f"Exception: {type(exc).__name__}",
+                error_details=str(exc),
+            )
+        except Exception as notify_exc:
+            log.warning("trailing-stop error alert failed: %s", notify_exc)
     return 0  # always 0 so Task Scheduler doesn't disable the recurring task
 
 

@@ -537,28 +537,119 @@ class TradeExecutor:
         audit["stop_price"] = stop_to_submit
         audit["stop_loss_source"] = stop_source
         audit["take_profit"] = target
+        # Quote fetch — try once, refresh once if the first snapshot looks
+        # stale (no bid/ask). A momentary wide spread on a fast-moving
+        # breakout can flip the preflight from approve to reject and back
+        # in seconds; a second fetch resolves most of that noise.
         quote_price = None
         quote_snapshot: dict[str, Any] = {}
         quote_getter = getattr(self.client, "get_stock_quote", None)
-        if quote_getter is not None:
+
+        def _fetch_quote() -> None:
+            nonlocal quote_price, quote_snapshot
+            if quote_getter is None:
+                return
             try:
                 quote_price, quote_snapshot = self._quote_midpoint(quote_getter(symbol))
             except Exception as exc:
                 quote_snapshot = {"lookup_error": str(exc)}
+
+        _fetch_quote()
+        # If first snapshot was empty/errored, retry once.
+        if quote_price is None and quote_getter is not None:
+            _fetch_quote()
+            audit["quote_refetched"] = True
         audit["latest_quote"] = quote_snapshot
+
         if quote_price is not None:
-            gap = max(
-                float(self.cfg.get("execution_preflight", "stop_min_gap_usd", default=0.02) or 0.02),
-                quote_price * float(self.cfg.get("execution_preflight", "stop_min_gap_pct", default=0.001) or 0.001),
+            # Compare the stop against the side we'll actually FILL at (ask for
+            # buys), not the bid-ask midpoint. On wide-spread breakout names
+            # the mid can sit a few percent below the ask and a stop that's
+            # safely below the ask gets rejected for being "above" the mid.
+            # See 2026-05-11 09:22 BE: bid $287 ask $295, selector stop $291.30
+            # is 1.25% below ask but 0.10% above mid — rejection blocked the
+            # entire $32K buy with no real safety benefit.
+            ask_for_check = quote_snapshot.get("ask") if isinstance(quote_snapshot, dict) else None
+            bid_for_check = quote_snapshot.get("bid") if isinstance(quote_snapshot, dict) else None
+            try:
+                ask_price = float(ask_for_check) if ask_for_check else None
+            except (TypeError, ValueError):
+                ask_price = None
+            try:
+                bid_price = float(bid_for_check) if bid_for_check else None
+            except (TypeError, ValueError):
+                bid_price = None
+            reference_price = ask_price if ask_price and ask_price > 0 else quote_price
+
+            # Adaptive gap: max of static gap (1bp default) AND half the
+            # bid-ask spread. Wide spreads imply real market uncertainty;
+            # the gap should reflect it so the tightened stop sits clear of
+            # spread-jitter that would re-trigger the broker's check.
+            static_gap_pct = float(
+                self.cfg.get("execution_preflight", "stop_min_gap_pct", default=0.001) or 0.001
             )
-            audit["current_price_reference"] = round(float(quote_price), 4)
+            static_gap_usd = float(
+                self.cfg.get("execution_preflight", "stop_min_gap_usd", default=0.02) or 0.02
+            )
+            half_spread = 0.0
+            if bid_price and ask_price and ask_price > bid_price:
+                half_spread = (ask_price - bid_price) / 2.0
+            gap = max(static_gap_usd, reference_price * static_gap_pct, half_spread)
+
+            # Slack tolerance: stops within this fraction ABOVE the
+            # reference are still acceptable. The actual stop submission
+            # happens AFTER the buy fills and is re-derived from the real
+            # fill price, so a small overshoot in the selector's stop is
+            # not a real safety issue. Keeps the audit log quiet on minor
+            # spread noise while still tightening before submit to avoid
+            # broker rejection of the standalone stop order.
+            slack_pct = float(
+                self.cfg.get("execution_preflight", "stop_slack_pct", default=0.002) or 0.0
+            )
+            slack_abs = reference_price * max(0.0, slack_pct)
+
+            audit["current_price_reference"] = round(float(reference_price), 4)
+            audit["current_price_reference_source"] = "ask" if reference_price is ask_price else "mid"
             audit["min_stop_gap"] = round(float(gap), 4)
-            if stop_to_submit >= quote_price - gap:
-                audit.update({
-                    "status": "rejected",
-                    "reject_reason": "stop_not_below_current_market",
-                })
-                return False, audit
+            audit["stop_slack_pct"] = slack_pct
+            if half_spread > 0:
+                audit["half_spread"] = round(half_spread, 4)
+
+            within_slack = (
+                stop_to_submit >= reference_price - gap
+                and stop_to_submit <= reference_price + slack_abs
+            )
+            above_slack = stop_to_submit > reference_price + slack_abs
+
+            if within_slack or above_slack:
+                # Auto-tighten: shift the stop to just below the expected fill
+                # price so the buy can ship rather than skipping the whole
+                # allocation. The trailing-stop bot will widen via ATR after
+                # the fill; a too-tight stop costs at most one early stop-out,
+                # while a skipped buy costs the entire alpha opportunity.
+                tighten_enabled = bool(self.cfg.get(
+                    "execution_preflight", "auto_tighten_stop_on_market_drift", default=True,
+                ))
+                tightened = round(reference_price - gap * 1.5, 2)
+                if tighten_enabled and tightened > 0 and tightened < reference_price:
+                    audit_block = {
+                        "from": round(stop_to_submit, 4),
+                        "to": tightened,
+                        "reference_price": round(reference_price, 4),
+                        "gap": round(gap, 4),
+                        "half_spread": round(half_spread, 4) if half_spread > 0 else None,
+                    }
+                    # Quiet bucket for within-slack adjustments; loud bucket
+                    # for genuine market drift beyond the tolerance band.
+                    audit["stop_within_slack_tighten" if within_slack else "stop_auto_tightened"] = audit_block
+                    stop_to_submit = tightened
+                    audit["stop_price"] = stop_to_submit
+                else:
+                    audit.update({
+                        "status": "rejected",
+                        "reject_reason": "stop_not_below_current_market",
+                    })
+                    return False, audit
         audit["status"] = "approved"
         return True, audit
 

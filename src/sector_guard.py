@@ -14,6 +14,7 @@ That correlation is exactly what crushed the book on 2026-04-28.
 from __future__ import annotations
 
 import logging
+import math
 from dataclasses import dataclass, field
 from typing import Any, Iterable
 
@@ -44,12 +45,14 @@ class GuardResult:
     ok: bool
     violations: list[Violation] = field(default_factory=list)
     forced_exits: list[str] = field(default_factory=list)
+    audit: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "ok": self.ok,
             "violations": [v.to_dict() for v in self.violations],
             "forced_exits": list(self.forced_exits),
+            "audit": self.audit,
         }
 
 
@@ -117,7 +120,7 @@ def validate(
 
     proxy = (cash_proxy_symbol or "").upper()
 
-    selected: list[tuple[str, float, str, str]] = []
+    selected: list[tuple[str, float, str, str, bool]] = []
     for sym, weight in target_weights.items():
         sym_u = sym.upper()
         if sym_u == proxy:
@@ -131,13 +134,41 @@ def validate(
         meta = pool_meta.get(sym) or pool_meta.get(sym_u) or {}
         sector = str(meta.get("sector") or "Other")
         theme = theme_bucket_for(sector, sector_to_theme, sym_u, symbol_overrides)
-        selected.append((sym_u, w, sector, theme))
+        selected.append((sym_u, w, sector, theme, bool(meta.get("currently_held"))))
 
     sector_groups: dict[str, list[tuple[str, float]]] = {}
     theme_groups: dict[str, list[tuple[str, float]]] = {}
-    for sym, w, sector, theme in selected:
+    audit_sector_groups: dict[str, dict[str, Any]] = {}
+    audit_theme_groups: dict[str, dict[str, Any]] = {}
+    for sym, w, sector, theme, currently_held in selected:
         sector_groups.setdefault(sector, []).append((sym, w))
         theme_groups.setdefault(theme, []).append((sym, w))
+        sector_row = audit_sector_groups.setdefault(
+            sector,
+            {
+                "limit": max_per_sector,
+                "members": [],
+                "live_holdings": [],
+                "accepted_same_scan_candidates": [],
+                "weight": 0.0,
+            },
+        )
+        theme_row = audit_theme_groups.setdefault(
+            theme,
+            {
+                "count_limit": max_per_theme,
+                "weight_limit": max_theme_weight,
+                "members": [],
+                "live_holdings": [],
+                "accepted_same_scan_candidates": [],
+                "weight": 0.0,
+            },
+        )
+        target_bucket = "live_holdings" if currently_held else "accepted_same_scan_candidates"
+        for row in (sector_row, theme_row):
+            row["members"].append(sym)
+            row[target_bucket].append(sym)
+            row["weight"] = round(float(row.get("weight", 0.0) or 0.0) + w, 4)
 
     violations: list[Violation] = []
     for sector, members in sector_groups.items():
@@ -174,7 +205,15 @@ def validate(
             len(violations),
             [(v.kind, v.bucket, len(v.members)) for v in violations],
         )
-    return GuardResult(ok=not violations, violations=violations)
+    audit = {
+        "rule": "live holdings plus accepted same-scan candidates count; rejected/unfilled symbols do not",
+        "max_per_gics_sector": max_per_sector,
+        "max_per_theme": max_per_theme,
+        "max_theme_weight_pct": max_theme_weight,
+        "sectors": audit_sector_groups,
+        "themes": audit_theme_groups,
+    }
+    return GuardResult(ok=not violations, violations=violations, audit=audit)
 
 
 def force_compliance(
@@ -216,17 +255,22 @@ def force_compliance(
         info["target_qty"] = new_qty
         info["delta_qty"] = round(new_qty - current_qty, 6)
 
-    def _sync_exit_qty(sym: str) -> None:
+    def _current_qty(sym: str) -> float:
         info = per_symbol.get(sym)
         if not isinstance(info, dict):
-            return
+            return 0.0
         try:
             old_qty = float(info.get("qty", info.get("target_qty", 0)) or 0)
             old_delta = float(info.get("delta_qty", 0) or 0)
         except (TypeError, ValueError):
-            current_qty = 0.0
-        else:
-            current_qty = max(0.0, old_qty - old_delta)
+            return 0.0
+        return max(0.0, old_qty - old_delta)
+
+    def _sync_exit_qty(sym: str) -> None:
+        info = per_symbol.get(sym)
+        if not isinstance(info, dict):
+            return
+        current_qty = _current_qty(sym)
         info["qty"] = 0
         info["target_qty"] = 0
         info["delta_qty"] = round(-current_qty, 6) if current_qty > 0 else 0
@@ -248,16 +292,44 @@ def force_compliance(
             if current <= float(v.limit) + 1e-6:
                 continue
             scale = float(v.limit) / current
+            scaled_units: dict[str, int] = {
+                sym: max(0, int(round(old * scale * 10000)))
+                for sym, old in live
+            }
+            # Keep the rounded 4-decimal weights at or below the hard cap.
+            # Otherwise 0.50004 can round back to 0.5001 and re-trip validate().
+            limit_units = int(math.floor(float(v.limit) * 10000 + 1e-9))
+            excess_units = sum(scaled_units.values()) - limit_units
+            if excess_units > 0:
+                for sym, _old in sorted(live, key=lambda row: _opp(row[0])):
+                    if excess_units <= 0:
+                        break
+                    reduction = min(excess_units, scaled_units.get(sym, 0))
+                    scaled_units[sym] = scaled_units.get(sym, 0) - reduction
+                    excess_units -= reduction
             recovered = 0.0
             for sym, old in live:
-                new = round(old * scale, 4)
+                new = round(scaled_units.get(sym, 0) / 10000, 4)
                 target_weights[sym] = new
                 if sym in per_symbol:
                     per_symbol[sym]["target_pct"] = new
                     _sync_scaled_qty(sym, new / old if old > 0 else 0.0)
-                    # Don't clobber EXIT — keep REDUCE only when still long.
+                    # Don't clobber EXIT/PASS. For live names, label the
+                    # post-guard action by the remaining quantity direction.
                     if per_symbol[sym].get("action") not in ("EXIT", "PASS"):
-                        per_symbol[sym]["action"] = "REDUCE"
+                        try:
+                            new_qty = float(per_symbol[sym].get("qty") or 0)
+                        except (TypeError, ValueError):
+                            new_qty = 0.0
+                        current_qty = _current_qty(sym)
+                        if current_qty <= 1e-9 and new_qty > 0:
+                            per_symbol[sym]["action"] = "BUY"
+                        elif new_qty < current_qty - 1e-9:
+                            per_symbol[sym]["action"] = "REDUCE"
+                        elif new_qty > current_qty + 1e-9:
+                            per_symbol[sym]["action"] = "INCREASE"
+                        else:
+                            per_symbol[sym]["action"] = "HOLD"
                 recovered += old - new
             if proxy and recovered > 0:
                 target_weights[proxy] = round(
@@ -274,15 +346,31 @@ def force_compliance(
         ordered = sorted(live_members, key=_opp)
         for sym in ordered[:excess]:
             old = float(target_weights.get(sym, 0) or 0)
+            current_qty = _current_qty(sym)
+            # Also treat positions flagged as HOLD/INCREASE/REDUCE as currently
+            # held even when qty bookkeeping isn't populated (e.g. in tests or
+            # when the selector omits qty fields).
+            held_action = (per_symbol.get(sym) or {}).get("action") in (
+                "HOLD", "INCREASE", "REDUCE"
+            )
+            is_held = current_qty > 1e-9 or held_action
             target_weights[sym] = 0.0
             if sym in per_symbol:
                 per_symbol[sym]["target_pct"] = 0.0
                 _sync_exit_qty(sym)
-                per_symbol[sym]["action"] = "EXIT"
-                per_symbol[sym]["one_sentence_reason"] = (
-                    f"Sector-guard forced exit: {v.kind}={v.bucket} exceeded "
-                    f"cap of {v.limit}."
-                )
+                if is_held:
+                    per_symbol[sym]["action"] = "EXIT"
+                    per_symbol[sym]["one_sentence_reason"] = (
+                        f"Sector-guard forced exit: {v.kind}={v.bucket} exceeded "
+                        f"cap of {v.limit}."
+                    )
+                else:
+                    per_symbol[sym]["action"] = "PASS"
+                    per_symbol[sym]["reason_code"] = "sector_capped"
+                    per_symbol[sym]["one_sentence_reason"] = (
+                        f"Sector-guard removed target: {v.kind}={v.bucket} exceeded "
+                        f"cap of {v.limit}."
+                    )
             forced.append(sym)
             if proxy and old > 0:
                 target_weights[proxy] = round(
@@ -290,5 +378,5 @@ def force_compliance(
                 )
 
     if forced:
-        log.warning("[sector_guard] forced exits: %s", forced)
+        log.warning("[sector_guard] forced removals/exits: %s", forced)
     return forced

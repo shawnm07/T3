@@ -14,7 +14,19 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+try:
+    from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+except ImportError:  # Python 3.8 compatibility in the local test runner.
+    from dateutil import tz
+
+    class ZoneInfoNotFoundError(Exception):
+        pass
+
+    def ZoneInfo(name: str):
+        zone = tz.gettz(name)
+        if zone is None:
+            raise ZoneInfoNotFoundError(name)
+        return zone
 
 import requests
 

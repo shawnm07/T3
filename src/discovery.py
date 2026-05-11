@@ -221,11 +221,65 @@ def discover_candidates(
                     sector_hint=row.get("sector", ""))
             breakdown["tv_squeeze"] += 1
 
+    # 5b. Phase 7b (2026-05-07): earnings calendar source. Picks up names
+    # reporting today AMC + next window_days BMO/AMC that may not appear
+    # in normal momentum scanners but have a strong pre-earnings setup.
+    # Filtered by min_research_score so only credible plays reach the pool.
+    earnings_calendar_cfg = (
+        (cfg.get("discovery", "sources", default={}) or {}).get("earnings_calendar")
+        if isinstance(cfg.get("discovery", "sources", default={}) or {}, dict)
+        else None
+    )
+    if earnings_calendar_cfg and earnings_calendar_cfg.get("enabled", True):
+        try:
+            from src.earnings import fetch_upcoming_earnings_calendar, compute_earnings_research_score
+            window_days = int(earnings_calendar_cfg.get("window_days", 2) or 2)
+            horizon = str(earnings_calendar_cfg.get("horizon", "3month") or "3month")
+            max_cands = int(earnings_calendar_cfg.get("max_candidates", 10) or 10)
+            min_score = float(earnings_calendar_cfg.get("min_research_score", 0.30) or 0.30)
+            picks = fetch_upcoming_earnings_calendar(window_days=window_days, horizon=horizon)
+            added = 0
+            for entry in picks:
+                if added >= max_cands:
+                    break
+                sym = (entry.get("symbol") or "").upper()
+                if not sym or sym in excluded:
+                    continue
+                research = compute_earnings_research_score(sym)
+                if float(research.get("score") or 0.0) < min_score:
+                    continue
+                _upsert(pool, sym, "earnings_calendar", sectors)
+                breakdown["earnings_calendar"] += 1
+                added += 1
+        except Exception as e:
+            log.warning("[discovery] earnings_calendar source failed: %s", e)
+
     # 6. Apply screener floors (skip held — they bypass floors)
     pool = _apply_screener_floors(pool, cfg, held)
 
     # 7. Rank the raw pool by active market evidence, not by list membership.
     _annotate_discovery_priorities(pool)
+
+    # 7b. Phase 7b (2026-05-07): boost earnings_calendar candidates so they
+    # compete with momentum movers despite no intraday flow. Boost is
+    # research_score * priority_score_boost (default 10), so a 0.30 score
+    # adds +3 points; 0.60 score adds +6 points.
+    if earnings_calendar_cfg and earnings_calendar_cfg.get("enabled", True):
+        try:
+            from src.earnings import compute_earnings_research_score
+            boost_mult = float(earnings_calendar_cfg.get("priority_score_boost", 10) or 10)
+            for cand in pool.values():
+                if "earnings_calendar" not in (cand.sources or []):
+                    continue
+                research = compute_earnings_research_score(cand.symbol)
+                bonus = float(research.get("score") or 0.0) * boost_mult
+                if bonus > 0:
+                    cand.discovery_priority_score = float(cand.discovery_priority_score or 0.0) + bonus
+                    cand.discovery_priority_reasons = list(cand.discovery_priority_reasons or []) + [
+                        f"earnings_calendar_research_score={research.get('score')}"
+                    ]
+        except Exception as e:
+            log.debug("[discovery] earnings_calendar boost failed: %s", e)
 
     # 8. Sector cap on the pool (held retained for exit decisions)
     pool = _apply_sector_cap(pool, cfg, held)

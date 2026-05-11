@@ -20,25 +20,49 @@ from src.candidate_scoring import (
     annotate_candidate_leadership,
     missed_breakout_candidates,
 )
+from src.cash_policy import (
+    build_selector_cash_policy_decision,
+    save_cash_policy,
+    submit_cash_proxy_buy,
+    sweep_cash_to_proxy_if_allowed,
+)
 from src.decision import DecisionEngine, TradeDecision
 from src.discovery import Candidate, discover_candidates
 from src.dynamic_watchlist import (
     remove_dynamic_watchlist_symbols,
     update_dynamic_watchlist,
 )
-from src.earnings import EarningsInfo, fetch_earnings, within_window
+from src.earnings import (
+    EarningsInfo,
+    build_preclose_earnings_profile,
+    compute_earnings_research_score,
+    fetch_earnings,
+    within_window,
+)
 from src.executor import TradeExecutor
 from src.fundamentals import compute_fundamentals
+from src.intraday_tape import TapeSignal, compute_tape_signal
 from src.journal import log_decision
 from src.macro import MacroSignal, compute_macro
 from src.market_data import get_market_data
-from src.overnight import OvernightSignal, market_bias_from_spy, score_overnight
+from src.overnight import (
+    OvernightSignal,
+    build_preclose_edge,
+    compute_sector_momentum,
+    market_bias_from_spy,
+    score_overnight,
+)
+from src.overnight_learning import (
+    estimate_overnight_edge,
+    record_preclose_candidates,
+    resolve_overnight_outcomes,
+)
 from src.rebalance import compute_rebalance_plan
 from src.risk import RiskManager
 from src import sector_guard
 from src.sentiment import score_news_for_symbol
 from src.technicals import TechnicalSignal, compute_technicals, technicals_for_bars_df
-from src.universe import build_stock_universe
+from src.universe import build_stock_universe, sp500_sectors
 
 log = logging.getLogger(__name__)
 
@@ -577,10 +601,28 @@ class TradingOrchestrator:
         return True
 
     def _fresh_exit_guard(self, action: Any, *, full_exit: bool) -> dict[str, Any] | None:
+        """Phase 5 (2026-05-07): tiered minimum-hold cooldown.
+
+        Tiers (configurable under ``selector:`` in config.yaml):
+          age <  short_min  : require conf ≥ short_min_conf AND
+                              (unrealized_plpc < short_floor_pl OR severe-reason
+                              OR stop breach). Else: downgrade EXIT to
+                              REDUCE short_trim_pct of the position.
+          age <  medium_min : require conf ≥ medium_min_conf, else downgrade
+                              EXIT to REDUCE medium_trim_pct.
+          age >= medium_min : no cooldown gate.
+
+        Returns None to allow the exit, or a dict to either skip or downgrade
+        to a partial sell. Downgrade key: ``downgrade_to_reduce_pct`` in (0, 1].
+        """
         lifecycle = self._position_lifecycle_context(getattr(action, "symbol", ""))
-        if not lifecycle.get("fresh_exit_cooldown_active"):
+        if not lifecycle:
             return None
-        min_conf = float(self.cfg.get("selector", "fresh_exit_min_confidence", default=0.85) or 0.85)
+        age_min = float(lifecycle.get("age_minutes") or 0.0)
+        short_min = float(self.cfg.get("selector", "fresh_exit_cooldown_short_min", default=90) or 90)
+        medium_min = float(self.cfg.get("selector", "fresh_exit_cooldown_medium_min", default=240) or 240)
+        if age_min >= medium_min:
+            return None
         try:
             conf = float(getattr(action, "ai_confidence", 0.0) or 0.0)
         except (TypeError, ValueError):
@@ -606,15 +648,46 @@ class TradingOrchestrator:
         severe_reason = any(term in reason for term in severe_terms)
         severe_underperformance = plpc <= -0.015
         severe_opportunity_loss = opportunity > 0 and opportunity <= 25
-        if conf >= min_conf or severe_reason or severe_underperformance or severe_opportunity_loss:
+        # Short tier: tightest bar
+        if age_min < short_min:
+            short_min_conf = float(self.cfg.get("selector", "fresh_exit_short_min_conf", default=0.85) or 0.85)
+            short_floor_pl = float(self.cfg.get("selector", "fresh_exit_short_floor_pl", default=-0.005) or -0.005)
+            if (
+                conf >= short_min_conf
+                or severe_reason
+                or plpc <= short_floor_pl
+                or severe_underperformance
+                or severe_opportunity_loss
+            ):
+                return None
+            trim_pct = float(self.cfg.get("selector", "fresh_exit_short_trim_pct", default=0.50) or 0.50)
+            return {
+                "reason": "fresh_exit_cooldown_short_trimmed",
+                "full_exit": bool(full_exit),
+                "ai_confidence": round(conf, 3),
+                "min_confidence": short_min_conf,
+                "tier": "short",
+                "age_minutes": round(age_min, 1),
+                "unrealized_plpc": round(plpc, 4),
+                "opportunity_score": opportunity,
+                "downgrade_to_reduce_pct": trim_pct,
+                "lifecycle": lifecycle,
+            }
+        # Medium tier
+        medium_min_conf = float(self.cfg.get("selector", "fresh_exit_medium_min_conf", default=0.75) or 0.75)
+        if conf >= medium_min_conf or severe_reason or severe_underperformance or severe_opportunity_loss:
             return None
+        trim_pct = float(self.cfg.get("selector", "fresh_exit_medium_trim_pct", default=0.33) or 0.33)
         return {
-            "reason": "fresh_exit_cooldown_low_confidence",
+            "reason": "fresh_exit_cooldown_medium_trimmed",
             "full_exit": bool(full_exit),
             "ai_confidence": round(conf, 3),
-            "min_confidence": min_conf,
+            "min_confidence": medium_min_conf,
+            "tier": "medium",
+            "age_minutes": round(age_min, 1),
             "unrealized_plpc": round(plpc, 4),
             "opportunity_score": opportunity,
+            "downgrade_to_reduce_pct": trim_pct,
             "lifecycle": lifecycle,
         }
 
@@ -1004,17 +1077,57 @@ class TradingOrchestrator:
             pass
         return bool(ok)
 
-    def _available_cash_above_floor(self, equity: float, floor_pct: float) -> float:
+    def _available_cash_above_floor(
+        self, equity: float, floor_pct: float, *, soft: bool = True,
+    ) -> float:
+        """Cash available for new buys after honoring the in-flight cash floor.
+
+        Strict (soft=False): always reserve `equity * floor_pct` of cash; if
+        the account is below that, return 0.
+
+        Soft (soft=True, default; toggle via cash.soft_floor_when_below):
+        when the account is *already* below the requested floor at scan time
+        (selector emitted high cash_target_pct but holdings haven't sold yet),
+        the strict rule locks out every entry forever — there's nothing to
+        reserve from. Soft mode treats the current cash ratio as the in-flight
+        floor for this scan: allow buys up to actual confirmed cash, then rely
+        on post-execution `_restore_cash_floor` / `_sweep_cash_to_proxy` to
+        true the cash ratio back to the target afterward. See 2026-05-11
+        16:22 scan where $5,150 cash vs. $30,964 required floor blocked AAON
+        entirely despite the selector explicitly picking it.
+        """
         try:
             account = self.client.get_account()
             cash = float(account.cash)
         except Exception as e:
             log.warning("cash budget: account fetch failed: %s", e)
             return 0.0
-        return max(0.0, cash - (equity * max(0.0, floor_pct)))
+        floor_pct = max(0.0, float(floor_pct or 0.0))
+        reserved = equity * floor_pct
+        if soft and bool(self.cfg.get("cash", "soft_floor_when_below", default=True)):
+            if cash + 0.01 < reserved and equity > 0:
+                actual_pct = max(0.0, cash / equity)
+                log.info(
+                    "cash floor softened in-flight: actual=%.2f%% < target=%.2f%% "
+                    "— allowing buys up to confirmed cash ($%.2f)",
+                    actual_pct * 100.0, floor_pct * 100.0, cash,
+                )
+                return max(0.0, cash)
+        return max(0.0, cash - reserved)
 
     def _sell_cash_proxy_for(self, notional: float, reason: str) -> bool:
-        """Sell SPY cash-proxy by qty/percentage, avoiding stale notional oversells."""
+        """Sell SPY cash-proxy by qty/percentage, avoiding stale notional oversells.
+
+        The cash-proxy normally has a protective trailing stop attached (created
+        by the trailing-stop bot after every entry). That stop reserves every
+        share as `held_for_orders`, so Alpaca rejects any incremental sell with
+        "insufficient qty available for order". Before any sell we cancel the
+        proxy's open orders so the qty becomes available — the trailing-stop
+        bot will recreate the stop on its next pass against the new position.
+        See 2026-05-11 09:22 scan: $91K cash on the books but every BE/PWR/AAON
+        buy skipped on `insufficient_confirmed_cash` because the proxy sell was
+        rejected by Alpaca on `held_for_orders`.
+        """
         if not self.cash_proxy_enabled or notional <= 0:
             return False
         positions = self.client.get_positions()
@@ -1026,6 +1139,22 @@ class TradingOrchestrator:
         proxy_qty = abs(float(proxy.qty))
         if proxy_value <= 0 or proxy_qty <= 0:
             return False
+        # Release any held_for_orders reservation (typically the trailing stop)
+        # so the qty actually becomes available for this sell.
+        try:
+            cancelled = self.client.cancel_open_orders_for_symbol(
+                self.cash_proxy_symbol,
+            )
+            if cancelled:
+                log.info(
+                    "Cash-proxy funding: cancelled %d open %s order(s) before sell (%s)",
+                    cancelled, self.cash_proxy_symbol, reason,
+                )
+        except Exception as e:
+            log.warning(
+                "Cash-proxy funding: cancel open orders for %s failed: %s",
+                self.cash_proxy_symbol, e,
+            )
         sell_value = min(notional, proxy_value)
         try:
             if sell_value >= proxy_value * 0.98:
@@ -1143,29 +1272,38 @@ class TradingOrchestrator:
             return 0.0
         return allowed
 
-    def _sweep_cash_to_proxy(self, equity: float) -> dict[str, Any] | None:
-        """After a scan's trades settle: park cash above the true-cash floor in SPY."""
+    def _sweep_cash_to_proxy(
+        self,
+        equity: float,
+        cash_policy_decision: dict[str, Any] | None = None,
+    ) -> dict[str, Any] | None:
+        """After trades settle, park excess cash in SPY only when policy allows."""
         if not self.cash_proxy_enabled:
             return None
-        try:
-            account = self.client.get_account()
-            cash = float(account.cash)
-        except Exception as e:
-            log.warning("sweep: account fetch failed: %s", e)
+        action = sweep_cash_to_proxy_if_allowed(
+            self.client,
+            self.cfg,
+            equity,
+            policy=cash_policy_decision,
+            reason="scan_idle_cash_sweep",
+        )
+        if not action:
             return None
-        floor = equity * self.risk.cash_reserve_pct
-        excess = cash - floor
-        if excess < self.cash_proxy_min:
-            return None
-        try:
-            self.client.submit_notional(self.cash_proxy_symbol, excess, side="buy")
-            log.info("Swept $%.0f idle cash into %s (floor=$%.0f)",
-                     excess, self.cash_proxy_symbol, floor)
-            return {"action": "buy_proxy", "symbol": self.cash_proxy_symbol,
-                    "notional": round(excess, 2)}
-        except Exception as e:
-            log.warning("Cash-proxy buy failed: %s", e)
-            return None
+        if action.get("action") == "buy_proxy":
+            log.info(
+                "Swept $%.0f idle cash into %s (policy=%s floor=$%.0f)",
+                float(action.get("notional") or 0),
+                self.cash_proxy_symbol,
+                (action.get("cash_policy") or {}).get("mode"),
+                float(action.get("floor") or 0),
+            )
+        elif action.get("skipped"):
+            log.info(
+                "Cash-proxy sweep skipped: %s (policy=%s)",
+                action.get("skipped"),
+                (action.get("cash_policy") or {}).get("mode"),
+            )
+        return action
 
     def _restore_cash_floor(self, equity: float) -> None:
         """If cash has dipped below the minimum reserve, immediately sell SPY proxy
@@ -1467,37 +1605,44 @@ class TradingOrchestrator:
         confidence: float,
         earnings_map: dict[str, EarningsInfo],
     ) -> dict[str, Any] | None:
-        """Return a block dict if `sym` should be blocked from new entry.
+        """Phase 7 (2026-05-07): research-gated pre-earnings entry.
 
-        Tightened rule (post-2026-04-28 incident):
-        - days_until ∈ {0, 1}: HARD BLOCK, no override path. We do not open
-          new positions on the day of or day before earnings under any
-          circumstances — the CECO/CNC churn on 2026-04-28 was caused by
-          the selector entering names with earnings *today* via the override.
-        - days_until == 2: blocked unless `confidence >= override_confidence`
-          (default 0.90). This is the only override-eligible day.
+        Replaces the previous "hard block days 0-1, conf>=0.90 day 2" rule
+        with an evidence-based gate. The bot computes an
+        ``earnings_research_score`` (beat history + analyst PT trend +
+        implied move + sentiment) and decides:
+
+        - score >= research_score_strong (default 0.30): allow normal entry.
+        - score in [research_score_neutral, strong): require confidence
+          >= research_neutral_min_selector_conf (default 0.65).
+        - score < research_negative_floor AND days_until <= 1: block (the
+          bot has affirmative negative evidence).
         - days_until >= 3 (or None): no block.
+
+        Legacy ``research_gate_enabled=false`` falls back to the prior
+        hard-block behavior.
         """
         if not self.earnings_enabled:
             return None
         einfo = earnings_map.get(sym)
         days_until = einfo.days_until if einfo else None
-        if days_until is None:
+        if days_until is None or days_until < 0:
             return None
-        if days_until < 0:
-            return None  # past report
+        if days_until > self.entry_earnings_blackout_days:
+            return None
 
-        if days_until <= 1:
-            return {
-                "symbol": sym,
-                "days_until_earnings": days_until,
-                "next_earnings_date": einfo.next_date,
-                "confidence": round(confidence, 3),
-                "override_confidence": None,  # no override permitted
-                "blackout_days": self.entry_earnings_blackout_days,
-                "reason": "hard_block_day_0_or_1",
-            }
-        if days_until <= self.entry_earnings_blackout_days:
+        if not bool(self.cfg.get("earnings", "research_gate_enabled", default=True)):
+            # Legacy hard block path — kept for the safety toggle.
+            if days_until <= 1:
+                return {
+                    "symbol": sym,
+                    "days_until_earnings": days_until,
+                    "next_earnings_date": einfo.next_date,
+                    "confidence": round(confidence, 3),
+                    "override_confidence": None,
+                    "blackout_days": self.entry_earnings_blackout_days,
+                    "reason": "hard_block_day_0_or_1",
+                }
             if confidence >= self.entry_earnings_override:
                 return None
             return {
@@ -1509,6 +1654,52 @@ class TradingOrchestrator:
                 "blackout_days": self.entry_earnings_blackout_days,
                 "reason": "below_override_confidence",
             }
+
+        # Research-gated path
+        try:
+            from src.earnings import compute_earnings_research_score
+            ttl = float(self.cfg.get("earnings", "research_cache_ttl_hours", default=12) or 12)
+            research = compute_earnings_research_score(sym, ttl_hours=ttl)
+        except Exception as e:
+            log.debug("earnings research score for %s failed: %s", sym, e)
+            research = {"score": 0.0, "components": {}, "available_components": []}
+        score = float(research.get("score") or 0.0)
+        strong = float(self.cfg.get("earnings", "research_score_strong", default=0.30) or 0.30)
+        neutral = float(self.cfg.get("earnings", "research_score_neutral", default=0.0) or 0.0)
+        neutral_min_conf = float(
+            self.cfg.get("earnings", "research_neutral_min_selector_conf", default=0.65) or 0.65
+        )
+        negative_floor = float(self.cfg.get("earnings", "research_negative_floor", default=0.0) or 0.0)
+
+        if score >= strong:
+            return None  # strong setup → normal entry
+        if score >= neutral:
+            if confidence >= neutral_min_conf:
+                return None
+            return {
+                "symbol": sym,
+                "days_until_earnings": days_until,
+                "next_earnings_date": einfo.next_date,
+                "confidence": round(confidence, 3),
+                "research_score": score,
+                "research_threshold": strong,
+                "neutral_min_confidence": neutral_min_conf,
+                "blackout_days": self.entry_earnings_blackout_days,
+                "reason": "below_neutral_confidence_for_research_score",
+            }
+        # score < negative_floor: block only when day 0 or 1 (affirmative negative evidence)
+        if score < negative_floor and days_until <= 1:
+            return {
+                "symbol": sym,
+                "days_until_earnings": days_until,
+                "next_earnings_date": einfo.next_date,
+                "confidence": round(confidence, 3),
+                "research_score": score,
+                "negative_floor": negative_floor,
+                "blackout_days": self.entry_earnings_blackout_days,
+                "reason": "negative_research_score_in_window",
+            }
+        # Otherwise allow but note the soft signal — caller may downsize.
         return None
 
     # ---------- exits ----------
@@ -1741,7 +1932,13 @@ class TradingOrchestrator:
                 self._handle_exit_arbiter_reduce(p, plpc, conf, reasoning)
                 self._exit_confirmation_buffer_clear(p.symbol)
                 self._record_exit_arbiter_action(p.symbol, "reduce", conf, reasoning)
-            # else: hold / low-confidence → do nothing
+            elif action == "hold":
+                # Phase 4 (2026-05-07): record HOLD verdicts too. The selector
+                # uses these as continuation evidence when weighing rotation
+                # decisions. Recording is symmetric — HOLD raises the rotation
+                # bar but EXIT lowers it (no incumbent bias).
+                self._record_exit_arbiter_action(p.symbol, "hold", conf, reasoning)
+            # else: low-confidence / unknown → do nothing
         return closes
 
     def _exit_confirmation_buffer_path(self) -> Path:
@@ -1809,6 +2006,161 @@ class TradingOrchestrator:
             "reason": str(reasoning or "")[:200],
         }
         self._save_recent_exit_actions(state)
+
+    # ---------- Phase A/D/E helpers (2026-05-07) ----------
+
+    def _compute_tape_state_for_selector(self) -> dict[str, Any]:
+        """Compute the proportional intraday SPY tape filter signal.
+
+        Returns the ``TapeSignal`` as a dict suitable for inclusion in
+        ``system_state.tape_state``. Always returns a usable dict; on data
+        unavailability the floor is the configured base and severity is
+        ``favorable`` (i.e. no penalty).
+        """
+        try:
+            tape_cfg = self.cfg.get("macro", "intraday_tape_filter", default={}) or {}
+        except Exception:
+            tape_cfg = {}
+        if not bool(tape_cfg.get("enabled", True)):
+            base_floor = float(tape_cfg.get("base_min_opportunity_score", 65) or 65)
+            return {
+                "enabled": False,
+                "min_opportunity_score_floor": base_floor,
+                "severity_label": "favorable",
+                "tape_badness": 0.0,
+                "spy_intraday_change_pct": 0.0,
+                "spy_vs_vwap_pct": 0.0,
+                "has_data": False,
+                "notes": ["filter_disabled"],
+            }
+        try:
+            spy_intraday = self._fetch_intraday(["SPY"], minutes=5)
+        except Exception as e:
+            log.info("[tape] SPY intraday fetch failed: %s", e)
+            spy_intraday = None
+        spy_slice = self._slice_symbol(spy_intraday, "SPY") if spy_intraday is not None else None
+        signal = compute_tape_signal(spy_slice, tape_cfg)
+        out = signal.to_dict()
+        out["enabled"] = True
+        log.info(
+            "[tape] severity=%s badness=%.2f spy_intra=%+.2f%% vs_vwap=%+.3f%% "
+            "buy_floor=%.0f",
+            signal.severity_label,
+            signal.tape_badness,
+            signal.spy_intraday_change_pct * 100.0,
+            signal.spy_vs_vwap_pct * 100.0,
+            signal.min_opportunity_score_floor,
+        )
+        return out
+
+    def _minutes_to_close_with_freeze_flag(self) -> tuple[int | None, bool]:
+        """Return (minutes_to_close, no_new_entries) using the broker clock.
+
+        ``no_new_entries`` is True when ``minutes_to_close`` is below the
+        configured threshold ``selector.no_new_entries_minutes_before_close``.
+        Returns (None, False) when the clock is unavailable.
+        """
+        threshold = int(
+            self.cfg.get(
+                "selector", "no_new_entries_minutes_before_close", default=30
+            ) or 30
+        )
+        try:
+            clock = self.client.get_clock()
+        except Exception as e:
+            log.info("[late-day-freeze] clock unavailable: %s", e)
+            return None, False
+        if clock is None:
+            return None, False
+        try:
+            is_open = bool(getattr(clock, "is_open", False))
+            next_close = getattr(clock, "next_close", None)
+            now_attr = getattr(clock, "timestamp", None) or datetime.now(timezone.utc)
+            if not is_open or next_close is None:
+                return None, False
+            now_dt = pd.Timestamp(now_attr).tz_convert("UTC") if pd.Timestamp(now_attr).tzinfo else pd.Timestamp(now_attr).tz_localize("UTC")
+            close_dt = pd.Timestamp(next_close).tz_convert("UTC") if pd.Timestamp(next_close).tzinfo else pd.Timestamp(next_close).tz_localize("UTC")
+            mins = int(max(0, (close_dt - now_dt).total_seconds() // 60))
+        except Exception as e:
+            log.info("[late-day-freeze] clock parse failed: %s", e)
+            return None, False
+        no_new = mins <= threshold
+        if no_new:
+            log.info("[late-day-freeze] active: %d min to close (threshold=%d)", mins, threshold)
+        return mins, no_new
+
+    # Phase D: selector-source rotation cooldown — separate state file from
+    # exit-arbiter so the two cooldowns can be tuned and read independently.
+    def _selector_rotations_path(self) -> Path:
+        return Path(__file__).resolve().parents[1] / "data" / "state" / "recent_selector_rotations.json"
+
+    def _load_recent_selector_rotations(self) -> dict[str, Any]:
+        path = self._selector_rotations_path()
+        try:
+            return json.loads(path.read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            return {}
+        except Exception as e:
+            log.warning("recent-selector-rotations load failed: %s", e)
+            return {}
+
+    def _save_recent_selector_rotations(self, state: dict[str, Any]) -> None:
+        path = self._selector_rotations_path()
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps(state, indent=2), encoding="utf-8")
+        except Exception as e:
+            log.warning("recent-selector-rotations save failed: %s", e)
+
+    def record_selector_rotation_exit(
+        self, symbol: str, opportunity_score: float, reason: str = "",
+    ) -> None:
+        """Record a selector-driven EXIT so future selector scans can't
+        immediately re-buy without clearing the rebuy bar."""
+        sym = str(symbol or "").strip().upper()
+        if not sym:
+            return
+        state = self._load_recent_selector_rotations()
+        state[sym] = {
+            "ts": datetime.now(timezone.utc).isoformat(),
+            "opportunity_score_at_exit": round(float(opportunity_score or 0), 1),
+            "reason": str(reason or "")[:200],
+        }
+        self._save_recent_selector_rotations(state)
+
+    def _recent_selector_rotations_for_selector(self) -> dict[str, Any]:
+        """Return selector rotations still inside the cooldown window."""
+        cooldown_min = float(
+            self.cfg.get("selector", "selector_rotation_cooldown_minutes", default=90) or 90
+        )
+        if cooldown_min <= 0:
+            return {}
+        state = self._load_recent_selector_rotations()
+        if not state:
+            return {}
+        now = datetime.now(timezone.utc)
+        out: dict[str, Any] = {}
+        changed = False
+        for sym, entry in list(state.items()):
+            ts = self._parse_lifecycle_ts((entry or {}).get("ts"))
+            if ts is None:
+                state.pop(sym, None)
+                changed = True
+                continue
+            age_min = (now - ts).total_seconds() / 60.0
+            if age_min > cooldown_min:
+                state.pop(sym, None)
+                changed = True
+                continue
+            out[sym] = {
+                "minutes_ago": round(age_min, 1),
+                "minutes_remaining": round(cooldown_min - age_min, 1),
+                "opportunity_score_at_exit": entry.get("opportunity_score_at_exit"),
+                "reason": entry.get("reason"),
+            }
+        if changed:
+            self._save_recent_selector_rotations(state)
+        return out
 
     def _recent_exit_actions_for_selector(self) -> dict[str, Any]:
         """Return exit-arbiter actions still inside the cooldown window.
@@ -3050,23 +3402,78 @@ class TradingOrchestrator:
             if action.side == "sell":
                 fresh_guard = self._fresh_exit_guard(action, full_exit=full_exit)
                 if fresh_guard:
-                    log.info(
-                        "[%s] %s sell skipped by fresh-exit guard: conf=%.2f < %.2f",
-                        action.symbol, label,
-                        fresh_guard.get("ai_confidence", 0.0),
-                        fresh_guard.get("min_confidence", 0.0),
-                    )
-                    log_decision({
-                        "event": "fresh_exit_guard_skipped",
-                        "symbol": action.symbol,
-                        "action": action_dict,
-                        "guard": fresh_guard,
-                    })
-                    return {
-                        **action_dict,
-                        "skipped": "fresh_exit_cooldown_low_confidence",
-                        "fresh_exit_guard": fresh_guard,
-                    }
+                    trim_pct = float(fresh_guard.get("downgrade_to_reduce_pct", 0) or 0)
+                    if trim_pct > 0 and trim_pct < 1.0:
+                        # Phase 5: downgrade full EXIT to partial REDUCE.
+                        # Recompute delta_qty as a fraction of current_qty so
+                        # the executor submits a partial sell rather than
+                        # a close_position. Mutate the action in place.
+                        try:
+                            current_qty = abs(float(getattr(action, "current_qty", 0) or 0))
+                        except (TypeError, ValueError):
+                            current_qty = 0.0
+                        if current_qty <= 0:
+                            log.info(
+                                "[%s] %s fresh-exit downgrade requested but current_qty unknown; skipping",
+                                action.symbol, label,
+                            )
+                            return {
+                                **action_dict,
+                                "skipped": "fresh_exit_cooldown_low_confidence",
+                                "fresh_exit_guard": fresh_guard,
+                            }
+                        trim_qty = round(current_qty * trim_pct, 6)
+                        if trim_qty <= 0:
+                            return {
+                                **action_dict,
+                                "skipped": "fresh_exit_cooldown_low_confidence",
+                                "fresh_exit_guard": fresh_guard,
+                            }
+                        log.info(
+                            "[%s] %s fresh-exit guard tier=%s age=%.1fm: "
+                            "downgraded EXIT → REDUCE %.0f%% (qty=%.4f of %.4f)",
+                            action.symbol, label,
+                            fresh_guard.get("tier"),
+                            fresh_guard.get("age_minutes", 0.0),
+                            trim_pct * 100, trim_qty, current_qty,
+                        )
+                        log_decision({
+                            "event": "fresh_exit_guard_downgraded",
+                            "symbol": action.symbol,
+                            "action": action_dict,
+                            "guard": fresh_guard,
+                            "trim_qty": trim_qty,
+                            "current_qty": current_qty,
+                        })
+                        # Replace the full exit with a partial sell.
+                        action.ai_delta_qty = -trim_qty
+                        action.target_pct = max(0.0, float(getattr(action, "target_pct", 0.0) or 0.0))
+                        # Force the caller out of the full_exit branch.
+                        full_exit = False
+                        ai_audit["fresh_exit_downgraded"] = {
+                            "tier": fresh_guard.get("tier"),
+                            "trim_pct": trim_pct,
+                            "trim_qty": trim_qty,
+                            "current_qty": current_qty,
+                        }
+                    else:
+                        log.info(
+                            "[%s] %s sell skipped by fresh-exit guard: conf=%.2f < %.2f",
+                            action.symbol, label,
+                            fresh_guard.get("ai_confidence", 0.0),
+                            fresh_guard.get("min_confidence", 0.0),
+                        )
+                        log_decision({
+                            "event": "fresh_exit_guard_skipped",
+                            "symbol": action.symbol,
+                            "action": action_dict,
+                            "guard": fresh_guard,
+                        })
+                        return {
+                            **action_dict,
+                            "skipped": "fresh_exit_cooldown_low_confidence",
+                            "fresh_exit_guard": fresh_guard,
+                        }
             if full_exit:
                 if action.ai_delta_qty is not None:
                     try:
@@ -3548,8 +3955,14 @@ class TradingOrchestrator:
                 "available_cash_above_floor": round(affordable, 2),
                 "ai_target_pct": round(float(target_pct), 4),
             }
-        try:
-            self.client.submit_notional(self.cash_proxy_symbol, buy_amt, side="buy")
+        buy_result = submit_cash_proxy_buy(
+            self.client,
+            self.cfg,
+            self.cash_proxy_symbol,
+            buy_amt,
+            reason="SPY target rebalance",
+        )
+        if buy_result.get("action") == "buy_proxy" and buy_result.get("ok", True):
             log.info("SPY rebalance BUY $%.0f: %s %.1f%% → target %.1f%% of equity",
                      buy_amt, self.cash_proxy_symbol,
                      current_value / equity * 100, float(target_pct) * 100)
@@ -3559,10 +3972,15 @@ class TradingOrchestrator:
                 "current_value": round(current_value, 2),
                 "target_value": round(target_value, 2),
                 "ai_target_pct": round(float(target_pct), 4),
+                "cash_proxy_buy": buy_result,
             }
-        except Exception as e:
-            log.warning("SPY rebalance buy failed: %s", e)
-            return {"symbol": self.cash_proxy_symbol, "action": "buy_failed", "error": str(e)}
+        log.warning("SPY rebalance buy failed/skipped: %s", buy_result)
+        return {
+            "symbol": self.cash_proxy_symbol,
+            "action": "buy_failed" if buy_result.get("action") == "buy_failed" else "buy_skipped",
+            "requested_delta_usd": round(buy_amt, 2),
+            "cash_proxy_buy": buy_result,
+        }
 
     # ---------- post-execution portfolio verifier (Sonnet 4.6) ----------
     def _verify_portfolio_alignment(self, equity: float) -> dict[str, Any] | None:
@@ -4013,6 +4431,79 @@ class TradingOrchestrator:
             breakdown[key] = int(breakdown.get(key, 0) or 0) + 1
         return candidates, breakdown
 
+    def _seed_cash_proxy_target_weight(self, result: dict[str, Any]) -> None:
+        """Mirror selector spy_target_pct into target_weights before repairs.
+
+        The sector guard moves rejected stock allocation into the cash proxy.
+        Its inputs are target_weights-only, while the selector normally keeps
+        SPY in a separate spy_target_pct field, so seed the proxy weight first
+        to preserve the original SPY target plus any recovered allocation.
+        """
+        if not self.cash_proxy_enabled:
+            return
+        target_weights = result.get("target_weights")
+        if not isinstance(target_weights, dict):
+            return
+        proxy = str(self.cash_proxy_symbol or "").upper()
+        if not proxy or proxy in {str(s).upper() for s in target_weights.keys()}:
+            return
+        try:
+            spy_target = float(result.get("spy_target_pct", 0) or 0)
+        except (TypeError, ValueError):
+            return
+        if spy_target > 0:
+            target_weights[proxy] = round(max(0.0, min(1.0, spy_target)), 4)
+
+    def _sync_cash_proxy_target_from_weights(self, result: dict[str, Any]) -> None:
+        """Keep spy_target_pct consistent when guard repairs target_weights."""
+        if not self.cash_proxy_enabled:
+            return
+        target_weights = result.get("target_weights")
+        if not isinstance(target_weights, dict):
+            return
+        proxy = str(self.cash_proxy_symbol or "").upper()
+        match = next(
+            (s for s in target_weights.keys() if str(s).upper() == proxy),
+            None,
+        )
+        if match is None:
+            return
+        try:
+            proxy_weight = float(target_weights.get(match, 0) or 0)
+        except (TypeError, ValueError):
+            return
+        proxy_weight = round(max(0.0, min(1.0, proxy_weight)), 4)
+        result["spy_target_pct"] = proxy_weight
+        spy_decision = result.get("spy_decision")
+        if isinstance(spy_decision, dict):
+            spy_decision["target_pct"] = proxy_weight
+
+    def _prune_zero_target_selected_positions(self, result: dict[str, Any]) -> list[str]:
+        """Drop guard-removed zero-weight symbols from selected_positions."""
+        selected = result.get("selected_positions")
+        target_weights = result.get("target_weights")
+        if not isinstance(selected, list) or not isinstance(target_weights, dict):
+            return []
+        proxy = str(self.cash_proxy_symbol or "").upper() if self.cash_proxy_enabled else ""
+        kept: list[str] = []
+        removed: list[str] = []
+        for sym in selected:
+            sym_s = str(sym)
+            if proxy and sym_s.upper() == proxy:
+                continue
+            try:
+                target = float(target_weights.get(sym_s, 0.0) or 0.0)
+            except (TypeError, ValueError):
+                target = 0.0
+            if target > 0:
+                kept.append(sym_s)
+            else:
+                removed.append(sym_s)
+        if removed:
+            result["selected_positions"] = kept
+            result["sector_guard_removed_targets"] = removed
+        return removed
+
     def _stage_new_entry_targets(
         self,
         result: dict[str, Any],
@@ -4035,11 +4526,27 @@ class TradingOrchestrator:
             for s, info in (result.get("per_symbol") or {}).items()
         }
         cash_target_pct = float(result.get("cash_target_pct", 0) or 0)
-        fraction = float(self.cfg.get(
+        base_fraction = float(self.cfg.get(
             "selector", "new_entry_initial_fraction", default=0.70,
         ) or 0.70)
-        fraction = max(0.05, min(1.0, fraction))
-        if fraction >= 0.999:
+        base_fraction = max(0.05, min(1.0, base_fraction))
+        strong_fraction = float(self.cfg.get(
+            "selector", "new_entry_strong_initial_fraction", default=0.85,
+        ) or 0.85)
+        max_fraction = float(self.cfg.get(
+            "selector", "new_entry_max_initial_fraction", default=0.90,
+        ) or 0.90)
+        strong_fraction = max(base_fraction, min(max_fraction, strong_fraction))
+        strong_min_score = float(self.cfg.get(
+            "selector", "new_entry_strong_min_opportunity_score", default=85,
+        ) or 85)
+        strong_min_conf = float(self.cfg.get(
+            "selector", "new_entry_strong_min_confidence", default=0.75,
+        ) or 0.75)
+        tape_state = result.get("_tape_state") or {}
+        tape_severity = str((tape_state or {}).get("severity_label") or "favorable")
+        risk_off_tape = tape_severity in ("mild_risk_off", "strong_risk_off")
+        if base_fraction >= 0.999:
             return target_weights, per_symbol, cash_target_pct, []
 
         adjustments: list[dict[str, Any]] = []
@@ -4050,11 +4557,25 @@ class TradingOrchestrator:
             original_w = float(target_weights.get(sym, 0.0) or 0.0)
             if original_w <= 0:
                 continue
+            info = dict(per_symbol.get(sym) or {})
+            try:
+                opp_score = float(info.get("opportunity_score", 0) or 0)
+            except (TypeError, ValueError):
+                opp_score = 0.0
+            confidence = self._selector_entry_confidence(info)
+            fraction = base_fraction
+            fraction_reason = "base"
+            if (
+                not risk_off_tape
+                and opp_score >= strong_min_score
+                and confidence >= strong_min_conf
+            ):
+                fraction = strong_fraction
+                fraction_reason = "strong_opportunity"
             staged_w = round(original_w * fraction, 4)
             if staged_w <= 0:
                 continue
             freed_w = max(0.0, original_w - staged_w)
-            info = dict(per_symbol.get(sym) or {})
             try:
                 entry = float(info.get("entry_price", 0) or 0)
                 original_qty = float(info.get("qty", 0) or 0)
@@ -4071,6 +4592,7 @@ class TradingOrchestrator:
             info["_staged_entry"] = True
             info["_original_target_pct"] = round(original_w, 4)
             info["_staged_fraction"] = fraction
+            info["_staged_fraction_reason"] = fraction_reason
             reason = str(info.get("one_sentence_reason") or "")
             if reason and "starter" not in reason.lower():
                 info["one_sentence_reason"] = (
@@ -4087,6 +4609,10 @@ class TradingOrchestrator:
                 "cash_target_added_pct": round(freed_w, 4),
                 "original_qty": original_qty,
                 "staged_qty": staged_qty,
+                "staged_fraction_reason": fraction_reason,
+                "opportunity_score": opp_score,
+                "confidence": confidence,
+                "tape_severity": tape_severity,
             })
 
         return target_weights, per_symbol, cash_target_pct, adjustments
@@ -4407,8 +4933,49 @@ class TradingOrchestrator:
             "selected, you MUST include at least one new candidate.",
             f"New entries should start near {float(self.cfg.get('selector', 'new_entry_initial_fraction', default=0.70) or 0.70):.0%} "
             "of the desired final target and scale on later scans if continuation persists.",
-            "Score-weighted sizing: weight ∝ opportunity_score, not equal-weight.",
+            "Score-weighted sizing: weight ∝ opportunity_score^k where k = "
+            "system_state.concentration_exponent. Top-conviction names get a "
+            "real majority share — equal-ish weights across 5-6 names is the "
+            "failure pattern this rule corrects. If your top-3 weights span "
+            "less than system_state.min_top3_weight_ratio (max/min), drop the "
+            "weakest and reallocate.",
             "Sector caps and per-position caps are HARD constraints.",
+            (
+                "Phase A intraday tape filter: BUY/INCREASE actions REQUIRE "
+                "opportunity_score >= max(system_state.buy_min_opportunity_score, "
+                "system_state.tape_state.min_opportunity_score_floor). The tape "
+                "floor scales with how bad SPY is doing intraday — a -1% SPY "
+                "session may push the floor to ~85. There is NO hard halt: any "
+                "number of names that clear the floor are allowed."
+            ),
+            (
+                "Phase B risk-off concentration: when system_state.risk_off_active "
+                "is true, return at most system_state.max_positions_this_scan "
+                "selected positions and use the higher concentration_exponent "
+                "the system_state already provides. Capital not deployed to "
+                "selected names may stay in cash only when SPY/tape is bearish; "
+                "otherwise assign it to spy_target_pct."
+            ),
+            (
+                "Phase C quality gates: a BUY MUST also satisfy "
+                "distance_from_high_pct >= buy_max_distance_from_high_pct "
+                "OR have rising volume — chasing names within 4% of intraday "
+                "high with fading/flat volume is a hard PASS."
+            ),
+            (
+                "Phase D selector-rotation cooldown: symbols in "
+                "system_state.recent_selector_rotations may NOT be re-bought "
+                "unless your opportunity_score >= "
+                "selector_rotation_rebuy_min_score AND beats the prior exit "
+                "score by >= selector_rotation_rebuy_min_score_delta. Otherwise "
+                "PASS — do not round-trip the same symbol within the cooldown."
+            ),
+            (
+                "Phase E late-day freeze: when system_state.no_new_entries=true "
+                "(within minutes_to_close of the bell), NO BUY or INCREASE "
+                "actions. HOLD/EXIT/REDUCE/PASS only. There is not enough "
+                "runway for a fresh entry."
+            ),
             (
                 f"DIVERSIFICATION CAP (HARD): no more than "
                 f"{int(self.cfg.get('diversification', 'max_per_gics_sector', default=3) or 3)} "
@@ -4417,6 +4984,13 @@ class TradingOrchestrator:
                 f"may share the same theme_bucket. Theme weight cap: "
                 f"{float(self.cfg.get('diversification', 'max_theme_weight_pct', default=0.50) or 0.50):.0%}. "
                 f"The executor will VETO any plan that violates these caps."
+            ),
+            (
+                "Cash-vs-SPY decision: explicitly decide whether excess idle "
+                "money is better in true cash or SPY. Use cash_target_pct above "
+                "the reserve only when SPY/tape is bearish or cash is clearly "
+                "safer than market exposure; otherwise use spy_target_pct so "
+                "the account participates in constructive SPY tape."
             ),
         ]
 
@@ -4440,6 +5014,101 @@ class TradingOrchestrator:
                     "exit_arbiter", "rebuy_min_confidence", default=0.80
                 ) or 0.80
             )
+
+        # Phase A (2026-05-07): proportional intraday SPY tape filter. Computed
+        # from SPY 5-min bars; raises the BUY opportunity_score floor smoothly
+        # with how bad the tape is, never hard-blocks. Independent of the
+        # daily macro halt.
+        ss["tape_state"] = self._compute_tape_state_for_selector()
+        # Phase B (2026-05-07): concentration-weighted sizing knobs.
+        risk_off_now = (ss["tape_state"].get("severity_label") in ("mild_risk_off", "strong_risk_off"))
+        ss["risk_off_active"] = bool(risk_off_now)
+        if risk_off_now:
+            ss["concentration_exponent"] = float(
+                self.cfg.get("selector", "concentration_exponent_risk_off", default=5.0) or 5.0
+            )
+            ss["max_positions_this_scan"] = int(
+                self.cfg.get("selector", "max_positions_risk_off", default=3) or 3
+            )
+        else:
+            ss["concentration_exponent"] = float(
+                self.cfg.get("selector", "concentration_exponent", default=3.0) or 3.0
+            )
+            ss["max_positions_this_scan"] = int(
+                self.cfg.get("selector", "max_positions", default=6) or 6
+            )
+        ss["min_top3_weight_ratio"] = float(
+            self.cfg.get("selector", "min_top3_weight_ratio", default=1.5) or 1.5
+        )
+        # Phase C (2026-05-07): hard quality gates above BUY threshold.
+        ss["buy_min_opportunity_score"] = float(
+            self.cfg.get("selector", "buy_min_opportunity_score", default=70) or 70
+        )
+        ss["buy_max_distance_from_high_pct"] = float(
+            self.cfg.get("selector", "buy_max_distance_from_high_pct", default=0.04) or 0.04
+        )
+        # Phase C.1 (2026-05-11): dynamic gate softening. Both the opp-score
+        # floor and the distance-from-high floor scale with (a) the pool's
+        # top opportunity score and (b) tape_badness ∈ [0,1]. In a favorable
+        # tape with a top score of 78, a 70-flat floor leaves a 8-pt working
+        # band — too tight, and "don't chase the high" filters out leaders
+        # for being leaders. See ai_pipeline._validate_selector_output.
+        ss["buy_floor_dynamic_enabled"] = bool(
+            self.cfg.get("selector", "buy_floor_dynamic_enabled", default=True)
+        )
+        ss["buy_floor_dynamic_min"] = float(
+            self.cfg.get("selector", "buy_floor_dynamic_min", default=55) or 55
+        )
+        ss["buy_floor_dynamic_delta_favorable"] = float(
+            self.cfg.get("selector", "buy_floor_dynamic_delta_favorable", default=15) or 15
+        )
+        ss["buy_floor_dynamic_delta_severe"] = float(
+            self.cfg.get("selector", "buy_floor_dynamic_delta_severe", default=5) or 5
+        )
+        ss["buy_distance_dynamic_min_scale"] = float(
+            self.cfg.get("selector", "buy_distance_dynamic_min_scale", default=0.25) or 0.25
+        )
+        ss["buy_distance_confidence_bypass"] = float(
+            self.cfg.get("selector", "buy_distance_confidence_bypass", default=0.65) or 0.65
+        )
+        # Phase C.1 (2026-05-11): dynamic rotation-cooldown floor.
+        ss["rotation_rebuy_dynamic_enabled"] = bool(
+            self.cfg.get("selector", "rotation_rebuy_dynamic_enabled", default=True)
+        )
+        ss["rotation_rebuy_dynamic_min"] = float(
+            self.cfg.get("selector", "rotation_rebuy_dynamic_min", default=70) or 70
+        )
+        ss["rotation_rebuy_dynamic_delta_favorable"] = float(
+            self.cfg.get("selector", "rotation_rebuy_dynamic_delta_favorable", default=8) or 8
+        )
+        ss["rotation_rebuy_dynamic_delta_severe"] = float(
+            self.cfg.get("selector", "rotation_rebuy_dynamic_delta_severe", default=2) or 2
+        )
+        ss["anti_stagnation_min_top_score"] = float(
+            self.cfg.get("selector", "anti_stagnation_min_top_score", default=70) or 70
+        )
+        # Phase D (2026-05-07): selector-source rotation cooldown — surface
+        # selector-driven exits so the selector can't immediately reverse them.
+        recent_rotations = self._recent_selector_rotations_for_selector()
+        if recent_rotations:
+            ss["recent_selector_rotations"] = recent_rotations
+            ss["selector_rotation_rebuy_min_score"] = float(
+                self.cfg.get("selector", "selector_rotation_rebuy_min_score", default=90) or 90
+            )
+            ss["selector_rotation_rebuy_min_score_delta"] = float(
+                self.cfg.get(
+                    "selector", "selector_rotation_rebuy_min_score_delta", default=10
+                ) or 10
+            )
+        # Phase E (2026-05-07): late-day entry freeze. Compute minutes to close
+        # so the selector and validator can block fresh BUYs in the last N min.
+        mins_to_close, no_new_entries = self._minutes_to_close_with_freeze_flag()
+        if mins_to_close is not None:
+            ss["minutes_to_close"] = mins_to_close
+        ss["no_new_entries"] = bool(no_new_entries)
+        ss["no_new_entries_minutes_before_close"] = int(
+            self.cfg.get("selector", "no_new_entries_minutes_before_close", default=30) or 30
+        )
 
         # Build unified candidate_pool. Held positions get full block (qty,
         # weight, pnl); new candidates get zeros for those fields plus discovery
@@ -4470,6 +5139,7 @@ class TradingOrchestrator:
             sym = cand.symbol
             currently_held = bool(cand.is_held)
             block: dict[str, Any] = held_blocks_by_sym.get(sym, {}).copy()
+            einfo = earnings_map.get(sym)
             chart = self._intraday_chart_for(selector_intraday, sym, selector_daily)
             momentum_profile = self._momentum_profile(chart)
             five_day_change = self._five_day_change_pct(selector_daily, sym)
@@ -4479,7 +5149,6 @@ class TradingOrchestrator:
                 tech = tech_map.get(sym)
                 sent = sent_map.get(sym)
                 num = numeric.get(sym)
-                einfo = earnings_map.get(sym)
                 block = {
                     "symbol": sym,
                     "side": "long",  # default — selector decides direction via action
@@ -4508,6 +5177,20 @@ class TradingOrchestrator:
                     "earnings_days_until": (einfo.days_until if einfo else None),
                     "earnings_next_date": (einfo.next_date if einfo else None),
                 }
+            # Phase 7 (2026-05-07): surface earnings research evidence so the
+            # selector can size & confidence-weight pre-earnings entries.
+            if einfo and einfo.days_until is not None and 0 <= einfo.days_until <= self.entry_earnings_blackout_days:
+                try:
+                    from src.earnings import compute_earnings_research_score
+                    ttl = float(self.cfg.get("earnings", "research_cache_ttl_hours", default=12) or 12)
+                    research = compute_earnings_research_score(sym, ttl_hours=ttl)
+                    block["earnings_research_score"] = research.get("score")
+                    block["earnings_research_components"] = research.get("components")
+                    block["pre_earnings_size_multiplier"] = float(
+                        self.cfg.get("earnings", "pre_earnings_size_multiplier", default=0.75) or 0.75
+                    )
+                except Exception as e:
+                    log.debug("earnings research surface for %s failed: %s", sym, e)
             else:
                 # Held blocks come from _portfolio_signals which DOES embed
                 # intraday_chart. Drop it here to keep the selector context
@@ -4574,6 +5257,40 @@ class TradingOrchestrator:
                 "intraday_chart": chart,
                 "position_lifecycle": lifecycle,
             }
+            # Phase 6 (2026-05-07): liquidity-aware concentration cap inputs.
+            # is_illiquid drives selector validator clamping AND surfaces in
+            # the candidate block so the selector can self-cap. Daily bars
+            # cache is shared with technicals so ADV is essentially free
+            # after the first call.
+            try:
+                price_thresh = float(self.cfg.get("risk", "illiquid_price_threshold", default=20.0) or 20.0)
+                adv_thresh = float(self.cfg.get("risk", "illiquid_adv_threshold", default=50_000_000) or 50_000_000)
+                cand_price = float(getattr(cand, "price", 0) or 0)
+                is_illiq_price = cand_price > 0 and cand_price < price_thresh
+                adv_value: float | None = None
+                if not is_illiq_price and adv_thresh > 0:
+                    try:
+                        mds_local = get_market_data(self.cfg)
+                        adv_value = mds_local.get_avg_dollar_volume(sym, days=20)
+                    except Exception:
+                        adv_value = None
+                else:
+                    try:
+                        adv_value = get_market_data(self.cfg).get_avg_dollar_volume(sym, days=20)
+                    except Exception:
+                        adv_value = None
+                is_illiq_adv = adv_value is not None and adv_value < adv_thresh
+                is_illiq = bool(is_illiq_price or is_illiq_adv)
+                pool_meta[sym]["price"] = cand_price or None
+                pool_meta[sym]["avg_dollar_volume_20d"] = adv_value
+                pool_meta[sym]["is_illiquid"] = is_illiq
+                if is_illiq:
+                    block["is_illiquid"] = True
+                    block["illiquid_max_position_pct"] = float(
+                        self.cfg.get("risk", "illiquid_max_position_pct", default=0.08) or 0.08
+                    )
+            except Exception as e:
+                log.debug("[selector] illiquid-check failed for %s: %s", sym, e)
 
         annotate_candidate_leadership(
             unified_pool,
@@ -4631,6 +5348,134 @@ class TradingOrchestrator:
         base.pop("positions", None)
         base.pop("scan_candidates_summary", None)
         return base, pool_meta
+
+    def _build_selector_safety_noop_result(
+        self,
+        *,
+        reason: str,
+        ctx: dict[str, Any],
+        pool_meta: dict[str, dict[str, Any]],
+        portfolio: dict[str, Any],
+        account: Any,
+        equity: float,
+        consecutive_failures: int,
+    ) -> dict[str, Any]:
+        """Return a broker-neutral selector result that makes no selector trades.
+
+        This is the final safety net when the AI selector is unavailable,
+        truncated, or invalid after all retries. It does not originate trades;
+        it freezes the current non-SPY book at current quantities and marks
+        every fresh candidate PASS so downstream reporting still completes.
+        """
+        holdings = {
+            str(getattr(p, "symbol", "") or ""): p
+            for p in portfolio.get("holdings", [])
+            if getattr(p, "symbol", None)
+            and "/" not in str(getattr(p, "symbol", ""))
+            and not self._is_cash_proxy(str(getattr(p, "symbol", "")))
+        }
+        candidate_pool = ctx.get("candidate_pool") or []
+        pool_symbols = {
+            str(row.get("symbol") or "")
+            for row in candidate_pool
+            if isinstance(row, dict) and row.get("symbol")
+        }
+
+        per_symbol: dict[str, dict[str, Any]] = {}
+        target_weights: dict[str, float] = {}
+        selected: list[str] = []
+
+        def _float(v: Any, default: float = 0.0) -> float:
+            try:
+                return float(v)
+            except (TypeError, ValueError):
+                return default
+
+        for sym in sorted(pool_symbols | set(holdings.keys())):
+            if not sym or self._is_cash_proxy(sym) or "/" in sym:
+                continue
+            p = holdings.get(sym)
+            meta = pool_meta.get(sym) or {}
+            if p is not None:
+                qty = abs(_float(getattr(p, "qty", 0), 0.0))
+                notional = abs(_float(getattr(p, "market_value", 0), 0.0))
+                price = (notional / qty) if qty > 0 and notional > 0 else _float(
+                    getattr(p, "current_price", 0), 0.0
+                )
+                target_pct = round((notional / equity) if equity > 0 else 0.0, 6)
+                if qty > 0 and target_pct > 0:
+                    selected.append(sym)
+                    target_weights[sym] = target_pct
+                per_symbol[sym] = {
+                    "target_pct": target_pct,
+                    "qty": qty,
+                    "delta_qty": 0,
+                    "entry_price": round(price, 4) if price > 0 else 0,
+                    "stop_loss": None,
+                    "take_profit": None,
+                    "action": "HOLD",
+                    "confidence": 0.0,
+                    "opportunity_score": _float(meta.get("candidate_priority_score"), 0.0),
+                    "one_sentence_reason": None,
+                    "reason_code": "selector_safety_noop",
+                }
+                continue
+
+            chart = meta.get("intraday_chart") if isinstance(meta, dict) else None
+            price = _float((chart or {}).get("current_price"), 0.0)
+            per_symbol[sym] = {
+                "target_pct": 0.0,
+                "qty": 0,
+                "delta_qty": 0,
+                "entry_price": round(price, 4) if price > 0 else 0,
+                "stop_loss": None,
+                "take_profit": None,
+                "action": "PASS",
+                "confidence": 0.0,
+                "opportunity_score": _float(meta.get("candidate_priority_score"), 0.0),
+                "one_sentence_reason": None,
+                "reason_code": "selector_unavailable",
+            }
+
+        spy_target_pct = 0.0
+        for p in portfolio.get("holdings", []) or []:
+            sym = str(getattr(p, "symbol", "") or "")
+            if self._is_cash_proxy(sym):
+                spy_target_pct += (abs(_float(getattr(p, "market_value", 0), 0.0)) / equity) if equity > 0 else 0.0
+        spy_target_pct = round(max(0.0, spy_target_pct), 6)
+        current_cash_pct = (max(0.0, _float(getattr(account, "cash", 0), 0.0)) / equity) if equity > 0 else 0.0
+        total = sum(target_weights.values()) + spy_target_pct + current_cash_pct
+        if not (0.99 <= total <= 1.01):
+            current_cash_pct = max(0.0, 1.0 - sum(target_weights.values()) - spy_target_pct)
+        cash_target_pct = round(current_cash_pct, 6)
+
+        return {
+            "portfolio_thesis": (
+                "Selector AI failed after retries; safety no-op is holding the current "
+                "book and making no selector-driven allocation changes."
+            ),
+            "spy_target_pct": spy_target_pct,
+            "cash_target_pct": cash_target_pct,
+            "spy_decision": {
+                "target_pct": spy_target_pct,
+                "action": "HOLD",
+                "opportunity_score": 0,
+                "one_sentence_reason": "Safety no-op preserves the current SPY allocation because selector AI failed.",
+            },
+            "spy_vs_cash_reasoning": "Safety no-op preserves current cash and SPY exposure.",
+            "selected_positions": selected,
+            "target_weights": target_weights,
+            "per_symbol": per_symbol,
+            "exhaustion_penalty_applied": [],
+            "rotation_plan": {"exited": [], "entered": [], "held": [
+                {"symbol": sym, "reason": "selector_safety_noop"} for sym in selected
+            ]},
+            "capital_movement_plan": [],
+            "risk_flags": [f"selector_safety_noop: {reason}"],
+            "_selector_safety_noop": True,
+            "_selector_failure_reason": reason,
+            "_selector_consecutive_failures": consecutive_failures,
+        }
 
     def _run_scan_with_selector(
         self,
@@ -4776,11 +5621,48 @@ class TradingOrchestrator:
         dynamic_watchlist_update: dict[str, Any] | None = None
 
         # 6. Run selector
+        # Phase 1 (2026-05-07): on max_tokens, retry with a smaller pool. The
+        # callable preserves held candidates and re-ranks the rest by
+        # discovery_priority_score (matches discovery._truncate_pool semantics).
+        def _rebuild_with_pool_size(
+            n: int,
+        ) -> tuple[dict[str, Any], list[str], dict[str, dict[str, Any]]]:
+            held_set = {c.symbol for c in candidates if c.is_held}
+            held_cands = [c for c in candidates if c.symbol in held_set]
+            rest = [c for c in candidates if c.symbol not in held_set]
+            rest.sort(
+                key=lambda c: (
+                    -float(getattr(c, "discovery_priority_score", 0.0) or 0.0),
+                    -abs(float(getattr(c, "change_pct", 0.0) or 0.0)),
+                    c.symbol,
+                )
+            )
+            keep = held_cands + rest[: max(0, n - len(held_cands))]
+            log.info(
+                "[selector] max_tokens fallback: rebuilding context with %d candidates "
+                "(held=%d, fresh=%d)",
+                len(keep), len(held_cands), len(keep) - len(held_cands),
+            )
+            new_ctx, new_pool_meta = self._build_selector_context(
+                candidates=keep,
+                portfolio=portfolio,
+                macro=macro,
+                equity=equity,
+                bearish_halt=bearish_halt,
+                dry_run=dry_run,
+                allow_floor_breach=allow_floor_breach,
+                earnings_close_symbols=earnings_exit_syms,
+            )
+            new_pool_symbols = [c.symbol for c in keep]
+            return new_ctx, new_pool_symbols, new_pool_meta
+
         result = run_portfolio_selector(
             self.cfg, ctx, pool_symbols=pool_symbols, pool_meta=pool_meta,
             held_symbols=held_symbols, allow_floor_breach=allow_floor_breach,
+            rebuild_with_pool_size=_rebuild_with_pool_size,
         )
 
+        selector_safety_noop = False
         if result is None:
             try:
                 dynamic_watchlist_update = update_dynamic_watchlist(
@@ -4797,56 +5679,126 @@ class TradingOrchestrator:
             consec = self._handle_selector_failure(reason="ai_failure_or_validation")
             log_decision({"event": "selector_skipped", "reason": "ai_failure",
                           "consecutive_failures": consec})
-            return {
-                "status": "skipped_selector_failure",
-                "equity": equity,
-                "positions_count": len(positions),
+            selector_safety_noop = True
+            result = self._build_selector_safety_noop_result(
+                reason="ai_failure_or_validation",
+                ctx=ctx,
+                pool_meta=pool_meta,
+                portfolio=portfolio,
+                account=account,
+                equity=equity,
+                consecutive_failures=consec,
+            )
+            log_decision({
+                "event": "selector_safety_noop",
+                "reason": "ai_failure_or_validation",
                 "consecutive_failures": consec,
-                "exits": exit_results,
-                "executions": [],
-                "decisions": [],
-                "pool_size": len(candidates),
-                "dynamic_watchlist": dynamic_watchlist_update,
-            }
-
-        self._reset_selector_failures()
+                "selected_positions": result.get("selected_positions", []),
+                "target_weights": result.get("target_weights", {}),
+            })
+        else:
+            self._reset_selector_failures()
 
         # Diversification veto: force deterministic compliance with per-sector
         # / per-theme caps before execution. This avoids another large Opus
         # call immediately after selector success, which can hit TPM limits.
         cash_proxy = self.cash_proxy_symbol if self.cash_proxy_enabled else None
-        guard = sector_guard.validate(
-            target_weights=result.get("target_weights") or {},
-            per_symbol=result.get("per_symbol") or {},
-            pool_meta=pool_meta,
-            cfg=self.cfg,
-            cash_proxy_symbol=cash_proxy,
-        )
-        if not guard.ok:
-            log_decision({"event": "sector_guard_violation",
-                          "violations": [v.to_dict() for v in guard.violations]})
-            forced = sector_guard.force_compliance(
-                target_weights=result.get("target_weights") or {},
-                per_symbol=result.get("per_symbol") or {},
-                violations=guard.violations,
-                cash_proxy_symbol=cash_proxy,
-            )
-            guard_after = sector_guard.validate(
+        sector_guard_audit: dict[str, Any] | None = None
+        if not selector_safety_noop:
+            self._seed_cash_proxy_target_weight(result)
+            guard = sector_guard.validate(
                 target_weights=result.get("target_weights") or {},
                 per_symbol=result.get("per_symbol") or {},
                 pool_meta=pool_meta,
                 cfg=self.cfg,
                 cash_proxy_symbol=cash_proxy,
             )
-            log_decision({"event": "sector_guard_forced",
-                          "forced_exits": forced,
-                          "violations": [v.to_dict() for v in guard.violations],
-                          "post_guard_ok": guard_after.ok,
-                          "post_guard_violations": [
-                              v.to_dict() for v in guard_after.violations
-                          ]})
+            sector_guard_audit = guard.to_dict()
+            if not guard.ok:
+                log_decision({"event": "sector_guard_violation",
+                              "violations": [v.to_dict() for v in guard.violations],
+                              "audit": guard.to_dict()})
+                forced = sector_guard.force_compliance(
+                    target_weights=result.get("target_weights") or {},
+                    per_symbol=result.get("per_symbol") or {},
+                    violations=guard.violations,
+                    cash_proxy_symbol=cash_proxy,
+                )
+                guard_after = sector_guard.validate(
+                    target_weights=result.get("target_weights") or {},
+                    per_symbol=result.get("per_symbol") or {},
+                    pool_meta=pool_meta,
+                    cfg=self.cfg,
+                    cash_proxy_symbol=cash_proxy,
+                )
+                sector_guard_audit = guard_after.to_dict()
+                log_decision({"event": "sector_guard_forced",
+                              "forced_exits": forced,
+                              "violations": [v.to_dict() for v in guard.violations],
+                              "post_guard_ok": guard_after.ok,
+                              "post_guard_violations": [
+                                  v.to_dict() for v in guard_after.violations
+                              ],
+                              "pre_audit": guard.to_dict(),
+                              "post_audit": guard_after.to_dict()})
+                removed_selected = self._prune_zero_target_selected_positions(result)
+                if removed_selected:
+                    log_decision({
+                        "event": "sector_guard_selected_positions_pruned",
+                        "removed": removed_selected,
+                        "selected_positions": result.get("selected_positions", []),
+                    })
+            self._sync_cash_proxy_target_from_weights(result)
 
         log_decision({"event": "selector_output", "result": result})
+
+        selector_tape_state = ((ctx.get("system_state") or {}).get("tape_state") or {})
+        result["_tape_state"] = selector_tape_state
+        cash_policy_decision: dict[str, Any] | None = None
+        if not selector_safety_noop:
+            try:
+                cash_policy_decision = build_selector_cash_policy_decision(
+                    self.cfg,
+                    result,
+                    tape_state=selector_tape_state,
+                    spy_target_pct=float(result.get("spy_target_pct", 0) or 0),
+                    cash_target_pct=float(result.get("cash_target_pct", 0) or 0),
+                    scan_ts=pd.Timestamp.utcnow().isoformat(),
+                )
+                if not dry_run:
+                    save_cash_policy(self.cfg, cash_policy_decision)
+                log_decision({
+                    "event": "cash_policy_selector_decision",
+                    "policy": cash_policy_decision,
+                    "dry_run": dry_run,
+                })
+            except Exception as e:
+                log.warning("[selector] cash policy persist failed: %s", e)
+                cash_policy_decision = {"error": str(e)}
+
+        # Phase D (2026-05-07): record every selector-driven EXIT so the next
+        # scan cannot immediately reverse the rotation without clearing the
+        # rebuy bar. We record on plan emission (before execution) — the
+        # selector intent IS what the cooldown protects against repeating.
+        try:
+            for _sym, _info in (result.get("per_symbol") or {}).items():
+                if not isinstance(_info, dict):
+                    continue
+                _action = str(_info.get("action", "") or "").upper()
+                if _action != "EXIT":
+                    continue
+                # Only record when the symbol was actually held this scan —
+                # PASS-as-EXIT is just "not selected", no cooldown needed.
+                if not pool_meta.get(_sym, {}).get("currently_held", False):
+                    continue
+                self.record_selector_rotation_exit(
+                    symbol=_sym,
+                    opportunity_score=float(_info.get("opportunity_score", 0) or 0),
+                    reason=str(_info.get("one_sentence_reason") or _info.get("exit_reason") or "")[:200],
+                )
+        except Exception as _e:
+            log.warning("[selector] rotation cooldown recording failed: %s", _e)
+
         # Phase 0: candidate_rankings was dropped from the schema. Reconstitute
         # a ranking list from per_symbol so downstream journal consumers keep
         # working without forcing the model to emit a 50-row duplicate.
@@ -4907,21 +5859,22 @@ class TradingOrchestrator:
             "missed_breakouts": missed_breakouts,
             "count": len(missed_breakouts),
         })
-        try:
-            dynamic_watchlist_update = update_dynamic_watchlist(
-                self.cfg,
-                ctx.get("candidate_pool") or [],
-                selected_symbols=result.get("selected_positions") or [],
-                missed_breakouts=missed_breakouts,
-            )
-            log_decision({
-                "event": "dynamic_watchlist_update",
-                "update": dynamic_watchlist_update,
-                "phase": "selector_completed",
-            })
-        except Exception as e:
-            dynamic_watchlist_update = {"error": str(e)}
-            log.warning("[dynamic_watchlist] update failed: %s", e)
+        if not selector_safety_noop:
+            try:
+                dynamic_watchlist_update = update_dynamic_watchlist(
+                    self.cfg,
+                    ctx.get("candidate_pool") or [],
+                    selected_symbols=result.get("selected_positions") or [],
+                    missed_breakouts=missed_breakouts,
+                )
+                log_decision({
+                    "event": "dynamic_watchlist_update",
+                    "update": dynamic_watchlist_update,
+                    "phase": "selector_completed",
+                })
+            except Exception as e:
+                dynamic_watchlist_update = {"error": str(e)}
+                log.warning("[dynamic_watchlist] update failed: %s", e)
 
         # 7. Build one final target portfolio, then execute it as one rebalance.
         original_target_weights = result.get("target_weights") or {}
@@ -4957,8 +5910,18 @@ class TradingOrchestrator:
                 "execution_target_weights": target_weights,
                 "execution_cash_target_pct": cash_target_pct,
             })
+        # Cash floor for buy execution must reflect the SELECTOR'S ORIGINAL
+        # cash intent, not the post-stage/post-block bumped value. Staging
+        # (70-85% of target) and execution-gate blocks reclassify portions of
+        # would-be entry weight as cash, inflating `cash_target_pct` here. If
+        # we then use that inflated value as the buy floor we lock ourselves
+        # out of the very entries whose weight got bumped. See 2026-05-11
+        # 07:03 scan: selector emitted cash=5%, post-stage+block hit ~25%,
+        # buy floor used 25% and skipped INOD/NVDA/RKLX with
+        # insufficient_confirmed_cash even though SPY proxy had ample cover.
+        original_cash_target_pct = float(result.get("cash_target_pct", 0) or 0)
         selector_cash_floor_pct = max(
-            cash_target_pct,
+            original_cash_target_pct,
             float(self.risk.cash_reserve_pct),
         )
         unified_portfolio_plan = self._build_unified_portfolio_plan_audit(
@@ -5130,33 +6093,36 @@ class TradingOrchestrator:
 
         # 8. Apply SPY target + verifier
         cash_proxy_action = None
-        if not dry_run and self.cash_proxy_enabled:
+        if not selector_safety_noop and not dry_run and self.cash_proxy_enabled:
             try:
                 cash_proxy_action = self._apply_spy_target(spy_target_pct, equity)
                 self._last_arbiter_set_spy_target = True
             except Exception as e:
                 log.warning("[selector] SPY target apply failed: %s", e)
+        elif selector_safety_noop:
+            cash_proxy_action = {"skipped": "selector_safety_noop"}
 
         verifier_summary: dict[str, Any] | None = None
-        if not dry_run:
+        if selector_safety_noop:
+            verifier_summary = {"skipped": "selector_safety_noop"}
+        elif not dry_run:
             try:
                 verifier_summary = self._verify_portfolio_alignment(equity)
             except Exception as e:
                 log.warning("[selector] verifier raised: %s", e)
                 verifier_summary = {"error": str(e)}
 
-        # Phase 2a: SPY-as-cash discipline. Today's review (2026-05-05) showed
-        # the bot held ZERO SPY for 6 hours mid-day with $40-87K idle cash
-        # because the selector emitted `spy_target_pct=0` and the apply step
-        # respected that literally. After the verifier completes, sweep any
-        # idle cash above the reserve into SPY so capital isn't sitting flat
-        # while the index rallies. The user explicitly requested this on
-        # 2026-05-05.
+        # Policy-aware SPY-as-cash discipline. Excess cash is parked only when
+        # the persisted selector/tape policy says SPY is the better idle sink.
+        # A selector cash decision is locked so the 5-minute stop checker does
+        # not reverse it immediately after a scan.
         idle_park_action = None
-        if not dry_run and self.cash_proxy_enabled:
+        if not selector_safety_noop and not dry_run and self.cash_proxy_enabled:
             try:
-                idle_park_action = self._sweep_cash_to_proxy(equity)
-                if idle_park_action:
+                idle_park_action = self._sweep_cash_to_proxy(
+                    equity, cash_policy_decision=cash_policy_decision,
+                )
+                if idle_park_action and idle_park_action.get("action") == "buy_proxy":
                     log.info(
                         "[selector] SPY-as-cash sweep: $%.0f idle parked",
                         float(idle_park_action.get("notional") or 0),
@@ -5164,6 +6130,76 @@ class TradingOrchestrator:
             except Exception as e:
                 log.warning("[selector] idle-cash SPY sweep failed: %s", e)
         trade_learning_end = self._resolve_trade_learning("scan_end")
+
+        # Phase 3 (2026-05-07): consolidated trade-failure Telegram alert.
+        # Diff selector intent (per_symbol with non-PASS action) against
+        # actual executor outcomes. Fires for: stop-clamp neutralized symbols,
+        # blocked new entries, post-execution removals, and any execution
+        # whose ExecutionResult status is rejected/unfilled/not_submitted.
+        try:
+            if bool(self.cfg.get("telegram", "notify_trade_failures", default=True)):
+                from src.telegram_notifier import get_notifier
+
+                mismatches: list[dict[str, Any]] = []
+                errors: list[dict[str, Any]] = []
+
+                # Stop-tighten neutralizations from validator (#2 path).
+                dropped_for_stop = result.get("_dropped_for_invalid_stop") if isinstance(result, dict) else None
+                for sym in dropped_for_stop or []:
+                    info = (per_symbol or {}).get(sym) or {}
+                    mismatches.append({
+                        "symbol": sym,
+                        "action": "PASS (stop-clamp neutralized)",
+                        "reason": info.get("pass_reason") or "stop cannot meet max_risk_per_trade",
+                    })
+
+                # Blocked new entries (e.g. earnings, sector cap).
+                for entry in blocked_new_entries or []:
+                    mismatches.append({
+                        "symbol": entry.get("symbol", "?"),
+                        "action": entry.get("action", "BUY"),
+                        "reason": entry.get("reason", "blocked"),
+                    })
+
+                # Post-execution removals (selector said BUY but execution failed).
+                for entry in failed_new_entry_targets or []:
+                    errors.append({
+                        "symbol": entry.get("symbol", "?"),
+                        "status": "execution_failed",
+                        "reason": entry.get("reason", "unknown"),
+                    })
+
+                # Sweep executions for any explicit error status.
+                for ex in executions or []:
+                    if not isinstance(ex, dict):
+                        continue
+                    if ex.get("dry_run"):
+                        continue
+                    sym = ex.get("symbol")
+                    if not sym:
+                        continue
+                    er = ex.get("execution") or {}
+                    status = er.get("status")
+                    if status in {"rejected", "unfilled", "not_submitted_entry_unfilled"}:
+                        errors.append({
+                            "symbol": sym,
+                            "status": status,
+                            "reason": er.get("message") or er.get("reject_reason") or "no detail",
+                        })
+
+                if mismatches or errors:
+                    label = "selector-scan"
+                    get_notifier().notify_trade_failure(
+                        scan_label=label,
+                        mismatches=mismatches,
+                        errors=errors,
+                    )
+        except Exception as e:
+            log.debug("Telegram trade-failure notify failed: %s", e)
+
+        if isinstance(unified_portfolio_plan, dict):
+            unified_portfolio_plan["cash_policy"] = cash_policy_decision
+            unified_portfolio_plan["sector_guard"] = sector_guard_audit
 
         summary = {
             "ts": pd.Timestamp.utcnow().isoformat(),
@@ -5187,11 +6223,18 @@ class TradingOrchestrator:
                 "allow_floor_breach": allow_floor_breach,
                 "missed_breakouts": missed_breakouts,
                 "dynamic_watchlist": dynamic_watchlist_update,
+                "cash_policy": cash_policy_decision,
+                "sector_guard": sector_guard_audit,
+                "safety_noop": selector_safety_noop,
+                "safety_noop_reason": result.get("_selector_failure_reason"),
+                "consecutive_failures": result.get("_selector_consecutive_failures"),
             },
             "unified_portfolio_plan": unified_portfolio_plan,
             "exits": exit_results,
             "executions": executions,
             "cash_proxy": cash_proxy_action,
+            "idle_park": idle_park_action,
+            "cash_policy": cash_policy_decision,
             "verifier": verifier_summary,
             "trade_learning": {
                 "start": trade_learning_start,
@@ -5626,6 +6669,11 @@ class TradingOrchestrator:
         and optionally open new positions likely to gap up at the next open."""
         log.info("=== Pre-close overnight decision (dry_run=%s) ===", dry_run)
         trade_learning_start = self._resolve_trade_learning("preclose_start")
+        try:
+            overnight_learning_start = resolve_overnight_outcomes(self.cfg, self.client)
+        except Exception as e:
+            log.warning("overnight-learning resolve failed at preclose start: %s", e)
+            overnight_learning_start = {"enabled": True, "error": str(e)}
 
         # HARD RULE: preclose closes/opens touch capital, so they must route
         # through the Opus 4.7 arbiter. No AI → no preclose trades.
@@ -5652,6 +6700,7 @@ class TradingOrchestrator:
                 "new_executions": [],
                 "market_bias": 0.0,
                 "trade_learning": {"start": trade_learning_start},
+                "overnight_learning": {"start": overnight_learning_start},
             }
 
         # Config knobs (weekday defaults)
@@ -5694,6 +6743,35 @@ class TradingOrchestrator:
                 )
                 or []
             )
+        }
+        catalyst_min_research = float(
+            self.cfg.get("preclose_earnings_catalyst", "min_research_score", default=0.25)
+            or 0.25
+        )
+        catalyst_event_threshold = float(
+            self.cfg.get("preclose_earnings_catalyst", "event_risk_buy_threshold", default=0.65)
+            or 0.65
+        )
+        catalyst_post_threshold = float(
+            self.cfg.get("preclose_earnings_catalyst", "post_earnings_buy_threshold", default=0.50)
+            or 0.50
+        )
+        catalyst_non_event_threshold = float(
+            self.cfg.get("preclose_earnings_catalyst", "non_event_buy_threshold", default=0.58)
+            or 0.58
+        )
+        catalyst_unknown_time_is_event = bool(
+            self.cfg.get("preclose_earnings_catalyst", "unknown_time_is_event_risk", default=True)
+        )
+        edge_weights = {
+            "momentum": float(self.cfg.get("overnight", "edge", "momentum_weight", default=0.12) or 0.12),
+            "sector": float(self.cfg.get("overnight", "edge", "sector_weight", default=0.10) or 0.10),
+            "earnings": float(self.cfg.get("overnight", "edge", "earnings_weight", default=1.0) or 1.0),
+            "learned": float(self.cfg.get("overnight", "edge", "learned_weight", default=1.0) or 1.0),
+            "gap_only_penalty": float(self.cfg.get("overnight", "edge", "gap_only_penalty", default=0.18) or 0.18),
+            "fading_penalty": float(self.cfg.get("overnight", "edge", "fading_penalty", default=0.10) or 0.10),
+            "high_atr_penalty": float(self.cfg.get("overnight", "edge", "high_atr_penalty", default=0.08) or 0.08),
+            "high_atr_pct": float(self.cfg.get("overnight", "edge", "high_atr_pct", default=0.08) or 0.08),
         }
 
         # Weekend / pre-holiday detection: when the gap to the next trading
@@ -6025,6 +7103,7 @@ class TradingOrchestrator:
             held_set = {p.symbol for p in positions}
             tech_by_sym: dict[str, TechnicalSignal] = {t.symbol: t for t in tech_top}
             discovery_sources: dict[str, list[str]] = {}
+            discovery_meta: dict[str, dict[str, Any]] = {}
             discovery_breakdown: dict[str, int] = {}
             try:
                 discovered, discovery_breakdown = discover_candidates(
@@ -6036,6 +7115,15 @@ class TradingOrchestrator:
                     if c.symbol in held_set or "/" in c.symbol:
                         continue
                     discovery_sources[c.symbol] = list(c.sources)
+                    discovery_meta[c.symbol] = {
+                        "sector": c.sector,
+                        "price": c.price,
+                        "change_pct": c.change_pct,
+                        "volume": c.volume,
+                        "market_cap_usd": c.market_cap_usd,
+                        "discovery_priority_score": c.discovery_priority_score,
+                        "discovery_priority_reasons": c.discovery_priority_reasons,
+                    }
             except Exception as e:
                 log.warning("Preclose discovery failed: %s", e)
                 discovered = []
@@ -6097,6 +7185,21 @@ class TradingOrchestrator:
                 daily_cand = self.client.get_stock_bars(cand_syms, lookback_days=30) if cand_syms else None
             except Exception:
                 daily_cand = None
+            try:
+                sector_lookup = sp500_sectors()
+            except Exception:
+                sector_lookup = {}
+            sectors_by_sym = {
+                s: (
+                    (discovery_meta.get(s) or {}).get("sector")
+                    or sector_lookup.get(s)
+                    or "Other"
+                )
+                for s in cand_syms
+            }
+            sector_momentum_by_sym = compute_sector_momentum(
+                daily_cand, cand_syms, sectors_by_sym,
+            )
 
             # When the market tape is leaning down, require higher conviction
             # than the default buy_threshold.
@@ -6104,12 +7207,13 @@ class TradingOrchestrator:
                 bearish_buy_threshold if market_bias < 0 else buy_threshold
             )
 
-            scored: list[tuple[TechnicalSignal, OvernightSignal]] = []
+            scored: list[tuple[TechnicalSignal, OvernightSignal, dict[str, Any]]] = []
             preclose_ctx_by_sym: dict[str, dict[str, Any]] = {}
             for t in long_biased:
                 intraday = self._slice_symbol(intraday_cand, t.symbol)
                 sent = score_news_for_symbol(t.symbol, news_cand)
-                ov = score_overnight(t.symbol, intraday, t.score, sent.score if sent else 0.0, market_bias)
+                sent_score = sent.score if sent else 0.0
+                ov = score_overnight(t.symbol, intraday, t.score, sent_score, market_bias)
                 if not ov:
                     continue
                 chart = self._intraday_chart_for(intraday_cand, t.symbol, daily_cand)
@@ -6125,30 +7229,126 @@ class TradingOrchestrator:
                     and 0 <= days_until_earnings <= catalyst_lookahead_days
                 )
                 catalyst_source = bool(sources.intersection(catalyst_allowed_sources))
-                catalyst_sentiment = bool(sent and sent.score >= catalyst_min_sentiment)
+                catalyst_sentiment = bool(sent_score >= catalyst_min_sentiment)
+                earnings_research = None
+                earnings_profile = {
+                    "near_earnings": False,
+                    "entry_allowed": True,
+                    "score_adjustment": 0.0,
+                    "reasons": ["earnings_disabled_or_not_in_window"],
+                }
+                if self.earnings_enabled and earnings_info is not None:
+                    if near_earnings or "earnings_calendar" in sources:
+                        try:
+                            earnings_research = compute_earnings_research_score(
+                                t.symbol,
+                                sentiment_score=sent_score,
+                                ttl_hours=float(
+                                    self.cfg.get(
+                                        "earnings", "research_cache_ttl_hours",
+                                        default=12,
+                                    ) or 12
+                                ),
+                            )
+                        except Exception as e:
+                            log.debug("[%s] preclose earnings research failed: %s", t.symbol, e)
+                            earnings_research = {
+                                "score": 0.0,
+                                "components": {},
+                                "available_components": [],
+                            }
+                    earnings_profile = build_preclose_earnings_profile(
+                        earnings_info,
+                        earnings_research,
+                        sentiment_score=sent_score,
+                        catalyst_source=catalyst_source,
+                        lookahead_days=catalyst_lookahead_days,
+                        min_sentiment=catalyst_min_sentiment,
+                        min_research_score=catalyst_min_research,
+                        neutral_research_score=float(
+                            self.cfg.get("earnings", "research_score_neutral", default=0.0)
+                            or 0.0
+                        ),
+                        event_risk_buy_threshold=catalyst_event_threshold,
+                        post_earnings_buy_threshold=catalyst_post_threshold,
+                        non_event_buy_threshold=catalyst_non_event_threshold,
+                        event_risk_size_multiplier=catalyst_size_multiplier,
+                        post_earnings_size_multiplier=min(size_mult, 0.50),
+                        unknown_time_is_event_risk=catalyst_unknown_time_is_event,
+                    )
+                    near_earnings = bool(earnings_profile.get("near_earnings"))
                 earnings_catalyst_exception = bool(
                     catalyst_enabled
                     and near_earnings
-                    and (catalyst_source or catalyst_sentiment)
+                    and earnings_profile.get("entry_allowed")
+                )
+                sector_profile = sector_momentum_by_sym.get(t.symbol, {
+                    "sector": sectors_by_sym.get(t.symbol, "Other"),
+                    "score": 0.0,
+                })
+                learning_features = {
+                    "adjusted_score": ov.score,
+                    "sector": sector_profile.get("sector"),
+                    "sources": sorted(sources),
+                    "earnings_bucket": (
+                        "event_risk" if earnings_profile.get("event_risk_overnight")
+                        else "post_earnings" if earnings_profile.get("post_earnings_session")
+                        else "near_earnings" if near_earnings
+                        else "no_near_earnings"
+                    ),
+                }
+                learned_edge = estimate_overnight_edge(self.cfg, t.symbol, learning_features)
+                atr_pct = (
+                    float(t.atr) / float(t.price)
+                    if t.atr is not None and t.price not in (None, 0)
+                    else None
+                )
+                edge = build_preclose_edge(
+                    ov,
+                    chart=chart,
+                    momentum_profile=momentum_profile,
+                    sector_momentum=sector_profile,
+                    earnings_profile=earnings_profile,
+                    learned_edge=learned_edge,
+                    atr_pct=atr_pct,
+                    weights=edge_weights,
                 )
                 report_entry = {
                     "symbol": t.symbol,
+                    "sector": sector_profile.get("sector"),
                     "tech_score": round(t.score, 3),
                     "rsi": round(float(t.rsi), 1) if t.rsi is not None else None,
                     "overnight": ov.to_dict(),
+                    "overnight_edge": edge,
                     "intraday_chart": chart,
                     "momentum_profile": momentum_profile,
                     "earnings": earnings_info.to_dict() if earnings_info else None,
+                    "earnings_research": earnings_research,
+                    "earnings_profile": earnings_profile,
                     "earnings_catalyst_exception": {
                         "enabled": earnings_catalyst_exception,
                         "near_earnings": near_earnings,
                         "days_until_earnings": days_until_earnings,
+                        "time_of_day": (
+                            earnings_info.time_of_day if earnings_info else None
+                        ),
+                        "event_risk_overnight": earnings_profile.get("event_risk_overnight"),
+                        "post_earnings_session": earnings_profile.get("post_earnings_session"),
                         "catalyst_source": catalyst_source,
                         "catalyst_sentiment": catalyst_sentiment,
-                        "buy_threshold": catalyst_buy_threshold,
-                        "size_multiplier": catalyst_size_multiplier,
+                        "research_score": earnings_profile.get("research_score"),
+                        "buy_threshold": (
+                            earnings_profile.get("threshold_floor")
+                            or catalyst_buy_threshold
+                        ),
+                        "size_multiplier": (
+                            earnings_profile.get("size_multiplier")
+                            or catalyst_size_multiplier
+                        ),
+                        "reasons": earnings_profile.get("reasons", []),
                     },
                     "discovery_sources": discovery_sources.get(t.symbol, []),
+                    "discovery_meta": discovery_meta.get(t.symbol, {}),
                 }
                 preclose_ctx_by_sym[t.symbol] = report_entry
                 # Phase 5 (2026-05-05): tiered RSI gate. The flat 78-cap on
@@ -6216,30 +7416,39 @@ class TradingOrchestrator:
                         continue
                 if near_earnings and not earnings_catalyst_exception:
                     report_entry["skipped"] = (
-                        "near earnings without preclose catalyst exception"
+                        "near earnings without research-approved preclose catalyst exception"
                     )
                     cand_reports.append(report_entry)
                     log.info(
                         "[%s] overnight skip: earnings in %s day(s) without "
-                        "catalyst exception",
+                        "research-approved catalyst exception (%s)",
                         t.symbol, days_until_earnings,
+                        ",".join(earnings_profile.get("reasons", [])),
                     )
                     continue
                 symbol_buy_threshold = (
-                    max(effective_buy_threshold, catalyst_buy_threshold)
+                    max(
+                        effective_buy_threshold,
+                        float(
+                            earnings_profile.get("threshold_floor")
+                            or catalyst_buy_threshold
+                        ),
+                    )
                     if earnings_catalyst_exception
                     else effective_buy_threshold
                 )
-                if ov.score < symbol_buy_threshold:
+                report_entry["buy_threshold"] = round(float(symbol_buy_threshold), 3)
+                edge_score = float(edge.get("adjusted_score", ov.score))
+                if edge_score < symbol_buy_threshold:
                     report_entry["skipped"] = (
-                        f"ov {ov.score:.2f} < threshold {symbol_buy_threshold:.2f}"
+                        f"edge {edge_score:.2f} < threshold {symbol_buy_threshold:.2f}"
                     )
                     cand_reports.append(report_entry)
                     continue
                 cand_reports.append(report_entry)
-                scored.append((t, ov))
+                scored.append((t, ov, edge))
 
-            scored.sort(key=lambda x: x[1].score, reverse=True)
+            scored.sort(key=lambda x: float(x[2].get("adjusted_score", x[1].score)), reverse=True)
             picks = scored[:max_new]
             log.info(
                 "Preclose new-buy picks: %d (from %d scored, threshold=%.2f, "
@@ -6271,7 +7480,7 @@ class TradingOrchestrator:
             else:
                 available_liquidity = float("inf")
 
-            for tech, ov in picks:
+            for tech, ov, edge in picks:
                 price = tech.price
                 atr = tech.atr
                 if not price or not atr:
@@ -6286,7 +7495,15 @@ class TradingOrchestrator:
                     sentiment_score=None,
                     macro_score=None,
                     risk_score=0.0,
-                    signal_details={"technical": tech.to_dict(), "overnight": ov.to_dict()},
+                    signal_details={
+                        "technical": tech.to_dict(),
+                        "overnight": ov.to_dict(),
+                        "overnight_edge": edge,
+                    },
+                )
+                symbol_threshold = float(
+                    preclose_ctx.get("buy_threshold")
+                    or effective_buy_threshold
                 )
                 arbiter_ctx = {
                     "symbol": tech.symbol,
@@ -6298,19 +7515,23 @@ class TradingOrchestrator:
                             "overnight gap upside",
                             "next-session continuation upside",
                         ],
-                        "higher_threshold_applied": effective_buy_threshold,
+                        "higher_threshold_applied": symbol_threshold,
                     },
                     "current_price": price,
                     "position_status": "not_owned",
                     "technical_analyst": tech.to_dict(),
                     "overnight_signal": ov.to_dict(),
+                    "overnight_edge": edge,
                     "intraday_chart": preclose_ctx.get("intraday_chart"),
                     "momentum_profile": preclose_ctx.get("momentum_profile"),
                     "earnings": preclose_ctx.get("earnings"),
+                    "earnings_research": preclose_ctx.get("earnings_research"),
+                    "earnings_profile": preclose_ctx.get("earnings_profile"),
                     "preclose_earnings_catalyst_exception": preclose_ctx.get(
                         "earnings_catalyst_exception"
                     ),
                     "discovery_sources": preclose_ctx.get("discovery_sources", []),
+                    "discovery_meta": preclose_ctx.get("discovery_meta", {}),
                     "market_bias_spy_lateday": round(market_bias, 3),
                     "fundamental_analyst": {"note": "not computed for preclose speed"},
                     "sentiment_analyst": {"note": "embedded in overnight signal"},
@@ -6347,11 +7568,79 @@ class TradingOrchestrator:
 
                 # Size based on AI-approved confidence, not raw ov.score.
                 catalyst_ctx = preclose_ctx.get("earnings_catalyst_exception") or {}
+                earnings_profile = preclose_ctx.get("earnings_profile") or {}
                 effective_size_mult = (
-                    min(size_mult, catalyst_size_multiplier)
+                    min(
+                        size_mult,
+                        float(
+                            earnings_profile.get("size_multiplier")
+                            or catalyst_size_multiplier
+                        ),
+                    )
                     if catalyst_ctx.get("enabled")
                     else size_mult
                 )
+                learned_ctx = edge.get("learned_edge") or {}
+                risk_flags = set(edge.get("risk_flags") or [])
+                edge_size_scalar = 1.0
+                gap_down_risk = float(learned_ctx.get("gap_down_risk") or 0.0)
+                if gap_down_risk >= float(
+                    self.cfg.get(
+                        "overnight", "edge_sizing", "gap_down_risk_threshold",
+                        default=0.35,
+                    ) or 0.35
+                ):
+                    edge_size_scalar *= float(
+                        self.cfg.get(
+                            "overnight", "edge_sizing", "gap_down_risk_multiplier",
+                            default=0.65,
+                        ) or 0.65
+                    )
+                if risk_flags.intersection({
+                    "gap_only_risk", "fading_into_close",
+                    "high_atr_gap_risk", "earnings_event_overnight",
+                }):
+                    edge_size_scalar *= float(
+                        self.cfg.get(
+                            "overnight", "edge_sizing", "risk_flag_multiplier",
+                            default=0.80,
+                        ) or 0.80
+                    )
+                edge_score = float(edge.get("adjusted_score", ov.score))
+                if (
+                    edge_score >= symbol_threshold + float(
+                        self.cfg.get(
+                            "overnight", "edge_sizing", "boost_score_margin",
+                            default=0.20,
+                        ) or 0.20
+                    )
+                    and not risk_flags
+                ):
+                    edge_size_scalar *= float(
+                        self.cfg.get(
+                            "overnight", "edge_sizing", "strong_edge_multiplier",
+                            default=1.15,
+                        ) or 1.15
+                    )
+                edge_size_scalar = min(
+                    float(
+                        self.cfg.get(
+                            "overnight", "edge_sizing", "max_scalar",
+                            default=1.25,
+                        ) or 1.25
+                    ),
+                    max(
+                        float(
+                            self.cfg.get(
+                                "overnight", "edge_sizing", "min_scalar",
+                                default=0.40,
+                            ) or 0.40
+                        ),
+                        edge_size_scalar,
+                    ),
+                )
+                effective_size_mult *= edge_size_scalar
+                preclose_ctx["effective_size_multiplier"] = round(effective_size_mult, 3)
                 sizing = self.risk.size_position(
                     symbol=tech.symbol, side="buy",
                     price=price, atr=atr,
@@ -6406,15 +7695,21 @@ class TradingOrchestrator:
                     symbol=tech.symbol,
                     action="buy",
                     confidence=ai_conf,
-                    combined_score=tech.score,
-                    signal_scores={"technical": tech.score, "overnight": ov.score},
+                    combined_score=edge_score,
+                    signal_scores={
+                        "technical": tech.score,
+                        "overnight": ov.score,
+                        "overnight_edge": edge_score,
+                    },
                     signal_details={
                         "technical": tech.to_dict(), "overnight": ov.to_dict(),
+                        "overnight_edge": edge,
                         "ai_verdict": verdict,
                     },
                     reasoning=[
                         f"preclose AI-approved buy conf={ai_conf:.2f} (model={model_used})",
-                        f"ov={ov.score:+.2f} close_strength={ov.close_strength:+.2f}",
+                        f"edge={edge_score:+.2f} raw_ov={ov.score:+.2f} close_strength={ov.close_strength:+.2f}",
+                        f"risk_flags={','.join(edge.get('risk_flags') or []) or 'none'}",
                         f"thesis: {ai_thesis}",
                     ],
                 )
@@ -6456,7 +7751,9 @@ class TradingOrchestrator:
                                 "reason": "; ".join(decision_obj.reasoning),
                                 "confidence": ai_conf,
                                 "ai_action": ai_action,
-                                "opportunity_score": round(float(ov.score) * 100, 1),
+                                "opportunity_score": round(float(edge_score) * 100, 1),
+                                "raw_overnight_score": round(float(ov.score) * 100, 1),
+                                "risk_flags": edge.get("risk_flags") or [],
                             },
                         )
                     if not result.ok and sequential_cash:
@@ -6512,12 +7809,24 @@ class TradingOrchestrator:
                 "start": trade_learning_start,
                 "end": trade_learning_end,
             },
+            "overnight_learning": {
+                "start": overnight_learning_start,
+            },
             "thresholds": {
                 "hold": hold_threshold, "buy": buy_threshold,
                 "max_new": max_new, "size_mult": size_mult,
                 "weekend_session": weekend_session,
             },
         }
+        try:
+            summary["overnight_learning"]["record"] = record_preclose_candidates(
+                self.cfg,
+                summary,
+                dry_run=dry_run,
+            )
+        except Exception as e:
+            log.warning("overnight-learning record failed at preclose end: %s", e)
+            summary["overnight_learning"]["record"] = {"error": str(e)}
         # Per-decision tally for the auditable summary line — surfaces
         # "what scored, what held, what got AI-vetoed, what closed for earnings"
         # at one glance so a missing intraday-data path doesn't go unnoticed.

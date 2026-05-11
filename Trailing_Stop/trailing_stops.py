@@ -22,6 +22,7 @@ from alpaca.trading.enums import OrderSide, TimeInForce
 from alpaca.trading.requests import LimitOrderRequest
 
 from src.alpaca_client import AlpacaClient
+from src.cash_policy import resolve_active_cash_policy, sweep_cash_to_proxy_if_allowed
 from src.config import Config
 
 from .price_fetcher import PriceFetcher, build_default_fetcher
@@ -87,6 +88,8 @@ class CycleResult:
     skipped_tighter: int = 0
     no_op: int = 0
     errors: list[str] = field(default_factory=list)
+    cash_policy: dict[str, Any] | None = None
+    cash_proxy_action: dict[str, Any] | None = None
 
 
 @dataclass
@@ -290,6 +293,43 @@ def _safe_notify(notify_fn, *args, **kwargs) -> None:
         log.warning("telegram notify failed: %s", exc)
 
 
+def _notify_cash_policy_after_fill(
+    action: dict[str, Any] | None,
+    fills: list[dict],
+) -> None:
+    if not action:
+        return
+    kind = str(action.get("action") or "")
+    skipped = action.get("skipped")
+    if kind not in {"buy_proxy", "hold_cash", "buy_skipped"}:
+        return
+    symbols = ", ".join(str(f.get("symbol", "?")) for f in fills[:5])
+    policy = action.get("cash_policy") or {}
+    mode = str(policy.get("mode") or "?").upper()
+    reason = str(policy.get("reason") or skipped or kind)
+    if kind == "buy_proxy":
+        msg = (
+            f"Stop proceeds after {symbols} swept to {action.get('symbol', 'SPY')} "
+            f"(${float(action.get('notional') or 0):,.0f}); cash policy={mode}. "
+            f"{reason[:180]}"
+        )
+    elif skipped == "cash_policy_cash":
+        msg = (
+            f"Stop proceeds after {symbols} left in cash; cash policy={mode}. "
+            f"{reason[:180]}"
+        )
+    else:
+        msg = (
+            f"Stop proceeds after {symbols}: SPY sweep skipped "
+            f"({skipped or kind}); cash policy={mode}. {reason[:180]}"
+        )
+    try:
+        from src.telegram_notifier import send_alert
+        _safe_notify(send_alert, "cash_policy_stop_fill", "TrailingStops", msg)
+    except Exception as exc:
+        log.warning("notify cash policy after fill failed: %s", exc)
+
+
 def run_trailing_stop_cycle(
     client: AlpacaClient,
     cfg: Config,
@@ -378,6 +418,48 @@ def run_trailing_stop_cycle(
     removed = state.prune(held.keys())
     if removed:
         log.info("pruned %d stale state entr(ies): %s", len(removed), removed)
+
+    if fills and cfg.get("cash_policy", "enabled", default=True):
+        try:
+            policy = resolve_active_cash_policy(
+                cfg,
+                client,
+                persist_fallback=not dry_run,
+            )
+            result.cash_policy = policy
+            try:
+                account = client.get_account()
+                equity = float(getattr(account, "equity", 0) or 0)
+            except Exception as exc:
+                equity = 0.0
+                result.errors.append(f"cash_policy_account:{exc}")
+            if equity > 0:
+                action = sweep_cash_to_proxy_if_allowed(
+                    client,
+                    cfg,
+                    equity,
+                    policy=policy,
+                    dry_run=dry_run,
+                    reason="trailing_stop_fill",
+                )
+                result.cash_proxy_action = action
+                _notify_cash_policy_after_fill(action, fills)
+                if action and action.get("action") == "buy_proxy":
+                    log.info(
+                        "trailing-stop cash policy swept $%.0f to %s after fills=%s",
+                        float(action.get("notional") or 0),
+                        action.get("symbol", "SPY"),
+                        [f.get("symbol") for f in fills],
+                    )
+                elif action:
+                    log.info(
+                        "trailing-stop cash policy action after fills=%s: %s",
+                        [f.get("symbol") for f in fills],
+                        action.get("skipped") or action.get("action"),
+                    )
+        except Exception as exc:
+            log.warning("trailing-stop cash policy follow-through failed: %s", exc)
+            result.errors.append(f"cash_policy:{exc}")
 
     if not held:
         if not dry_run:

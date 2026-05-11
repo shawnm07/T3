@@ -245,7 +245,7 @@ class AlpacaClient:
             qty_f = float(qty)
         except (TypeError, ValueError):
             return False
-        return qty_f > 0 and abs(qty_f - round(qty_f)) < 1e-9
+        return qty_f > 0 and qty_f.is_integer()
 
     @classmethod
     def _standalone_stop_time_in_force(

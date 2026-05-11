@@ -240,6 +240,21 @@ def test_whole_share_standalone_stop_loss_can_use_gtc():
     assert req.qty == 12
 
 
+def test_precision_tail_standalone_stop_loss_uses_day_tif():
+    client = _client()
+
+    client.submit_stop_loss(
+        symbol="TSLA",
+        qty=180.999999999,
+        stop_price=384.481,
+        tif="gtc",
+    )
+
+    req = client.trading.last_request
+    assert req.time_in_force == TimeInForce.DAY
+    assert req.qty == 180.999999999
+
+
 def test_asset_preflight_rejects_not_tradable():
     client = _client()
     client.trading.assets["AKAN"] = SimpleNamespace(
@@ -297,6 +312,7 @@ if __name__ == "__main__":
     test_notional_orders_are_day_tif_even_when_requested_otherwise()
     test_standalone_stop_loss_keeps_fractional_qty_and_simple_order()
     test_whole_share_standalone_stop_loss_can_use_gtc()
+    test_precision_tail_standalone_stop_loss_uses_day_tif()
     test_asset_preflight_rejects_not_tradable()
     test_asset_preflight_rounds_non_fractionable_buy_to_whole_share()
     test_close_position_uses_day_qty_order()

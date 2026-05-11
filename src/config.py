@@ -29,7 +29,7 @@ class Config:
     @classmethod
     def load(cls, config_path: Path | str | None = None) -> "Config":
         path = Path(config_path) if config_path else ROOT / "config.yaml"
-        with open(path) as f:
+        with path.open("r", encoding="utf-8") as f:
             raw = yaml.safe_load(f)
         alpaca = AlpacaConfig(
             api_key=os.environ["ALPACA_API_KEY"],

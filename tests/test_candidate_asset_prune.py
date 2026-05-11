@@ -4,6 +4,7 @@ import json
 import sys
 import tempfile
 import types
+from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -86,6 +87,9 @@ from src.dynamic_watchlist import load_dynamic_watchlist, remove_dynamic_watchli
 from src.orchestrator import TradingOrchestrator
 
 
+FIXTURE_NOW = datetime(2026, 5, 8, 12, 0, tzinfo=timezone.utc)
+
+
 class DummyConfig:
     def __init__(self, state_file: str):
         self.raw = {
@@ -155,13 +159,14 @@ def test_remove_dynamic_watchlist_symbols_persists_prune():
             cfg,
             ["AKAN"],
             reason="alpaca_asset_not_ai_eligible",
+            now=FIXTURE_NOW,
         )
 
         assert update["removed"] == [{
             "symbol": "AKAN",
             "reason": "alpaca_asset_not_ai_eligible",
         }]
-        assert load_dynamic_watchlist(cfg) == ["MSFT"]
+        assert load_dynamic_watchlist(cfg, now=FIXTURE_NOW) == ["MSFT"]
 
 
 def test_selector_asset_prune_removes_non_tradable_before_ai(monkeypatch):
@@ -191,7 +196,7 @@ def test_selector_asset_prune_removes_non_tradable_before_ai(monkeypatch):
         assert [cand.symbol for cand in kept] == ["MSFT"]
         assert removed[0]["symbol"] == "AKAN"
         assert removed[0]["reason"] == "asset_not_tradable"
-        assert load_dynamic_watchlist(cfg) == ["MSFT"]
+        assert load_dynamic_watchlist(cfg, now=FIXTURE_NOW) == ["MSFT"]
 
 
 def test_asset_lookup_404_is_treated_as_terminal_not_found():

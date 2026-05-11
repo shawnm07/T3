@@ -17,10 +17,10 @@ from src.telegram_notifier import notify_weekly, send_alert
 
 def main() -> int:
     log = setup_logging("weekly_review")
-    cfg = Config.load()
-    client = AlpacaClient(cfg)
 
     try:
+        cfg = Config.load()
+        client = AlpacaClient(cfg)
         account = client.get_account()
         hist = client.get_portfolio_history(period="3M", timeframe="1D")
         equity = hist.equity or []

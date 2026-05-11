@@ -300,6 +300,29 @@ def test_selector_validator_repairs_small_stop_and_allocation_drift():
     assert "allocation_total" in result["_auto_repaired"]
 
 
+def test_selector_validator_drops_hallucinated_extra_per_symbol_keys():
+    cfg = DummyConfig()
+    result = _selector_result("Best remaining upside.")
+    result["per_symbol"]["AMD_check"] = None
+
+    ok, problems = validate_selector_response(
+        result,
+        held_symbols=[],
+        pool_symbols=["AMD", "INTC"],
+        pool_meta={
+            "AMD": {"currently_held": False, "current_qty": 0},
+            "INTC": {"currently_held": False, "current_qty": 0},
+        },
+        cfg=cfg,
+        allow_floor_breach=True,
+        equity=100_000,
+    )
+
+    assert ok, problems
+    assert "AMD_check" not in result["per_symbol"]
+    assert result["_auto_repaired"]["per_symbol_extra_keys_removed"] == ["AMD_check"]
+
+
 # NOTE: The candidate_rankings repair test was removed in Phase 0 (2026-05-05).
 # candidate_rankings was dropped from the selector schema entirely — per_symbol
 # already covers every pool member with the same opportunity_score. See
@@ -338,6 +361,7 @@ if __name__ == "__main__":
     test_validator_requires_explicit_peer_justification()
     test_selector_validator_repairs_rounded_exit_delta_qty()
     test_selector_validator_repairs_small_stop_and_allocation_drift()
+    test_selector_validator_drops_hallucinated_extra_per_symbol_keys()
     test_dynamic_watchlist_updates_without_list_bias()
     test_missed_breakout_detection_catches_unselected_leader()
     print("candidate scoring tests passed")

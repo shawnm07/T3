@@ -17,10 +17,10 @@ from src.telegram_notifier import send_alert
 
 def main() -> int:
     log = setup_logging("open_stop_guard")
-    cfg = Config.load()
-    client = AlpacaClient(cfg)
-    executor = TradeExecutor(client, cfg)
     try:
+        cfg = Config.load()
+        client = AlpacaClient(cfg)
+        executor = TradeExecutor(client, cfg)
         result = rearm_opening_guard_orders(cfg, client, executor=executor)
         log_decision({"event": "opening_stop_guard_rearm", "result": result})
         log.info("Opening-stop guard rearm complete: %s", result)

@@ -19,10 +19,10 @@ from src.telegram_notifier import notify_eod, send_alert
 
 def main() -> int:
     log = setup_logging("eod_report")
-    cfg = Config.load()
-    client = AlpacaClient(cfg)
 
     try:
+        cfg = Config.load()
+        client = AlpacaClient(cfg)
         # get_account() / get_positions() return independently-valued views —
         # equity, market_value, unrealized_pl[pc], current_price are recomputed
         # from independently fetched prices (not Alpaca's unreliable fields).

@@ -26,10 +26,10 @@ def main() -> int:
     args = parser.parse_args()
 
     log = setup_logging("preclose_decision")
-    cfg = Config.load()
-    orch = TradingOrchestrator(cfg)
 
     try:
+        cfg = Config.load()
+        orch = TradingOrchestrator(cfg)
         clock = orch.client.get_clock()
         if not clock.is_open and not args.force:
             log.info("Market closed (next_open=%s). Skipping preclose.", clock.next_open)

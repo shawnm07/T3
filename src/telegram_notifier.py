@@ -400,6 +400,15 @@ class TelegramNotifier:
                 f"Targets: cash {_fmt_pct(selector.get('execution_cash_target_pct', selector.get('cash_target_pct')), signed=False)} | "
                 f"SPY {_fmt_pct(selector.get('spy_target_pct'), signed=False)}"
             )
+        cash_policy = selector.get("cash_policy") or plan.get("cash_policy") or {}
+        if isinstance(cash_policy, dict) and cash_policy.get("mode"):
+            lock_until = cash_policy.get("lock_until")
+            lock_part = f" | lock {lock_until}" if lock_until else ""
+            lines.append(
+                f"Cash policy: {str(cash_policy.get('mode')).upper()} "
+                f"({cash_policy.get('source', '?')}{lock_part}) - "
+                f"{_short_text(cash_policy.get('reason'), 180)}"
+            )
         if opportunity_ranking:
             lines.append(f"Opportunity ranking: {' > '.join(str(s) for s in opportunity_ranking[:10])}")
 
@@ -501,6 +510,15 @@ class TelegramNotifier:
                         f"  Earnings: {e.get('next_earnings_date')} ({e.get('days_until_earnings')}d), "
                         f"rule {e.get('reason')}"
                     )
+        sector_guard = selector.get("sector_guard") or plan.get("sector_guard") or {}
+        if isinstance(sector_guard, dict) and sector_guard.get("violations"):
+            lines.extend(["", "SECTOR / THEME CAPS"])
+            for v in sector_guard.get("violations", [])[:6]:
+                lines.append(
+                    f"{v.get('kind', '?')} {v.get('bucket', '?')}: "
+                    f"{', '.join(str(s) for s in (v.get('members') or []))} "
+                    f"> limit {v.get('limit')}"
+                )
 
         pass_rows = [
             r for r in (plan.get("all_symbol_decisions") or [])
@@ -760,6 +778,51 @@ class TelegramNotifier:
         ]
         if error_details:
             lines.extend(["", "DETAILS", _short_text(error_details, 1800)])
+        return self._send("\n".join(lines))
+
+    def notify_trade_failure(
+        self,
+        scan_label: str,
+        mismatches: list[dict] | None = None,
+        errors: list[dict] | None = None,
+    ) -> bool:
+        """Phase 3 (2026-05-07): consolidated end-of-scan trade-failure alert.
+
+        Fires when the selector emitted BUY/INCREASE/EXIT/REDUCE for a symbol
+        but no order was submitted (mismatch) or the order was rejected /
+        unfilled (executor error). Caller passes lists of dicts with at least
+        ``symbol`` and ``reason`` keys.
+
+        Returns True when a message was sent. If both lists are empty, no
+        message is sent and the function returns False.
+        """
+        mismatches = mismatches or []
+        errors = errors or []
+        if not mismatches and not errors:
+            return False
+        lines = [
+            f"TRADE FAILURE: {scan_label} | {_get_phoenix_timestamp()}",
+        ]
+        if mismatches:
+            lines.append("")
+            lines.append(f"selector→no-execute ({len(mismatches)}):")
+            for m in mismatches[:8]:
+                sym = m.get("symbol", "?")
+                action = m.get("action", "?")
+                reason = _short_text(str(m.get("reason", "")), 200)
+                lines.append(f"  {sym} {action}: {reason}")
+            if len(mismatches) > 8:
+                lines.append(f"  …+{len(mismatches) - 8} more")
+        if errors:
+            lines.append("")
+            lines.append(f"executor errors ({len(errors)}):")
+            for e in errors[:8]:
+                sym = e.get("symbol", "?")
+                status = e.get("status", "?")
+                reason = _short_text(str(e.get("reason", e.get("message", ""))), 200)
+                lines.append(f"  {sym} {status}: {reason}")
+            if len(errors) > 8:
+                lines.append(f"  …+{len(errors) - 8} more")
         return self._send("\n".join(lines))
 
 

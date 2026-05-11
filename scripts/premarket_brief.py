@@ -20,10 +20,10 @@ from src.telegram_notifier import notify_premarket, send_alert
 
 def main() -> int:
     log = setup_logging("premarket")
-    cfg = Config.load()
-    orch = TradingOrchestrator(cfg)
 
     try:
+        cfg = Config.load()
+        orch = TradingOrchestrator(cfg)
         client = orch.client
         clock = client.get_clock()
         log.info("Clock: is_open=%s next_open=%s", clock.is_open, clock.next_open)

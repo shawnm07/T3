@@ -245,6 +245,28 @@ class MarketDataService:
         self._cache.set("daily_bars", cache_key, _bars_records_from_df(df))
         return df
 
+    def get_avg_dollar_volume(self, symbol: str, days: int = 20) -> float | None:
+        """Phase 6 (2026-05-07): 20-day average dollar volume for liquidity gating.
+
+        Returns the mean of (close * volume) over the last ``days`` daily bars,
+        or None when bars are unavailable. Reuses ``get_daily_bars`` so the
+        existing daily-bars cache is shared (no separate cache needed).
+        """
+        try:
+            df = self.get_daily_bars(symbol, days=max(days * 2, 40))
+        except Exception:
+            return None
+        if df is None or df.empty:
+            return None
+        try:
+            tail = df.tail(days)
+            if tail.empty:
+                return None
+            dv = (tail["close"].astype(float) * tail["volume"].astype(float)).mean()
+            return float(dv)
+        except Exception:
+            return None
+
     def get_intraday_bars(
         self, symbol: str, interval: str = "5min", outputsize: str = "compact"
     ) -> pd.DataFrame:

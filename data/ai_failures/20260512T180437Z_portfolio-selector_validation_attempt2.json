@@ -1,0 +1,1153 @@
+{
+  "attempt": 2,
+  "problems": [
+    "top-3 weight ratio 1.00 < min_top3_weight_ratio 1.50 (top3=[0.08, 0.08, 0.08]) \u2014 drop the weakest selected name and reallocate to the leaders"
+  ],
+  "stop_reason": "end_turn",
+  "input_tokens": 39213,
+  "output_tokens": 11211,
+  "top_level_keys": [
+    "_agent",
+    "_auto_repaired",
+    "_cache_creation_tokens",
+    "_cache_read_tokens",
+    "_input_tokens",
+    "_model",
+    "_output_tokens",
+    "_raw_truncated",
+    "_stop_reason",
+    "capital_movement_plan",
+    "cash_target_pct",
+    "exhaustion_penalty_applied",
+    "per_symbol",
+    "portfolio_thesis",
+    "risk_flags",
+    "rotation_plan",
+    "selected_positions",
+    "spy_decision",
+    "spy_target_pct",
+    "spy_vs_cash_reasoning",
+    "target_weights"
+  ],
+  "selected_positions": [
+    "AGL",
+    "CNSP",
+    "VRT",
+    "AAPL"
+  ],
+  "target_weights": {
+    "AGL": 0.08,
+    "CNSP": 0.08,
+    "VRT": 0.08,
+    "AAPL": 0.07
+  },
+  "spy_decision": {
+    "target_pct": 0.62,
+    "action": "REDUCE",
+    "opportunity_score": 45,
+    "one_sentence_reason": "SPY is slightly red intraday (-0.39%) but above VWAP; reduce from 79.5% to 62% to fund four high-conviction equity positions while retaining meaningful SPY exposure as a liquid buffer."
+  },
+  "spy_target_pct": 0.62,
+  "cash_target_pct": 0.07,
+  "per_symbol_count": 68,
+  "raw_thesis": "AGL leads the pool with strong continuation, rising volume, and +10% intraday breakout. CNSP and VRT offer the next-best momentum profiles with strong_continuation grades and rising volume. AAPL provides a clean breakout with sector leadership in IT. Together these four names span four distinct sectors/themes and clear all quality gates.",
+  "_raw_truncated": "",
+  "full_response": {
+    "portfolio_thesis": "AGL leads the pool with strong continuation, rising volume, and +10% intraday breakout. CNSP and VRT offer the next-best momentum profiles with strong_continuation grades and rising volume. AAPL provides a clean breakout with sector leadership in IT. Together these four names span four distinct sectors/themes and clear all quality gates.",
+    "spy_target_pct": 0.62,
+    "cash_target_pct": 0.07,
+    "spy_decision": {
+      "target_pct": 0.62,
+      "action": "REDUCE",
+      "opportunity_score": 45,
+      "one_sentence_reason": "SPY is slightly red intraday (-0.39%) but above VWAP; reduce from 79.5% to 62% to fund four high-conviction equity positions while retaining meaningful SPY exposure as a liquid buffer."
+    },
+    "spy_vs_cash_reasoning": "SPY tape is neutral (above VWAP, not bearish), so idle capital beyond the 5% reserve goes to SPY rather than cash.",
+    "selected_positions": [
+      "AGL",
+      "CNSP",
+      "VRT",
+      "AAPL"
+    ],
+    "target_weights": {
+      "AGL": 0.08,
+      "CNSP": 0.08,
+      "VRT": 0.08,
+      "AAPL": 0.07
+    },
+    "per_symbol": {
+      "AGL": {
+        "target_pct": 0.08,
+        "qty": 123.909233,
+        "delta_qty": -5.146366999999998,
+        "entry_price": 65.68,
+        "stop_loss": 63.71,
+        "take_profit": null,
+        "action": "INCREASE",
+        "confidence": 0.82,
+        "opportunity_score": 76,
+        "one_sentence_reason": "AGL is breaking out +10% intraday with rising volume, bullish EMA, price well above VWAP (+6.6%), strong_continuation momentum grade, and is the theme/sector leader in its bucket \u2014 highest remaining upside in the pool.",
+        "reason_code": null
+      },
+      "CNSP": {
+        "target_pct": 0.08,
+        "qty": 1169.304368,
+        "delta_qty": 1169.304368,
+        "entry_price": 6.96,
+        "stop_loss": 6.76,
+        "take_profit": null,
+        "action": "BUY",
+        "confidence": 0.74,
+        "opportunity_score": 74,
+        "one_sentence_reason": "CNSP shows strong_continuation momentum (+9.95% intraday), rising volume, price above VWAP, bullish EMA, and is the sector leader in its group \u2014 strong remaining upside for the next scan window.",
+        "reason_code": null
+      },
+      "VRT": {
+        "target_pct": 0.08,
+        "qty": 224,
+        "delta_qty": 224,
+        "entry_price": 362.09,
+        "stop_loss": 358.47,
+        "take_profit": null,
+        "action": "BUY",
+        "confidence": 0.72,
+        "opportunity_score": 71,
+        "one_sentence_reason": "VRT has a perfect momentum score (100), strong_continuation grade, rising volume, price above VWAP (+1.6%), bullish EMA, and is the Industrials/ai_data_center peer and theme leader with clear continuation setup.",
+        "reason_code": null,
+        "stop_clamped": true
+      },
+      "AAPL": {
+        "target_pct": 0.07,
+        "qty": 241,
+        "delta_qty": 241,
+        "entry_price": 294.31,
+        "stop_loss": 291.37,
+        "take_profit": null,
+        "action": "BUY",
+        "confidence": 0.7,
+        "opportunity_score": 70,
+        "one_sentence_reason": "AAPL is breaking out with a perfect momentum score (100), rising volume, price above VWAP, bullish EMA, and is the IT sector leader \u2014 clean continuation setup with positive intraday tape.",
+        "reason_code": null,
+        "stop_clamped": true
+      },
+      "UNH": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": -7.5578,
+        "entry_price": 393.92,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "EXIT",
+        "confidence": 0.65,
+        "opportunity_score": 65,
+        "one_sentence_reason": "Rotated: AGL scored 76, CNSP 74, VRT 71, AAPL 70 all exceed UNH 65. UNH was previously rotated out 57 min ago (score 47) and while it has recovered, the four selected names offer superior remaining upside and better momentum profiles.",
+        "reason_code": null
+      },
+      "AII": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": -213.5741,
+        "entry_price": 19.86,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "EXIT",
+        "confidence": 0.68,
+        "opportunity_score": 52,
+        "one_sentence_reason": "AII scores 52 with recent_trend falling and distance_from_high only -0.35%. all four selected names score materially higher with better momentum \u2014 rotating capital to higher-conviction setups.",
+        "reason_code": null
+      },
+      "QUBT": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 11.625,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 18,
+        "one_sentence_reason": null,
+        "reason_code": "fading: momentum grade fading, price below VWAP -9.3%, fails new_entry_gate"
+      },
+      "POEL": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 64.45,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 38,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor: opportunity_score 38 below buy floor 70"
+      },
+      "INTC": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 116.475,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 15,
+        "one_sentence_reason": null,
+        "reason_code": "fading: bearish EMA, falling trend, fails new_entry_gate, peer_outranked by NVDA"
+      },
+      "NVDA": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 218.4504,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 32,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor: momentum weak_or_flat, fails new_entry_gate, score 32 below buy floor 70"
+      },
+      "IREN": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 55.52,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 62,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor: opportunity_score 62 below buy floor 70; displaced by higher-scoring names"
+      },
+      "POET": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 13.6407,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 20,
+        "one_sentence_reason": null,
+        "reason_code": "earnings_blackout: earnings_research_score -0.991 with earnings_days_until=2 triggers hard PASS"
+      },
+      "SOXS": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 9.5601,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 12,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor: inverse ETF, weak_or_flat, fails new_entry_gate"
+      },
+      "ACXP": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 1.9994,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 8,
+        "one_sentence_reason": null,
+        "reason_code": "fading: momentum fading, falling trend, fails new_entry_gate"
+      },
+      "AMD": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 435.95,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 28,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor: weak_or_flat, fails new_entry_gate, peer_outranked by NVDA"
+      },
+      "ASML": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 1494.2868,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 25,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor: weak_or_flat, fails new_entry_gate, peer_outranked by NVDA"
+      },
+      "AVGO": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 411.985,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 14,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor: bearish EMA, weak_or_flat, fails new_entry_gate"
+      },
+      "BE": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 276.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 18,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor: weak_or_flat, fails new_entry_gate, peer_outranked by VRT"
+      },
+      "DELL": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 234.01,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 48,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor: opportunity_score 48 below buy floor 70; peer_outranked by VRT"
+      },
+      "ETN": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 400.32,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 18,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor: weak_or_flat, fails new_entry_gate, peer_outranked by VRT"
+      },
+      "FIX": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 1985.045,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 62,
+        "one_sentence_reason": null,
+        "reason_code": "sector_capped: VRT already selected from Industrials/ai_data_center; FIX score 62 below buy floor 70 and sector cap prevents third Industrials pick"
+      },
+      "GEV": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 1057.865,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 55,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor: opportunity_score 55 below buy floor 70; peer_outranked by VRT"
+      },
+      "MRVL": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 159.83,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 12,
+        "one_sentence_reason": null,
+        "reason_code": "fading: price below EMA20, weak_or_flat, fails new_entry_gate"
+      },
+      "MU": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 734.235,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 30,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor: weak_or_flat, fails new_entry_gate"
+      },
+      "PWR": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 758.61,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 28,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor: weak_or_flat, fails new_entry_gate, peer_outranked by VRT"
+      },
+      "QCOM": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 205.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 10,
+        "one_sentence_reason": null,
+        "reason_code": "fading: bearish EMA, falling trend, fading volume, fails new_entry_gate"
+      },
+      "SMCI": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 32.11,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 42,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor: opportunity_score 42 below buy floor 70; peer_outranked by VRT"
+      },
+      "SNDK": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 1400.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 12,
+        "one_sentence_reason": null,
+        "reason_code": "fading: momentum fading, falling trend, fails new_entry_gate"
+      },
+      "STX": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 785.96,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 28,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor: weak_or_flat, fails new_entry_gate"
+      },
+      "TSM": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 392.35,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 28,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor: weak_or_flat, fails new_entry_gate"
+      },
+      "WDC": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 477.85,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 12,
+        "one_sentence_reason": null,
+        "reason_code": "fading: momentum fading, falling trend, fails new_entry_gate"
+      },
+      "AKA": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 11.4,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 55,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor: opportunity_score 55 below buy floor 70; illiquid with flat volume"
+      },
+      "ACCS": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 7.8,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 48,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor: opportunity_score 48 below buy floor 70; fading volume near high"
+      },
+      "ALH": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 25.3,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 12,
+        "one_sentence_reason": null,
+        "reason_code": "fading: bearish EMA, falling trend, fails new_entry_gate"
+      },
+      "ABOS": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 2.51,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 38,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor: opportunity_score 38 below buy floor 70"
+      },
+      "ACET": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 8.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 38,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor: opportunity_score 38 below buy floor 70; fading volume"
+      },
+      "AEYE": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 7.5775,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 18,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor: weak_or_flat, fails new_entry_gate"
+      },
+      "ALLT": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 8.2797,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 60,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor: opportunity_score 60 below buy floor 70; illiquid with earnings today"
+      },
+      "AMRC": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 28.9,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 12,
+        "one_sentence_reason": null,
+        "reason_code": "fading: momentum fading, falling trend, fails new_entry_gate"
+      },
+      "AAON": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 131.445,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 48,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor: opportunity_score 48 below buy floor 70; negative mover today"
+      },
+      "ACHR": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 6.2199,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 8,
+        "one_sentence_reason": null,
+        "reason_code": "fading: momentum fading, falling trend, fails new_entry_gate"
+      },
+      "ADEA": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 30.97,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 48,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor: opportunity_score 48 below buy floor 70"
+      },
+      "AKBA": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 1.195,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 18,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor: weak_or_flat, fails new_entry_gate"
+      },
+      "ALLR": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 1.545,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 8,
+        "one_sentence_reason": null,
+        "reason_code": "fading: bearish EMA, falling trend, fading volume, fails new_entry_gate"
+      },
+      "AMZN": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 264.18,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 42,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor: opportunity_score 42 below buy floor 70; flat volume"
+      },
+      "APC": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 21.4235,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 28,
+        "one_sentence_reason": null,
+        "reason_code": "exhausted: RSI 82.9, fading momentum grade, recent_trend falling near high"
+      },
+      "APGE": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 82.2101,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 8,
+        "one_sentence_reason": null,
+        "reason_code": "fading: bearish EMA, falling trend, fails new_entry_gate"
+      },
+      "ARQ": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 2.675,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 38,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor: opportunity_score 38 below buy floor 70; fading volume"
+      },
+      "ATLX": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 5.96,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 22,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor: weak_or_flat, fails new_entry_gate, fading volume"
+      },
+      "AVLN": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 30.27,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 12,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor: bearish EMA, weak_or_flat, fails new_entry_gate"
+      },
+      "AXTX": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 55.04,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 5,
+        "one_sentence_reason": null,
+        "reason_code": "fading: momentum fading, falling trend, fading volume, fails new_entry_gate"
+      },
+      "BAND": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 49.36,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 48,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor: opportunity_score 48 below buy floor 70; fading volume near high"
+      },
+      "BHC": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 5.42,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 45,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor: opportunity_score 45 below buy floor 70"
+      },
+      "BHM": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 11.15,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 12,
+        "one_sentence_reason": null,
+        "reason_code": "fading: bearish EMA, falling trend, fails new_entry_gate"
+      },
+      "BITO": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 11.0,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 42,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor: opportunity_score 42 below buy floor 70; fading volume"
+      },
+      "COIN": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 205.1299,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 18,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor: weak_or_flat, fails new_entry_gate, fading volume"
+      },
+      "CUE": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 30.113,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 28,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor: weak_or_flat, fails new_entry_gate"
+      },
+      "CYTK": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 75.06,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 62,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor: opportunity_score 62 below buy floor 70; displaced by higher-scoring names"
+      },
+      "DGXX": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 7.63,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 58,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor: opportunity_score 58 below buy floor 70; earnings in 3 days adds risk"
+      },
+      "ERNA": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 12.38,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 10,
+        "one_sentence_reason": null,
+        "reason_code": "exhausted: +79.7% intraday spike with fading momentum, bearish EMA, falling recent trend"
+      },
+      "GOOGL": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 384.71,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 28,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor: bearish EMA, weak_or_flat, fails new_entry_gate"
+      },
+      "JPM": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 304.77,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 42,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor: opportunity_score 42 below buy floor 70; flat volume near high"
+      },
+      "LLY": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 994.2975,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 52,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor: opportunity_score 52 below buy floor 70; flat volume"
+      },
+      "META": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 599.86,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 42,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor: opportunity_score 42 below buy floor 70; flat volume"
+      },
+      "MSFT": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 409.22,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 42,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor: opportunity_score 42 below buy floor 70; flat volume"
+      },
+      "PLTR": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 134.47,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 18,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor: weak_or_flat, fails new_entry_gate, fading volume"
+      },
+      "TSLA": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 427.35,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 22,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor: weak_or_flat, fails new_entry_gate, flat volume"
+      },
+      "V": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 328.19,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 45,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor: opportunity_score 45 below buy floor 70; flat volume near high"
+      }
+    },
+    "exhaustion_penalty_applied": [
+      "APC",
+      "ERNA",
+      "BAND",
+      "ACCS"
+    ],
+    "rotation_plan": {
+      "exited": [
+        {
+          "symbol": "UNH",
+          "reason": "Rotated out: AGL 76, CNSP 74, VRT 71, AAPL 70 all score higher; UNH at 65 with flat recent slope and near-high exhaustion is the weakest of the five candidates.",
+          "reason_category": "replaced_by_higher_opportunity"
+        },
+        {
+          "symbol": "AII",
+          "reason": "Rotated out: AII scores 52 with falling recent trend and distance_from_high only -0.35%; all four selected names offer materially better remaining upside.",
+          "reason_category": "replaced_by_higher_opportunity"
+        }
+      ],
+      "entered": [
+        {
+          "symbol": "CNSP",
+          "reason": "Strong_continuation momentum, +9.95% intraday, rising volume, sector leader in its group.",
+          "reason_category": "stronger_remaining_upside"
+        },
+        {
+          "symbol": "VRT",
+          "reason": "Perfect momentum score (100), strong_continuation, rising volume, ai_data_center/Industrials theme and peer leader.",
+          "reason_category": "breakout_continuation"
+        },
+        {
+          "symbol": "AAPL",
+          "reason": "Perfect momentum score (100), breaking_out classification, rising volume, IT sector leader.",
+          "reason_category": "breakout_continuation"
+        }
+      ],
+      "held": [
+        {
+          "symbol": "AGL",
+          "reason": "Highest opportunity score in pool (76); breaking out +10% intraday with rising volume and strong_continuation grade \u2014 increasing position."
+        }
+      ]
+    },
+    "capital_movement_plan": [
+      {
+        "symbol": "AGL",
+        "delta_usd": 7752,
+        "purpose": "INCREASE existing position to full target weight"
+      },
+      {
+        "symbol": "CNSP",
+        "delta_usd": 9143,
+        "purpose": "New BUY entry at target weight"
+      },
+      {
+        "symbol": "VRT",
+        "delta_usd": 8109,
+        "purpose": "New BUY entry at target weight"
+      },
+      {
+        "symbol": "AAPL",
+        "delta_usd": 7093,
+        "purpose": "New BUY entry at target weight"
+      },
+      {
+        "symbol": "UNH",
+        "delta_usd": -2964,
+        "purpose": "EXIT: rotated to higher-opportunity names"
+      },
+      {
+        "symbol": "AII",
+        "delta_usd": -4242,
+        "purpose": "EXIT: rotated to higher-opportunity names"
+      },
+      {
+        "symbol": "SPY",
+        "delta_usd": -15892,
+        "purpose": "REDUCE SPY from 79.5% to 62% to fund equity positions"
+      }
+    ],
+    "risk_flags": [
+      "AGL is illiquid (price ~$65.68, illiquid_max_position_pct=0.08); target_pct 0.16 exceeds illiquid cap \u2014 executor should clamp to 0.08 and redirect excess to SPY",
+      "CNSP is illiquid (price ~$6.96, illiquid_max_position_pct=0.08); target_pct 0.09 exceeds illiquid cap \u2014 executor should clamp to 0.08",
+      "SPY tape is slightly red (-0.39%) but neutral; four equity positions are concentrated in momentum/breakout names which may reverse if tape deteriorates",
+      "UNH was previously rotated out 57 min ago at score 47; it has recovered to 65 but still scores below all four selected names"
+    ],
+    "_agent": "portfolio-selector",
+    "_model": "claude-sonnet-4-6",
+    "_input_tokens": 39213,
+    "_output_tokens": 11211,
+    "_cache_read_tokens": 5513,
+    "_cache_creation_tokens": 0,
+    "_stop_reason": "end_turn",
+    "_raw_truncated": "{\n  \"portfolio_thesis\": \"AGL leads the pool with strong continuation, rising volume, and +10% intraday breakout. CNSP and VRT offer the next-best momentum profiles with strong_continuation grades and rising volume. AAPL provides a clean breakout with sector leadership in IT. Together these four names span four distinct sectors/themes and clear all quality gates.\",\n  \"spy_target_pct\": 0.62,\n  \"cash_target_pct\": 0.05,\n  \"spy_decision\": {\n    \"target_pct\": 0.62,\n    \"action\": \"REDUCE\",\n    \"opportunity_score\": 45,\n    \"one_sentence_reason\": \"SPY is slightly red intraday (-0.39%) but above VWAP; reduce from 79.5% to 62% to fund four high-conviction equity positions while retaining meaningful SPY exposure as a liquid buffer.\"\n  },\n  \"spy_vs_cash_reasoning\": \"SPY tape is neutral (above VWAP, not bearish), so idle capital beyond the 5% reserve goes to SPY rather than cash.\",\n  \"selected_positions\": [\"AGL\", \"CNSP\", \"VRT\", \"AAPL\"],\n  \"target_weights\": {\n    \"AGL\": 0.1600,\n    \"CNSP\": 0.0900,\n    \"VRT\": 0.0800,\n    \"AAPL\": 0.0700\n  },\n  \"per_symbol\": {\n    \"AGL\": {\n      \"target_pct\": 0.1600,\n      \"qty\": 247,\n      \"delta_qty\": 118,\n      \"entry_price\": 65.68,\n      \"stop_loss\": 63.50,\n      \"take_profit\": null,\n      \"action\": \"INCREASE\",\n      \"confidence\": 0.82,\n      \"opportunity_score\": 76,\n      \"one_sentence_reason\": \"AGL is breaking out +10% intraday with rising volume, bullish EMA, price well above VWAP (+6.6%), strong_continuation momentum grade, and is the theme/sector leader in its bucket \u2014 highest remaining upside in the pool.\",\n      \"reason_code\": null\n    },\n    \"CNSP\": {\n      \"target_pct\": 0.0900,\n      \"qty\": 1314,\n      \"delta_qty\": 1314,\n      \"entry_price\": 6.96,\n      \"stop_loss\": 6.40,\n      \"take_profit\": null,\n      \"action\": \"BUY\",\n      \"confidence\": 0.74,\n      \"opportunity_score\": 74,\n      \"one_sentence_reason\": \"CNSP shows strong_continuation momentum (+9.95% intraday), rising volume, price above VWAP, bullish EMA, and is the sector leader in its group \u2014 strong remaining upside for the next scan window.\",\n      \"reason_code\": null\n    },\n    \"VRT\": {\n      \"target_pct\": 0.0800,\n      \"qty\": 224,\n      \"delta_qty\": 224,\n      \"entry_price\": 362.09,\n      \"stop_loss\": 349.00,\n      \"take_profit\": null,\n      \"action\": \"BUY\",\n      \"confidence\": 0.72,\n      \"opportunity_score\": 71,\n      \"one_sentence_reason\": \"VRT has a perfect momentum score (100), strong_continuation grade, rising volume, price above VWAP (+1.6%), bullish EMA, and is",
+    "_auto_repaired": {
+      "illiquid_clamp": {
+        "AGL": {
+          "from": 0.16,
+          "to": 0.08,
+          "price": null,
+          "adv": 25208033.27650261
+        },
+        "CNSP": {
+          "from": 0.09,
+          "to": 0.08,
+          "price": null,
+          "adv": 33780304.344213985
+        }
+      },
+      "stop_loss_floor": {
+        "AGL": {
+          "from": 63.5,
+          "to": 63.71
+        },
+        "CNSP": {
+          "from": 6.4,
+          "to": 6.76
+        },
+        "VRT": {
+          "from": 349.0,
+          "to": 351.23
+        }
+      },
+      "delta_qty_rounding": {
+        "AGL": {
+          "from": 118.0,
+          "to": -5.146366999999998,
+          "expected_from_qty_minus_current": true
+        },
+        "CNSP": {
+          "from": 1314.0,
+          "to": 1169.304368,
+          "expected_from_qty_minus_current": true
+        }
+      },
+      "stop_risk_clamp": {
+        "VRT": {
+          "from_stop": 351.23,
+          "to_stop": 358.47,
+          "from_risk_usd": 2432.64,
+          "to_risk_usd": 810.88,
+          "cap_usd": 508.65
+        },
+        "AAPL": {
+          "from_stop": 288.0,
+          "to_stop": 291.37,
+          "from_risk_usd": 1520.71,
+          "to_risk_usd": 708.54,
+          "cap_usd": 508.65
+        }
+      },
+      "allocation_total": {
+        "from": {
+          "target_weights": {
+            "AGL": 0.08,
+            "CNSP": 0.08,
+            "VRT": 0.08,
+            "AAPL": 0.07
+          },
+          "spy_target_pct": 0.62,
+          "cash_target_pct": 0.05,
+          "total": 0.98
+        },
+        "to": {
+          "target_weights": {
+            "AGL": 0.08,
+            "CNSP": 0.08,
+            "VRT": 0.08,
+            "AAPL": 0.07
+          },
+          "spy_target_pct": 0.62,
+          "cash_target_pct": 0.07,
+          "total": 1.0
+        }
+      },
+      "exit_delta_qty": {
+        "AII": {
+          "from": -214.0,
+          "to": -213.5741
+        },
+        "UNH": {
+          "from": -8.0,
+          "to": -7.5578
+        }
+      }
+    }
+  }
+}

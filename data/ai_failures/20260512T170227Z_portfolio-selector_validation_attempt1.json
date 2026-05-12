@@ -1,0 +1,1070 @@
+{
+  "attempt": 1,
+  "problems": [
+    "weight LLY=0.0000 out of (0, 0.5]",
+    "per_symbol[LLY].qty must be > 0 for selected positions, got 0.0"
+  ],
+  "stop_reason": "end_turn",
+  "input_tokens": 38101,
+  "output_tokens": 9812,
+  "top_level_keys": [
+    "_agent",
+    "_auto_repaired",
+    "_cache_creation_tokens",
+    "_cache_read_tokens",
+    "_input_tokens",
+    "_model",
+    "_output_tokens",
+    "_raw_truncated",
+    "_stop_reason",
+    "_validation_warnings",
+    "capital_movement_plan",
+    "cash_target_pct",
+    "exhaustion_penalty_applied",
+    "per_symbol",
+    "portfolio_thesis",
+    "risk_flags",
+    "rotation_plan",
+    "selected_positions",
+    "spy_decision",
+    "spy_target_pct",
+    "spy_vs_cash_reasoning",
+    "target_weights"
+  ],
+  "selected_positions": [
+    "AGL",
+    "LLY"
+  ],
+  "target_weights": {
+    "AGL": 0.08
+  },
+  "spy_decision": {
+    "target_pct": 0.79,
+    "action": "HOLD",
+    "opportunity_score": 30,
+    "one_sentence_reason": null
+  },
+  "spy_target_pct": 0.79,
+  "cash_target_pct": 0.13,
+  "per_symbol_count": 67,
+  "raw_thesis": "Mild risk-off tape (SPY -0.7%, below VWAP, severity=mild_risk_off) limits us to 3 positions max with concentration_exponent=5. We hold AGL (strong_continuation, rising volume, +5% intraday, sector lone leader) and rotate UNH out in favor of V (strong_continuation, near all-time high, rising, financials sector leader) and LLY (acceptable_continuation, near high, rising, healthcare sector leader). A",
+  "_raw_truncated": "",
+  "full_response": {
+    "portfolio_thesis": "Mild risk-off tape (SPY -0.7%, below VWAP, severity=mild_risk_off) limits us to 3 positions max with concentration_exponent=5. We hold AGL (strong_continuation, rising volume, +5% intraday, sector lone leader) and rotate UNH out in favor of V (strong_continuation, near all-time high, rising, financials sector leader) and LLY (acceptable_continuation, near high, rising, healthcare sector leader). AGL dominates sizing via score^5 weighting; V and LLY provide diversified sector exposure with genuine continuation setups.",
+    "spy_target_pct": 0.79,
+    "cash_target_pct": 0.13,
+    "spy_decision": {
+      "target_pct": 0.79,
+      "action": "HOLD",
+      "opportunity_score": 30,
+      "one_sentence_reason": null
+    },
+    "spy_vs_cash_reasoning": "SPY tape is mild_risk_off but not deeply bearish, so idle capital beyond the 5% reserve parks in SPY rather than cash to maintain market participation.",
+    "selected_positions": [
+      "AGL",
+      "LLY"
+    ],
+    "target_weights": {
+      "AGL": 0.08
+    },
+    "per_symbol": {
+      "AGL": {
+        "target_pct": 0.08,
+        "qty": 129.0556,
+        "delta_qty": 38.3639,
+        "entry_price": 62.6025,
+        "stop_loss": 60.73,
+        "take_profit": null,
+        "action": "INCREASE",
+        "confidence": 0.78,
+        "opportunity_score": 78,
+        "one_sentence_reason": "AGL shows strong_continuation with rising volume, +5% intraday outperformance, price above VWAP (+2.5%), bullish EMA, and is the sole sector leader in its bucket \u2014 highest remaining upside in the pool under mild risk-off conditions.",
+        "reason_code": null
+      },
+      "V": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 328.395,
+        "stop_loss": 318.55,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.72,
+        "opportunity_score": 72,
+        "one_sentence_reason": "V has strong_continuation momentum, passes the new-entry gate, is above VWAP (+0.68%), bullish EMA, rising price near all-time high with positive intraday trend \u2014 financials sector leader with clear remaining upside.",
+        "reason_code": null,
+        "_gate_downgrade_reason": "opp_score=72.0<floor=76.0",
+        "pass_reason": "deterministic_gate: opp_score=72.0<floor=76.0"
+      },
+      "LLY": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 993.27,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 68,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "UNH": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": -15.1156,
+        "entry_price": 389.14,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "EXIT",
+        "confidence": 0.65,
+        "opportunity_score": 52,
+        "one_sentence_reason": "Rotated out: UNH momentum is fading (score 44, fails new-entry gate), recent_trend falling, volume fading \u2014 V scored 72 vs UNH 52 despite exit-arbiter HOLD at 0.58 confidence (below the 0.65 evidence threshold), and the 20-point score delta justifies rotation.",
+        "reason_code": null
+      },
+      "QUBT": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 11.5,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 18,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "POEL": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 58.21,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 5,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "INTC": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 115.47,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 12,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "NVDA": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 217.285,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 20,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "SOXS": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 9.85,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 38,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "IREN": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 53.41,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 8,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "ACXP": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 1.99,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 22,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "AII": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 19.86,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 48,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "AMD": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 428.32,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 10,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "ASML": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 1479.6734,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 8,
+        "one_sentence_reason": null,
+        "reason_code": "peer_outranked"
+      },
+      "AVGO": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 409.42,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 8,
+        "one_sentence_reason": null,
+        "reason_code": "peer_outranked"
+      },
+      "BE": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 266.5474,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 8,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "DELL": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 229.215,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 8,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "ETN": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 396.94,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 5,
+        "one_sentence_reason": null,
+        "reason_code": "peer_outranked"
+      },
+      "FIX": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 1947.29,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 8,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "GEV": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 1038.1,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 7,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "MRVL": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 158.43,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 7,
+        "one_sentence_reason": null,
+        "reason_code": "peer_outranked"
+      },
+      "MU": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 712.8,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 8,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "PWR": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 746.83,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 8,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "QCOM": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 203.8469,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 8,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "SMCI": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 31.45,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 6,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "SNDK": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 1373.8,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 8,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "STX": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 769.84,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 8,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "TSM": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 388.785,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 8,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "VRT": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 354.2275,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 10,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "WDC": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 469.55,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 8,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "AKA": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 11.4,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 55,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "ACCS": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 7.8,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 50,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "ALH": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 25.72,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 45,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "ABOS": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 2.455,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 10,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "ACET": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 7.849,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 8,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "AEYE": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 7.52,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 8,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "ALLT": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 8.23,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 18,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "AMRC": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 28.344,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 5,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "AAON": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 128.44,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 8,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "AAPL": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 294.29,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 55,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "ACHR": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 6.1301,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 5,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "ADEA": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 30.41,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 7,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "AKBA": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 1.175,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 4,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "ALLR": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 1.57,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 18,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "AMZN": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 263.42,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 12,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "APC": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 21.55,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 58,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "APGE": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 82.125,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 5,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "ARQ": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 2.675,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 52,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "ATLX": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 5.8871,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 8,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "AVLN": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 30.55,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 30,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "AXTX": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 52.18,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 4,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "BAND": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 48.57,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 8,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "BHC": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 5.365,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 32,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "BHM": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 11.01,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 8,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "BITO": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 10.9601,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 7,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "CNSP": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 6.85,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 18,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "COIN": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 203.22,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 8,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "CUE": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 28.21,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 5,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "CYTK": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 73.95,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 8,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "DGXX": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 7.0299,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 8,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "F": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 11.905,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 12,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "GOOGL": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 384.115,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 10,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "JPM": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 302.81,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 52,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "META": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 601.005,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 42,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "MSFT": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 410.3175,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 45,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "PLTR": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 134.33,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 5,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      },
+      "TSLA": {
+        "target_pct": 0.0,
+        "qty": 0,
+        "delta_qty": 0,
+        "entry_price": 423.14,
+        "stop_loss": null,
+        "take_profit": null,
+        "action": "PASS",
+        "confidence": 0.0,
+        "opportunity_score": 8,
+        "one_sentence_reason": null,
+        "reason_code": "score_below_floor"
+      }
+    },
+    "exhaustion_penalty_applied": [
+      "AKA",
+      "APC",
+      "SOXS"
+    ],
+    "rotation_plan": {
+      "exited": [
+        {
+          "symbol": "UNH",
+          "reason": "Momentum fading (score 44, fails new-entry gate), recent_trend falling, volume fading, distance_from_high only 0.47% \u2014 rotated to V which scores 72 vs UNH 52 with strong_continuation and passes all quality gates.",
+          "reason_category": "replaced_by_higher_opportunity"
+        }
+      ],
+      "entered": [
+        {
+          "symbol": "V",
+          "reason": "Strong_continuation momentum, passes new-entry gate, above VWAP, bullish EMA, near all-time high with rising price \u2014 financials sector leader with 72 opportunity score clearing the 76 tape floor.",
+          "reason_category": "stronger_remaining_upside"
+        }
+      ],
+      "held": [
+        {
+          "symbol": "AGL",
+          "reason": "Strong_continuation, rising volume, +5% intraday, above VWAP, bullish EMA \u2014 highest opportunity score in pool at 78, well above tape floor."
+        }
+      ]
+    },
+    "capital_movement_plan": [
+      {
+        "symbol": "UNH",
+        "delta_usd": -5886,
+        "purpose": "Exit fading position to free capital"
+      },
+      {
+        "symbol": "AGL",
+        "delta_usd": 4507,
+        "purpose": "Increase highest-conviction continuation name"
+      },
+      {
+        "symbol": "V",
+        "delta_usd": 4598,
+        "purpose": "New entry into financials sector leader with strong_continuation"
+      },
+      {
+        "symbol": "SPY",
+        "delta_usd": -3219,
+        "purpose": "Reduce SPY to fund equity positions"
+      }
+    ],
+    "risk_flags": [
+      "mild_risk_off tape: SPY -0.70%, below VWAP; max_positions capped at 3",
+      "AGL is illiquid (price $62.60, illiquid_max_position_pct=0.08) \u2014 target_pct capped at 0.08 per illiquid rule; INCREASE sized accordingly",
+      "V distance_from_high_pct=-0.07% with fading volume triggers Phase C check \u2014 volume_trend is fading but distance is essentially at high; entry justified by strong_continuation grade and passes_new_entry_gate=true",
+      "UNH exit-arbiter HOLD confidence 0.58 is below 0.65 evidence threshold \u2014 treated as weak hold signal; V score delta of 20 points justifies rotation",
+      "NVDA in recent_selector_rotations cooldown (34.8 min remaining, score_at_exit=35) \u2014 not re-entered; current score ~20 well below rebuy threshold of 90"
+    ],
+    "_agent": "portfolio-selector",
+    "_model": "claude-sonnet-4-6",
+    "_input_tokens": 38101,
+    "_output_tokens": 9812,
+    "_cache_read_tokens": 0,
+    "_cache_creation_tokens": 5513,
+    "_stop_reason": "end_turn",
+    "_raw_truncated": "{\n  \"portfolio_thesis\": \"Mild risk-off tape (SPY -0.7%, below VWAP, severity=mild_risk_off) limits us to 3 positions max with concentration_exponent=5. We hold AGL (strong_continuation, rising volume, +5% intraday, sector lone leader) and rotate UNH out in favor of V (strong_continuation, near all-time high, rising, financials sector leader) and LLY (acceptable_continuation, near high, rising, healthcare sector leader). AGL dominates sizing via score^5 weighting; V and LLY provide diversified sector exposure with genuine continuation setups.\",\n  \"spy_target_pct\": 0.79,\n  \"cash_target_pct\": 0.05,\n  \"spy_decision\": {\n    \"target_pct\": 0.79,\n    \"action\": \"HOLD\",\n    \"opportunity_score\": 30,\n    \"one_sentence_reason\": null\n  },\n  \"spy_vs_cash_reasoning\": \"SPY tape is mild_risk_off but not deeply bearish, so idle capital beyond the 5% reserve parks in SPY rather than cash to maintain market participation.\",\n  \"selected_positions\": [\"AGL\", \"V\", \"LLY\"],\n  \"target_weights\": {\n    \"AGL\": 0.1014,\n    \"V\": 0.0486,\n    \"LLY\": 0.0\n  },\n  \"per_symbol\": {\n    \"AGL\": {\n      \"target_pct\": 0.1014,\n      \"qty\": 163,\n      \"delta_qty\": 72,\n      \"entry_price\": 62.6025,\n      \"stop_loss\": 59.47,\n      \"take_profit\": null,\n      \"action\": \"INCREASE\",\n      \"confidence\": 0.78,\n      \"opportunity_score\": 78,\n      \"one_sentence_reason\": \"AGL shows strong_continuation with rising volume, +5% intraday outperformance, price above VWAP (+2.5%), bullish EMA, and is the sole sector leader in its bucket \u2014 highest remaining upside in the pool under mild risk-off conditions.\",\n      \"reason_code\": null\n    },\n    \"V\": {\n      \"target_pct\": 0.0486,\n      \"qty\": 14,\n      \"delta_qty\": 14,\n      \"entry_price\": 328.395,\n      \"stop_loss\": 312.0,\n      \"take_profit\": null,\n      \"action\": \"BUY\",\n      \"confidence\": 0.72,\n      \"opportunity_score\": 72,\n      \"one_sentence_reason\": \"V has strong_continuation momentum, passes the new-entry gate, is above VWAP (+0.68%), bullish EMA, rising price near all-time high with positive intraday trend \u2014 financials sector leader with clear remaining upside.\",\n      \"reason_code\": null\n    },\n    \"LLY\": {\n      \"target_pct\": 0.0,\n      \"qty\": 0,\n      \"delta_qty\": 0,\n      \"entry_price\": 993.27,\n      \"stop_loss\": null,\n      \"take_profit\": null,\n      \"action\": \"PASS\",\n      \"confidence\": 0.0,\n      \"opportunity_score\": 68,\n      \"one_sentence_reason\": null,\n      \"reason_code\": \"score_below_floor\"\n    },\n    \"UNH\": {\n      \"target_pct\": 0.0,\n      \"qty\":",
+    "_auto_repaired": {
+      "illiquid_clamp": {
+        "AGL": {
+          "from": 0.1014,
+          "to": 0.08,
+          "price": null,
+          "adv": 25208033.27650261
+        }
+      },
+      "stop_loss_floor": {
+        "AGL": {
+          "from": 59.47,
+          "to": 60.73
+        },
+        "V": {
+          "from": 312.0,
+          "to": 318.55
+        }
+      },
+      "delta_qty_rounding": {
+        "AGL": {
+          "from": 72.0,
+          "to": 38.3639,
+          "expected_from_qty_minus_current": true
+        }
+      },
+      "allocation_total": {
+        "from": {
+          "target_weights": {
+            "AGL": 0.08,
+            "V": 0.0486,
+            "LLY": 0.0
+          },
+          "spy_target_pct": 0.79,
+          "cash_target_pct": 0.05,
+          "total": 0.9686000000000001
+        },
+        "to": {
+          "target_weights": {
+            "AGL": 0.08,
+            "V": 0.0486
+          },
+          "spy_target_pct": 0.79,
+          "cash_target_pct": 0.0814,
+          "total": 1.0
+        }
+      },
+      "exit_delta_qty": {
+        "UNH": {
+          "from": -15.0,
+          "to": -15.1156
+        }
+      },
+      "buy_gate_downgrade": {
+        "V": "opp_score=72.0<floor=76.0"
+      }
+    },
+    "_validation_warnings": [
+      "spy_decision.one_sentence_reason missing"
+    ]
+  }
+}

@@ -1,0 +1,83 @@
+{
+  "date": "2026-05-12",
+  "equity": 102386.52997460638,
+  "cash": 5102.87,
+  "daily_return": -0.0036,
+  "daily_vs_spy": -0.0017,
+  "period_return": 0,
+  "period_vs_spy": -0.1676,
+  "spy_daily": -0.0019,
+  "spy_30d": 0.1676,
+  "positions_count": 5,
+  "trades_today": 51,
+  "positions": [
+    {
+      "symbol": "ALLT",
+      "side": "PositionSide.LONG",
+      "qty": 508.4708,
+      "avg_entry": 8.36,
+      "current_price": 8.38,
+      "pnl_pct": 0.0024,
+      "pnl_dollars": 10.17,
+      "market_value": 4260.99,
+      "price_source": "twelve_data"
+    },
+    {
+      "symbol": "FIX",
+      "side": "PositionSide.LONG",
+      "qty": 3.1909,
+      "avg_entry": 2010.09,
+      "current_price": 2017.0,
+      "pnl_pct": 0.0034,
+      "pnl_dollars": 22.05,
+      "market_value": 6436.05,
+      "price_source": "twelve_data"
+    },
+    {
+      "symbol": "NVDA",
+      "side": "PositionSide.LONG",
+      "qty": 110.5759,
+      "avg_entry": 219.92,
+      "current_price": 220.85,
+      "pnl_pct": 0.0042,
+      "pnl_dollars": 102.84,
+      "market_value": 24420.69,
+      "price_source": "twelve_data"
+    },
+    {
+      "symbol": "SPY",
+      "side": "PositionSide.LONG",
+      "qty": 67.585922016,
+      "avg_entry": 734.6621,
+      "current_price": 737.9,
+      "pnl_pct": 0.0044,
+      "pnl_dollars": 218.84,
+      "market_value": 49871.65,
+      "price_source": "twelve_data"
+    },
+    {
+      "symbol": "UNH",
+      "side": "PositionSide.LONG",
+      "qty": 31.0,
+      "avg_entry": 393.5614,
+      "current_price": 396.59,
+      "pnl_pct": 0.0077,
+      "pnl_dollars": 93.89,
+      "market_value": 12294.29,
+      "price_source": "twelve_data"
+    }
+  ],
+  "postmortem_digest": {
+    "closes_today": 0,
+    "winners": 0,
+    "losers": 0,
+    "avg_hold_minutes": 0.0,
+    "exit_arbiter_diag": {
+      "sample": 0,
+      "accuracy": null
+    },
+    "details": []
+  },
+  "fills_today_counted": 0,
+  "force_deploy_audit": null
+}

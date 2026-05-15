@@ -1,0 +1,66 @@
+{
+  "date": "2026-05-15",
+  "equity": 101098.74539148317,
+  "week_return": 0.0161,
+  "week_vs_spy": 0.0141,
+  "month_return": 0.0193,
+  "month_vs_spy": -0.034,
+  "spy_week": 0.002,
+  "spy_month": 0.0533,
+  "trades_count": 20,
+  "current_positions": 3,
+  "retrospective": {
+    "closes_examined": 12,
+    "winners": 0,
+    "losers": 0,
+    "win_rate": 0.0,
+    "avg_winner_hold_minutes": 0.0,
+    "avg_loser_hold_minutes": 0.0,
+    "exit_arbiter_diag": {
+      "sample": 12,
+      "correct": 0,
+      "accuracy": 0.0
+    }
+  },
+  "adaptive_config": {
+    "adjustments": [],
+    "records_examined": 12,
+    "exit_arbiter": {
+      "sample": 12,
+      "correct": 0,
+      "accuracy": 0.0
+    }
+  },
+  "sector_diagnostics": {
+    "status": "ok",
+    "as_of": 1778871610.894941,
+    "top_5d": [
+      {
+        "sym": "XLE",
+        "ret_5d": 0.0642
+      },
+      {
+        "sym": "XLK",
+        "ret_5d": 0.0134
+      },
+      {
+        "sym": "XLV",
+        "ret_5d": 0.0112
+      }
+    ],
+    "bottom_5d": [
+      {
+        "sym": "XLY",
+        "ret_5d": -0.0296
+      },
+      {
+        "sym": "XLRE",
+        "ret_5d": -0.0257
+      },
+      {
+        "sym": "XLB",
+        "ret_5d": -0.0228
+      }
+    ]
+  }
+}

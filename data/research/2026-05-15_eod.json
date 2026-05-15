@@ -1,0 +1,122 @@
+{
+  "date": "2026-05-15",
+  "equity": 101095.1879380923,
+  "cash": 55446.69,
+  "daily_return": -0.0082,
+  "daily_vs_spy": 0.0043,
+  "period_return": 0.0193,
+  "period_vs_spy": -0.1072,
+  "spy_daily": -0.0125,
+  "spy_30d": 0.1266,
+  "positions_count": 3,
+  "trades_today": 58,
+  "positions": [
+    {
+      "symbol": "SNDK",
+      "side": "PositionSide.LONG",
+      "qty": 23.0,
+      "avg_entry": 1410.6665,
+      "current_price": 1407.06,
+      "pnl_pct": -0.0026,
+      "pnl_dollars": -82.95,
+      "market_value": 32362.38,
+      "price_source": "twelve_data"
+    },
+    {
+      "symbol": "SPY",
+      "side": "PositionSide.LONG",
+      "qty": 9.599041998,
+      "avg_entry": 741.3793,
+      "current_price": 738.85,
+      "pnl_pct": -0.0034,
+      "pnl_dollars": -24.28,
+      "market_value": 7092.25,
+      "price_source": "twelve_data"
+    },
+    {
+      "symbol": "STX",
+      "side": "PositionSide.LONG",
+      "qty": 7.788381,
+      "avg_entry": 791.61,
+      "current_price": 795.27,
+      "pnl_pct": 0.0046,
+      "pnl_dollars": 28.51,
+      "market_value": 6193.87,
+      "price_source": "twelve_data"
+    }
+  ],
+  "postmortem_digest": {
+    "closes_today": 2,
+    "winners": 0,
+    "losers": 0,
+    "avg_hold_minutes": 0.0,
+    "exit_arbiter_diag": {
+      "sample": 2,
+      "correct": 0,
+      "accuracy": 0.0
+    },
+    "details": [
+      {
+        "ts": "2026-05-15T16:03:13.010589+00:00",
+        "symbol": "GOOGL",
+        "theme": "communication_services",
+        "sector": "Communication Services",
+        "entry_ts": "2026-05-15T16:03:13.010590+00:00",
+        "exit_ts": "2026-05-15T16:03:13.010589+00:00",
+        "hold_minutes": 0.0,
+        "entry_price": 0.0,
+        "exit_price": 0.0,
+        "qty": 9.4704,
+        "entry_score": null,
+        "exit_score": 20.0,
+        "entry_confidence": null,
+        "exit_confidence": 0.0,
+        "entry_arbiter_quote": null,
+        "exit_arbiter_quote": "arbiter EXIT -> 0.0% (from 3.7%): GOOGL is in selector-rotation cooldown (exited 58 min ago at score 52, rebuy requires score >=90). current score 20 with fading momentum, bearish EMA, falling slope \u2014 rotated: SNDK scored 88, WDC 82, STX 76, NVDA 72 vs GOOGL 20 despite arbiter HOLD 0.58.",
+        "mfe_pct": 0.0,
+        "mae_pct": 0.0,
+        "realized_pl_pct": 0.0,
+        "realized_pl_usd": 0.0,
+        "exit_kind": "exit_arbiter"
+      },
+      {
+        "ts": "2026-05-15T16:03:15.636151+00:00",
+        "symbol": "META",
+        "theme": "communication_services",
+        "sector": "Communication Services",
+        "entry_ts": "2026-05-15T16:03:15.636152+00:00",
+        "exit_ts": "2026-05-15T16:03:15.636151+00:00",
+        "hold_minutes": 0.0,
+        "entry_price": 0.0,
+        "exit_price": 0.0,
+        "qty": 12.3443,
+        "entry_score": null,
+        "exit_score": 22.0,
+        "entry_confidence": null,
+        "exit_confidence": 0.0,
+        "entry_arbiter_quote": null,
+        "exit_arbiter_quote": "arbiter EXIT -> 0.0% (from 7.5%): META has fading momentum (score 11, passes_new_entry_gate=false), bearish EMA state, falling recent slope, and opportunity score 22 vs SNDK 88/WDC 82/STX 76/NVDA 72 \u2014 no forward upside thesis supports holding.",
+        "mfe_pct": 0.0,
+        "mae_pct": 0.0,
+        "realized_pl_pct": 0.0,
+        "realized_pl_usd": 0.0,
+        "exit_kind": "exit_arbiter"
+      }
+    ]
+  },
+  "fills_today_counted": 2,
+  "force_deploy_audit": null,
+  "trough_and_comeback": {
+    "status": "ok",
+    "trough_ts": "2026-05-15T14:05:49.868574+00:00",
+    "trough_equity": 101116.65,
+    "close_equity": 101625.37,
+    "comeback_dollars": 508.72,
+    "comeback_pct": 0.005,
+    "samples": 6
+  },
+  "sector_breakdown": {
+    "Information Technology": 0.8446,
+    "Other": 0.1554
+  }
+}

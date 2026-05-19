@@ -1,0 +1,74 @@
+{
+  "date": "2026-05-19",
+  "equity": 99770.2883536457,
+  "cash": 4987.85,
+  "daily_return": -0.0066,
+  "daily_vs_spy": -0.0001,
+  "period_return": 0.0128,
+  "period_vs_spy": -0.1005,
+  "spy_daily": -0.0065,
+  "spy_30d": 0.1133,
+  "positions_count": 3,
+  "trades_today": 32,
+  "positions": [
+    {
+      "symbol": "LLY",
+      "side": "PositionSide.LONG",
+      "qty": 9.2804,
+      "avg_entry": 1015.5,
+      "current_price": 1021.11,
+      "pnl_pct": 0.0055,
+      "pnl_dollars": 52.06,
+      "market_value": 9476.31,
+      "price_source": "twelve_data"
+    },
+    {
+      "symbol": "SPY",
+      "side": "PositionSide.LONG",
+      "qty": 106.688639981,
+      "avg_entry": 735.6351,
+      "current_price": 733.88,
+      "pnl_pct": -0.0024,
+      "pnl_dollars": -187.25,
+      "market_value": 78296.66,
+      "price_source": "twelve_data"
+    },
+    {
+      "symbol": "UNH",
+      "side": "PositionSide.LONG",
+      "qty": 18.000000001,
+      "avg_entry": 387.2753,
+      "current_price": 389.415,
+      "pnl_pct": 0.0055,
+      "pnl_dollars": 38.51,
+      "market_value": 7009.47,
+      "price_source": "twelve_data"
+    }
+  ],
+  "postmortem_digest": {
+    "closes_today": 0,
+    "winners": 0,
+    "losers": 0,
+    "avg_hold_minutes": 0.0,
+    "exit_arbiter_diag": {
+      "sample": 0,
+      "accuracy": null
+    },
+    "details": []
+  },
+  "fills_today_counted": 0,
+  "force_deploy_audit": null,
+  "trough_and_comeback": {
+    "status": "ok",
+    "trough_ts": "2026-05-19T19:05:26.183721+00:00",
+    "trough_equity": 99825.42,
+    "close_equity": 99825.42,
+    "comeback_dollars": 0.0,
+    "comeback_pct": 0.0,
+    "samples": 6
+  },
+  "sector_breakdown": {
+    "Health Care": 0.1739,
+    "Other": 0.8261
+  }
+}

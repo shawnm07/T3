@@ -1,0 +1,110 @@
+{
+  "date": "2026-05-20",
+  "equity": 100107.39533782455,
+  "cash": 53085.39,
+  "daily_return": 0.0035,
+  "daily_vs_spy": -0.0068,
+  "period_return": 0.0058,
+  "period_vs_spy": -0.0907,
+  "spy_daily": 0.0103,
+  "spy_30d": 0.0965,
+  "positions_count": 4,
+  "trades_today": 39,
+  "positions": [
+    {
+      "symbol": "ASML",
+      "side": "PositionSide.LONG",
+      "qty": 12.7015,
+      "avg_entry": 1548.09,
+      "current_price": 1550.13,
+      "pnl_pct": 0.0013,
+      "pnl_dollars": 25.91,
+      "market_value": 19688.98,
+      "price_source": "yfinance"
+    },
+    {
+      "symbol": "CYTK",
+      "side": "PositionSide.LONG",
+      "qty": 53.5752,
+      "avg_entry": 78.35,
+      "current_price": 78.77,
+      "pnl_pct": 0.0054,
+      "pnl_dollars": 22.5,
+      "market_value": 4220.12,
+      "price_source": "yfinance"
+    },
+    {
+      "symbol": "NVDA",
+      "side": "PositionSide.LONG",
+      "qty": 81.0,
+      "avg_entry": 224.5702,
+      "current_price": 223.47,
+      "pnl_pct": -0.0049,
+      "pnl_dollars": -89.12,
+      "market_value": 18101.07,
+      "price_source": "yfinance"
+    },
+    {
+      "symbol": "SPY",
+      "side": "PositionSide.LONG",
+      "qty": 6.761245166,
+      "avg_entry": 737.5945,
+      "current_price": 741.26,
+      "pnl_pct": 0.005,
+      "pnl_dollars": 24.78,
+      "market_value": 5011.84,
+      "price_source": "yfinance"
+    }
+  ],
+  "postmortem_digest": {
+    "closes_today": 1,
+    "winners": 0,
+    "losers": 1,
+    "avg_hold_minutes": 298.1,
+    "exit_arbiter_diag": {
+      "sample": 1,
+      "correct": 1,
+      "accuracy": 1.0
+    },
+    "details": [
+      {
+        "ts": "2026-05-20T19:03:37.653431+00:00",
+        "symbol": "AMD",
+        "theme": "ai_data_center",
+        "sector": "Information Technology",
+        "entry_ts": "2026-05-20T14:05:29.206627+00:00",
+        "exit_ts": "2026-05-20T19:03:37.653431+00:00",
+        "hold_minutes": 298.14,
+        "entry_price": 437.4706,
+        "exit_price": 0.0,
+        "qty": 7.827509,
+        "entry_score": null,
+        "exit_score": 60.0,
+        "entry_confidence": null,
+        "exit_confidence": 0.0,
+        "entry_arbiter_quote": null,
+        "exit_arbiter_quote": "arbiter PASS -> 0.0% (from 3.5%): AMD shows acceptable_continuation with bullish EMA, above VWAP, peer rank 2 in semiconductors behind ASML. increasing to target weight as the second-best semi held name with clear continuation setup.",
+        "mfe_pct": 0.0,
+        "mae_pct": 0.0,
+        "realized_pl_pct": -1.0,
+        "realized_pl_usd": -3424.31,
+        "exit_kind": "exit_arbiter"
+      }
+    ]
+  },
+  "fills_today_counted": 1,
+  "force_deploy_audit": null,
+  "trough_and_comeback": {
+    "status": "ok",
+    "trough_ts": "2026-05-20T14:05:59.713892+00:00",
+    "trough_equity": 100017.68,
+    "close_equity": 100109.02,
+    "comeback_dollars": 91.34,
+    "comeback_pct": 0.0009,
+    "samples": 6
+  },
+  "sector_breakdown": {
+    "Other": 0.6151,
+    "Information Technology": 0.3849
+  }
+}

@@ -51,6 +51,22 @@ risk:
   illiquid_price_threshold: 20.0
   illiquid_adv_threshold: 50000000
   illiquid_max_position_pct: 0.08
+  # ------------------------------------------------------------------
+  # 2026-05-11 EOD overhaul: anti-churn + barbell ballast.
+  # ------------------------------------------------------------------
+  # Minimum hold time on a freshly opened position. Non-stop exits within
+  # this window require AI confidence >= min_hold_override_confidence.
+  # Stop-losses fire normally; only discretionary trims are blocked.
+  min_hold_minutes: 390            # ~1 trading day
+  min_hold_override_confidence: 0.80
+  # Hard daily fill cap (entries + non-stop exits). Stop fills do NOT count.
+  # When exceeded, the rest of the day is forced to HOLD-only mode.
+  max_daily_fills: 8
+  # SPY ballast cap: idle equity above this fraction is routed to the
+  # short-duration treasury proxy (`cash_proxy_idle_symbol`) instead of SPY.
+  # "No signal" should NOT equal "long beta".
+  max_spy_pct: 0.30
+  cash_proxy_idle_symbol: BIL
 
 universe:
   include_sp500: true
@@ -150,6 +166,14 @@ scheduling:
   late_session_no_new_entries_minutes: 0
 
 preclose:
+  # 2026-05-11 EOD overhaul: preclose asymmetry. A name that ALREADY cleared
+  # an intraday scan today has more evidence by 15:55 than at 10:00, so the
+  # buy threshold for repeat candidates is *lower* than first-look. Symbols
+  # not previously seen today still use overnight.buy_threshold (0.45).
+  repeat_candidate_buy_threshold: 0.35
+  # Close-drift / auction-imbalance signal weight (0..0.2). Pulled from
+  # last-5-min volume skew vs 5-day average; tie-breaker for preclose ranking.
+  close_drift_weight: 0.10
   # Phase 5 (2026-05-05): tier the overnight RSI cap so genuine momentum
   # leaders don't get vetoed in a clearly risk-on tape. The 2026-05-05
   # preclose blocked 17 names — including most of the day's strongest
@@ -350,7 +374,10 @@ exit_arbiter:
   # Opus 4.7 AI must explicitly approve every position close. Deterministic
   # exit triggers (technical flip, bad news, stall, preclose bias) are only
   # *inputs* to this decision — they never fire a trade on their own.
-  min_confidence: 0.55
+  # 2026-05-11 overhaul: raised from 0.55 → 0.65. Entries clear ~0.40 + ≥2
+  # agents + Opus arbiter; exits used to be cheaper than entries which
+  # produced same-day round-trips on noise. Stops fire regardless.
+  min_confidence: 0.65
   # Phase 4a (2026-05-05): require a 2nd consecutive exit signal ≥ N min
   # apart before flattening on opinion-based momentum-fade triggers. Skipped
   # when stop_loss breaches, earnings windows, macro halts, or position is
@@ -638,6 +665,30 @@ selector:
   selector_rotation_rebuy_min_score_delta: 10  # OR score must beat the prior rotation by this
 
   # =========================================================================
+  # 2026-05-16 postmortem fix: rotation cadence + conviction gap.
+  # The unified-pool selector was running at every intraday scan and rotating
+  # the portfolio hourly. 5/11–5/15 produced 46–87 trade events per day and
+  # the period-vs-SPY gap blew out to −16.8%. Hourly rotation captures noise,
+  # not alpha. These knobs cut rotation cadence to 1×/day and raise the
+  # score-delta required to fire a rotation.
+  # =========================================================================
+  # ET clock times (HH:MM) at which selector rotations (EXIT/REDUCE of held
+  # names + BUY of fresh names) are allowed. Off-schedule scans run the
+  # selector in HOLD-ONLY mode: existing positions cannot be reduced or
+  # exited by the selector (hard stops, earnings gate, and exit-arbiter
+  # still fire). Empty list = legacy behavior (rotation every scan).
+  rotation_scan_times:
+    - "13:00"
+  # Minimum opportunity_score margin a replacement candidate must hold over
+  # the held name being rotated out. With held score 60 and delta 25, the
+  # replacement must score ≥ 85. Filters intraday-noise rotations.
+  rotation_score_delta_required: 25
+  # State file: symbols sold in the current session. Selector cannot BUY or
+  # INCREASE these until the session resets at the next premarket. Prevents
+  # the wash-trade-recovery cycle observed 5/15 (SNDK, AXTX).
+  same_session_sold_state_file: data/state/same_session_sold.json
+
+  # =========================================================================
   # Phase C.1 (2026-05-11): dynamic rotation rebuy floor.
   # Static 90 was unreachable when pool_top_opp clusters in high-70s in a
   # favorable tape — 10 names got rotation-penalized in the 16:37 scan. Floor
@@ -663,8 +714,27 @@ selector:
 # Replaces the static SP500/Russell technical_screen approach.
 discovery:
   enabled: true
-  pool_size_target: 40             # discovery aim before AI ranking
-  pool_size_max: 50                # hard cap for AI cost
+  pool_size_target: 55             # 2026-05-11: raised from 40 → 55
+  pool_size_max: 75                # 2026-05-11: raised from 50 → 75 (carry-forward state means a sub-#50 today gets a fresh look tomorrow)
+  # Carry-forward: every scan, names that scored ≥ carry_forward_min_score but
+  # weren't selected are appended to a sticky watchlist for up to
+  # carry_forward_ttl_scans subsequent scans. Fixes the rank-truncation bug
+  # where a name at #51 in scan N is invisible at scan N+1 even if it would
+  # have been #3 had it survived.
+  carry_forward_enabled: true
+  carry_forward_min_score: 0.30
+  carry_forward_ttl_scans: 3
+  carry_forward_state_file: data/state/carry_forward.json
+  # Small-cap momentum lane: separate, stricter discovery path with a lower
+  # market-cap floor. Capped at smallcap_max_candidates to keep AI cost flat.
+  smallcap_lane:
+    enabled: true
+    min_market_cap_usd: 300000000
+    min_price: 3.0
+    min_dollar_volume_usd: 25000000
+    min_technical_score: 0.50
+    min_sentiment_score: 0.30
+    max_candidates: 10
   movers_top_n: 15                 # AV gainers + losers each
   most_active_top_n: 10            # AV most-active
   news_sentiment_top_n: 10
@@ -758,6 +828,13 @@ diversification:
   # exists specifically to prevent the 2026-04-28 failure mode: a book full
   # of semis (IT) + power/HVAC industrials all moving together on AI capex
   # news. Same cap (3) applies as any other theme.
+  # 2026-05-11: theme-replacement cooldown. After exiting symbol X in theme T,
+  # the bot may not enter any symbol Y in theme T within `theme_cooldown_minutes`
+  # unless Y's opportunity_score beats X's exit score by at least the delta.
+  # Stops same-day theme-churn like AMD→MU (both ai_data_center).
+  theme_cooldown_minutes: 2880        # 48 hours
+  theme_cooldown_score_delta: 20.0
+  theme_cooldown_state_file: data/state/theme_cooldown.json
   symbol_overrides:
     # Semis & AI-tied tech hardware
     NVDA: ai_data_center
@@ -809,6 +886,154 @@ trade_learning:
   enabled: true
   state_file: data/state/exit_learning_pending.json
   sync_lookback_hours: 36
+
+# 2026-05-11 EOD overhaul: per-trade post-mortem journal. Every closed trade
+# gets an entry: entry score, exit score, MFE/MAE while held, hold duration,
+# theme/sector, arbiter quotes. Powers the weekly retrospective.
+postmortem:
+  enabled: true
+  journal_file: data/journal/postmortems.jsonl
+  # Recompute MFE/MAE from minute bars when available; otherwise fall back to
+  # the entry/exit fill prices only.
+  use_minute_bars: true
+
+# 2026-05-11 EOD overhaul: auto-tuned thresholds. The weekly retrospective
+# computes exit-arbiter accuracy and other diagnostics; if calibration drifts
+# beyond the tolerance bands here, adaptive_config emits adjustments that
+# overlay (not overwrite) config.yaml at load time.
+adaptive_config:
+  enabled: true
+  overrides_file: data/state/config_overrides.yaml
+  exit_arbiter_min_accuracy: 0.55
+  # 2026-05-16 postmortem fix: lowered from 20 → 8. The weekly retro on 5/15
+  # logged 12 records with 0/12 accuracy and produced zero adjustments because
+  # 12 < 20. A trading-week sample is rarely >20; 8 is enough to detect a
+  # blown-out arbiter without overfitting.
+  exit_arbiter_min_samples: 8
+  exit_arbiter_step_up: 0.05
+  exit_arbiter_max_floor: 0.85
+
+# 2026-05-11 EOD overhaul: AV budget-aware throttling.
+av_budget:
+  enabled: true
+  rate_limit_per_min: 75
+  defer_below_pct: 0.20            # below 20% remaining → skip news lane
+  state_file: data/state/av_budget.json
+
+# 2026-05-11 EOD overhaul: scanning-failure alert. If preclose rejects 100%
+# of candidates for N consecutive days, raise a Telegram alert — either the
+# tape is genuinely dead or the gate is mis-calibrated.
+scanning_failure_alert:
+  enabled: true
+  consecutive_days: 3
+  state_file: data/state/scanning_failure_streak.json
+
+# ----------------------------------------------------------------------------
+# 2026-05-12 EOD overhaul: market-awareness layer
+# Bot was tech-loaded going into 2026-05-12, tech sold off, bot took 4 hours
+# to notice because it tracks SPY/VIX only — never sector ETFs. These sections
+# add real-time sector-rotation awareness, defensive lanes, and a dip-buy path.
+# ----------------------------------------------------------------------------
+
+sector_rotation:
+  enabled: true
+  # Sector ETFs tracked each scan. SPY is fetched separately as the benchmark.
+  etfs:
+    XLK: Information Technology
+    XLF: Financials
+    XLE: Energy
+    XLV: Health Care
+    XLP: Consumer Staples
+    XLY: Consumer Discretionary
+    XLU: Utilities
+    XLI: Industrials
+    XLB: Materials
+    XLRE: Real Estate
+    XLC: Communication Services
+  cache_dir: data/cache/sector_etfs
+  cache_ttl_minutes: 15
+  # Rotation score is in [0..1]. >= rotation_alert_score => "rotation day".
+  rotation_alert_score: 0.50
+  # Per-sector tape filter weight: how strongly XLK underperformance penalizes
+  # a tech candidate's opportunity score (in points). Cleared at 0.0.
+  sector_relative_score_pct_to_points: 50.0
+  # Pro-active trim trigger: held position whose sector is in lagging-2 with
+  # relative-strength worse than this gets a 25% trim proposal at the
+  # open-of-day audit and before each subsequent intraday scan.
+  proactive_trim_rs_threshold: -0.010
+  proactive_trim_pct: 0.25
+
+dynamic_watchlist_decay:
+  # Half-life (days) on the dynamic watchlist score. A 65-pt name added 3 days
+  # ago effectively scores ~32.5 today; 6 days → ~16. Stops "yesterday's
+  # leader" bias from compounding into next week.
+  enabled: true
+  half_life_days: 3.0
+  # Floor below which a decayed score is treated as expired and dropped.
+  expire_below_score: 10.0
+
+mean_reversion_lane:
+  # Dip-buy path for high-quality names that have over-corrected intraday.
+  # Runs in parallel with momentum discovery. Capped tight to control AI cost
+  # and avoid catching falling knives.
+  enabled: true
+  min_market_cap_usd: 20000000000
+  require_sp500: true
+  # Intraday drawdown thresholds
+  min_intraday_drop_pct: 0.03                  # down ≥ 3% on the day
+  min_drop_vs_5d_high_pct: 0.05                # down ≥ 5% from 5-day high
+  max_rsi: 35                                  # oversold
+  # Reversal pattern: last 30 min higher-low + positive RS vs sector
+  require_higher_low_30m: true
+  min_intraday_rs_vs_sector: 0.0
+  max_candidates: 3
+  # Score floor for the mean-reversion lane is separate from the momentum
+  # gate (which assumes price > EMA20). Lower because we expect short
+  # holding periods on dip-buys.
+  buy_threshold_confidence: 0.55
+
+tape_recovery:
+  # Detector for the comeback signal: tape_badness peaks then falls for N bars.
+  enabled: true
+  consecutive_falling_bars: 2
+  opportunity_score_boost: 5
+  state_file: data/state/tape_recovery.json
+
+defensive_lane:
+  # Defensive ETFs eligible when sector_regime says leading sectors are
+  # defensives AND rotation_score >= rotation_alert_score. The selector is
+  # *required* to evaluate at least require_min_evaluated of these.
+  enabled: true
+  etfs:
+    - XLV
+    - XLP
+    - XLU
+    - SHV
+    - BIL
+    - TLT
+  require_min_evaluated: 2
+  # Max share of equity routed to defensives in a single risk-off scan.
+  max_total_pct: 0.30
+
+tactical_hedge:
+  # Inverse-ETF hedge slot. Opens automatically when macro_score < threshold
+  # AND the bot's top theme is in lagging_sectors. Closes when macro recovers.
+  enabled: true
+  symbol: SH
+  max_pct: 0.05
+  open_macro_score_threshold: -0.20
+  close_macro_score_threshold: 0.0
+  # Dry-run shadow mode for week 1 — log decisions but don't actually trade.
+  shadow_mode: true
+  state_file: data/state/tactical_hedge.json
+
+open_of_day_audit:
+  # First scan of the day: explicitly check whether any held position is in
+  # today's bottom-2 sectors. Proposes pre-emptive trim before the normal
+  # selector runs.
+  enabled: true
+  trim_pct: 0.25
+  min_relative_underperformance_pct: 0.005    # held sector must be ≥ 50 bp worse than SPY YTD
 
 # ----------------------------------------------------------------------
 # Converging trailing-stop bot (separate from main pipeline).

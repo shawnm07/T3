@@ -138,6 +138,80 @@ def compute_technicals(symbol: str, df: pd.DataFrame) -> TechnicalSignal | None:
     )
 
 
+def relative_strength_vs_spy(
+    symbol_close: pd.Series,
+    spy_close: pd.Series,
+    lookback_days: int = 5,
+) -> dict[str, float] | None:
+    """Return relative-strength stats vs SPY over the lookback window.
+
+    A positive ``rs_pct`` means the symbol outperformed SPY over the window.
+    ``score_adjust`` is a small +/- nudge meant to be added to a candidate's
+    opportunity score (so a leader scores higher, a laggard scores lower).
+
+    Returns None if either series lacks enough data.
+    """
+    if symbol_close is None or spy_close is None:
+        return None
+    try:
+        s = symbol_close.dropna().tail(lookback_days + 1)
+        spy = spy_close.dropna().tail(lookback_days + 1)
+    except Exception:
+        return None
+    if len(s) < 2 or len(spy) < 2:
+        return None
+    try:
+        sym_ret = float(s.iloc[-1]) / float(s.iloc[0]) - 1
+        spy_ret = float(spy.iloc[-1]) / float(spy.iloc[0]) - 1
+    except Exception:
+        return None
+    rs_pct = sym_ret - spy_ret
+    # +0.10 ceiling for >=5% outperformance, -0.10 floor for <0 RS on up-tape.
+    if rs_pct >= 0.05:
+        adj = 0.10
+    elif rs_pct <= -0.05:
+        adj = -0.10
+    elif rs_pct < 0 and spy_ret > 0:
+        adj = -0.05
+    else:
+        adj = max(-0.10, min(0.10, rs_pct * 2))
+    return {
+        "rs_pct": round(float(rs_pct), 4),
+        "symbol_return": round(float(sym_ret), 4),
+        "spy_return": round(float(spy_ret), 4),
+        "lookback_days": int(lookback_days),
+        "score_adjust": round(float(adj), 4),
+    }
+
+
+def close_drift_score(
+    last_bars_volume: pd.Series,
+    avg_daily_volume: float,
+    last_bar_price: float,
+    vwap: float | None = None,
+) -> float:
+    """Close-drift / auction-imbalance proxy.
+
+    Without MOC/LOC data we use volume skew in the last few minutes vs the
+    5-day average plus a small VWAP adjustment. Returns a score in [-0.20, +0.20]
+    suitable as a tie-breaker on preclose ranking.
+    """
+    try:
+        recent_vol = float(last_bars_volume.tail(5).sum())
+    except Exception:
+        return 0.0
+    if avg_daily_volume <= 0:
+        return 0.0
+    # Last-5-min volume should be a small fraction of a normal day's volume;
+    # significantly above average implies large auction-driven activity.
+    ratio = recent_vol / max(avg_daily_volume / 78.0, 1.0)  # 78 = 5-min bars in a 6.5h session
+    base = max(-0.15, min(0.15, (ratio - 1.0) * 0.05))
+    vwap_adj = 0.0
+    if vwap and last_bar_price > 0:
+        vwap_adj = max(-0.05, min(0.05, ((last_bar_price / vwap) - 1.0) * 2.0))
+    return round(base + vwap_adj, 4)
+
+
 def technicals_for_bars_df(bars_df: pd.DataFrame) -> dict[str, TechnicalSignal]:
     """Input: multi-index (symbol, timestamp) DataFrame from Alpaca. Output: per-symbol signals."""
     out: dict[str, TechnicalSignal] = {}

@@ -113,6 +113,21 @@ def discover_candidates(
         _upsert(pool, sym, "dynamic_watchlist", sectors)
         breakdown["dynamic_watchlist"] += 1
 
+    # 2026-05-11 overhaul: carry-forward roster. Symbols that scored above
+    # discovery.carry_forward_min_score on a recent scan but weren't selected
+    # are re-introduced into today's pool so rank truncation doesn't make
+    # tomorrow's leader invisible.
+    try:
+        from src.carry_forward import get_carry_forward_symbols
+        for row in get_carry_forward_symbols(cfg):
+            sym = str(row.get("symbol", "")).upper()
+            if not sym or sym in excluded:
+                continue
+            _upsert(pool, sym, "carry_forward", sectors)
+            breakdown["carry_forward"] += 1
+    except Exception:
+        pass
+
     # 2b. Peer-group expansion. This prevents a single familiar ticker from
     # crowding out obvious substitutes in the same trade (AMD vs INTC, MU vs
     # SNDK/WDC, data-center power names such as BE/VRT/GEV).
@@ -280,6 +295,63 @@ def discover_candidates(
                     ]
         except Exception as e:
             log.debug("[discovery] earnings_calendar boost failed: %s", e)
+
+    # 7c. 2026-05-12 overhaul: sector-relative score adjustment.
+    # Penalize candidates whose sector ETF is underperforming SPY today;
+    # boost candidates whose sector is leading. Driven by macro.sector_regime
+    # if available. This is the per-sector counterpart to the SPY-only
+    # intraday tape filter.
+    try:
+        from src.sector_etfs import (
+            SectorRegime, SectorSnapshot,
+            sector_relative_score_adjustment,
+        )
+        sr_dict = None
+        try:
+            cached_path = Path(__file__).resolve().parents[1] / "data" / "cache" / "sector_etfs" / "snapshot.json"
+            if cached_path.exists():
+                cached = json.loads(cached_path.read_text())
+                snaps = [SectorSnapshot(**s) for s in cached.get("snapshots", [])]
+                sr_dict = {"snapshots": [s.to_dict() for s in snaps], "leading": [], "lagging": []}
+        except Exception:
+            sr_dict = None
+        if sr_dict and bool(cfg.get("sector_rotation", "enabled", default=False)):
+            # Build a regime from the cached snapshots so leading/lagging are
+            # computed against the same data the adjustment uses.
+            from src.sector_etfs import compute_sector_regime
+            regime = compute_sector_regime(cfg, [SectorSnapshot(**s) for s in cached.get("snapshots", [])])
+            for cand in pool.values():
+                sector_name = (sp500_sectors().get(cand.symbol) if sectors else cand.sector) or cand.sector
+                if not sector_name:
+                    continue
+                adj, _audit = sector_relative_score_adjustment(cfg, sector_name, regime)
+                if abs(adj) > 0.01:
+                    cand.discovery_priority_score = float(cand.discovery_priority_score or 0.0) + adj
+                    cand.discovery_priority_reasons = list(cand.discovery_priority_reasons or []) + [
+                        f"sector_rs_adj={adj:+.1f}"
+                    ]
+    except Exception as _e:
+        log.debug("sector-relative score adjustment skipped: %s", _e)
+
+    # 7d. 2026-05-12 overhaul: defensive lane injection. When sector_rotation
+    # signals a rotation day with defensives leading, the lane appends a
+    # required-evaluation set of defensive ETFs to the pool.
+    try:
+        from src.defensive_lane import build_defensive_candidates
+        if 'regime' in locals() and regime is not None:
+            for d in build_defensive_candidates(cfg, regime.to_dict()):
+                sym = d["symbol"]
+                if sym in excluded:
+                    continue
+                _upsert(pool, sym, "defensive_lane", sectors)
+                breakdown["defensive_lane"] += 1
+                if sym in pool:
+                    pool[sym].discovery_priority_score = max(
+                        float(pool[sym].discovery_priority_score or 0.0),
+                        float(d.get("discovery_priority_score") or 0.0),
+                    )
+    except Exception as _e:
+        log.debug("defensive_lane injection skipped: %s", _e)
 
     # 8. Sector cap on the pool (held retained for exit decisions)
     pool = _apply_sector_cap(pool, cfg, held)

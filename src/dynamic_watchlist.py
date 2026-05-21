@@ -65,11 +65,34 @@ def _load_state(cfg: Any) -> dict[str, Any]:
     return {"symbols": {}}
 
 
+def _decayed_score(raw_score: float, age_days: float, cfg: Any) -> float:
+    """Apply exponential decay so yesterday's leaders are not today's leaders.
+
+    Half-life is read from ``dynamic_watchlist_decay.half_life_days``.
+    Disabled => returns raw_score unchanged.
+    """
+    if not bool(_cfg(cfg, "dynamic_watchlist_decay", "enabled", default=False)):
+        return float(raw_score)
+    half_life = float(_cfg(cfg, "dynamic_watchlist_decay", "half_life_days", default=3.0) or 3.0)
+    if half_life <= 0:
+        return float(raw_score)
+    return float(raw_score) * (0.5 ** (max(0.0, float(age_days)) / half_life))
+
+
 def load_dynamic_watchlist(cfg: Any, now: datetime | None = None) -> list[str]:
-    """Return active dynamic symbols, filtered for TTL."""
+    """Return active dynamic symbols, filtered for TTL and momentum-decayed.
+
+    2026-05-12 overhaul: every entry's persisted score is decayed by half-life
+    before ranking. A name added at score 65 four days ago with a 3-day
+    half-life now sorts at ~25.8 — i.e. yesterday's leaders no longer dominate
+    the watchlist for a full week.
+    """
     if not bool(_cfg(cfg, "dynamic_watchlist", "enabled", default=True)):
         return []
     ttl_days = float(_cfg(cfg, "dynamic_watchlist", "ttl_days", default=7) or 7)
+    expire_below = float(
+        _cfg(cfg, "dynamic_watchlist_decay", "expire_below_score", default=0.0) or 0.0
+    )
     current = now or datetime.now(timezone.utc)
     symbols = _load_state(cfg).get("symbols", {})
     active: list[tuple[str, float, datetime]] = []
@@ -83,12 +106,48 @@ def load_dynamic_watchlist(cfg: Any, now: datetime | None = None) -> list[str]:
         if age_days > ttl_days:
             continue
         try:
-            score = float(info.get("score", 0) or 0)
+            raw_score = float(info.get("score", 0) or 0)
         except (TypeError, ValueError):
-            score = 0.0
-        active.append((str(sym).upper(), score, seen))
+            raw_score = 0.0
+        decayed = _decayed_score(raw_score, age_days, cfg)
+        if decayed < expire_below:
+            continue
+        active.append((str(sym).upper(), decayed, seen))
     active.sort(key=lambda row: (row[1], row[2]), reverse=True)
     return [sym for sym, _score, _seen in active]
+
+
+def decayed_scores(cfg: Any, now: datetime | None = None) -> dict[str, float]:
+    """Map symbol -> decayed score for callers that want the post-decay
+    priority (e.g. discovery rerank). Includes expired entries skipped by
+    ``load_dynamic_watchlist``? No — same TTL + expire filter as above.
+    """
+    if not bool(_cfg(cfg, "dynamic_watchlist", "enabled", default=True)):
+        return {}
+    ttl_days = float(_cfg(cfg, "dynamic_watchlist", "ttl_days", default=7) or 7)
+    expire_below = float(
+        _cfg(cfg, "dynamic_watchlist_decay", "expire_below_score", default=0.0) or 0.0
+    )
+    current = now or datetime.now(timezone.utc)
+    out: dict[str, float] = {}
+    for sym, info in (_load_state(cfg).get("symbols", {}) or {}).items():
+        if not isinstance(info, dict):
+            continue
+        seen = _parse_ts(info.get("last_seen"))
+        if seen is None:
+            continue
+        age = (current - seen).total_seconds() / 86400.0
+        if age > ttl_days:
+            continue
+        try:
+            raw = float(info.get("score", 0) or 0)
+        except (TypeError, ValueError):
+            raw = 0.0
+        d = _decayed_score(raw, age, cfg)
+        if d < expire_below:
+            continue
+        out[str(sym).upper()] = round(d, 4)
+    return out
 
 
 def update_dynamic_watchlist(

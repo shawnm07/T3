@@ -7,11 +7,13 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from src.adaptive_config import evaluate_and_update as adaptive_evaluate
 from src.alpaca_client import AlpacaClient
 from src.config import Config
 from src.daily_pnl import get_spy_period_pct
 from src.journal import log_decision, read_recent_trades
 from src.logging_setup import setup_logging
+from src.postmortem import exit_arbiter_accuracy, read_recent as read_postmortems
 from src.telegram_notifier import notify_weekly, send_alert
 
 
@@ -47,6 +49,55 @@ def main() -> int:
         # Placeholder: real P&L attribution would need matching buys/sells. Use closed positions for now.
         positions = client.get_positions()
 
+        # 2026-05-11 overhaul: weekly retrospective + adaptive tuning.
+        try:
+            pms = read_postmortems(cfg, days=7)
+        except Exception as e:
+            log.warning("postmortem read failed: %s", e)
+            pms = []
+        winners = [r for r in pms if float(r.get("realized_pl_pct", 0.0) or 0.0) > 0]
+        losers = [r for r in pms if float(r.get("realized_pl_pct", 0.0) or 0.0) < 0]
+        avg_winner_hold = (
+            sum(float(r.get("hold_minutes", 0.0) or 0.0) for r in winners) / len(winners)
+            if winners else 0.0
+        )
+        avg_loser_hold = (
+            sum(float(r.get("hold_minutes", 0.0) or 0.0) for r in losers) / len(losers)
+            if losers else 0.0
+        )
+        arbiter_diag = exit_arbiter_accuracy(pms) if pms else {"sample": 0, "accuracy": None}
+        # Adaptive config: may write to data/state/config_overrides.yaml.
+        try:
+            adaptive_summary = adaptive_evaluate(cfg)
+        except Exception as e:
+            log.warning("adaptive_config failed: %s", e)
+            adaptive_summary = {"status": "error", "error": str(e)}
+
+        # 2026-05-12 overhaul: missed-sector + sector-rotation diagnostics.
+        # Pull the most recent cached sector regime if available.
+        sector_diag: dict = {"status": "no_data"}
+        try:
+            from pathlib import Path as _P
+            cached = _P(__file__).resolve().parents[1] / "data" / "cache" / "sector_etfs" / "snapshot.json"
+            if cached.exists():
+                d = json.loads(cached.read_text())
+                snaps = d.get("snapshots") or []
+                if snaps:
+                    leaders = sorted(
+                        snaps, key=lambda s: float(s.get("ret_5d", 0) or 0), reverse=True,
+                    )[:3]
+                    laggards = sorted(
+                        snaps, key=lambda s: float(s.get("ret_5d", 0) or 0),
+                    )[:3]
+                    sector_diag = {
+                        "status": "ok",
+                        "as_of": d.get("_ts"),
+                        "top_5d": [{"sym": s["symbol"], "ret_5d": s.get("ret_5d")} for s in leaders],
+                        "bottom_5d": [{"sym": s["symbol"], "ret_5d": s.get("ret_5d")} for s in laggards],
+                    }
+        except Exception as e:
+            log.warning("sector diag failed: %s", e)
+
         report = {
             "date": datetime.now(timezone.utc).date().isoformat(),
             "equity": float(account.equity),
@@ -58,6 +109,17 @@ def main() -> int:
             "spy_month": round(spy_month, 4),
             "trades_count": len(submitted),
             "current_positions": len(positions),
+            "retrospective": {
+                "closes_examined": len(pms),
+                "winners": len(winners),
+                "losers": len(losers),
+                "win_rate": round(len(winners) / len(pms), 3) if pms else None,
+                "avg_winner_hold_minutes": round(avg_winner_hold, 1),
+                "avg_loser_hold_minutes": round(avg_loser_hold, 1),
+                "exit_arbiter_diag": arbiter_diag,
+            },
+            "adaptive_config": adaptive_summary,
+            "sector_diagnostics": sector_diag,
         }
         log.info("Week: %+.2f%% vs SPY %+.2f%% (diff %+.2f%%)", week_ret * 100, spy_week * 100, (week_ret - spy_week) * 100)
         log.info("Month: %+.2f%% vs SPY %+.2f%% (diff %+.2f%%)", month_ret * 100, spy_month * 100, (month_ret - spy_month) * 100)

@@ -121,6 +121,73 @@ def main() -> int:
             account.equity, account.cash, len(positions), macro.regime,
         )
 
+        # 2026-05-12 overhaul: sector heatmap + rotation alert.
+        sector_regime = getattr(macro, "sector_regime", None) or {}
+        if sector_regime:
+            log.info(
+                "Sector regime: %s | leading=%s | lagging=%s | rotation_score=%.2f",
+                sector_regime.get("rotation_regime", "?"),
+                sector_regime.get("leading"),
+                sector_regime.get("lagging"),
+                float(sector_regime.get("rotation_score", 0.0) or 0.0),
+            )
+            # Compact one-line heatmap of intraday RS by sector.
+            snaps = sector_regime.get("snapshots") or []
+            ranked = sorted(
+                snaps, key=lambda s: float(s.get("intraday_rs_vs_spy", 0) or 0), reverse=True,
+            )
+            heatmap = " ".join(
+                f"{s.get('symbol')}{float(s.get('intraday_rs_vs_spy', 0) or 0)*100:+.2f}%"
+                for s in ranked
+            )
+            log.info("Sector heatmap (RS vs SPY): %s", heatmap)
+
+            # Held-position-in-lagging warning.
+            try:
+                from src.sector_etfs import SectorRegime, SectorSnapshot, held_position_in_lagging
+                snap_objs = [SectorSnapshot(
+                    symbol=s.get("symbol"),
+                    sector_name=s.get("sector_name", ""),
+                    price=float(s.get("price", 0) or 0),
+                    ret_1d=float(s.get("ret_1d", 0) or 0),
+                    ret_5d=float(s.get("ret_5d", 0) or 0),
+                    ret_20d=float(s.get("ret_20d", 0) or 0),
+                    intraday_change_pct=float(s.get("intraday_change_pct", 0) or 0),
+                    intraday_rs_vs_spy=float(s.get("intraday_rs_vs_spy", 0) or 0),
+                ) for s in snaps]
+                rg = SectorRegime(
+                    leading=sector_regime.get("leading") or [],
+                    lagging=sector_regime.get("lagging") or [],
+                    rotation_score=float(sector_regime.get("rotation_score", 0) or 0),
+                    rotation_regime=str(sector_regime.get("rotation_regime", "stable")),
+                    defensives_leading=bool(sector_regime.get("defensives_leading")),
+                    cyclicals_lagging=bool(sector_regime.get("cyclicals_lagging")),
+                    snapshots=snap_objs,
+                )
+                from src.universe import sp500_sectors
+                sectors_map = sp500_sectors()
+                held_sectors = {p.symbol: sectors_map.get(p.symbol, "Other") for p in positions if "/" not in p.symbol}
+                flagged = held_position_in_lagging(cfg, held_sectors, rg)
+                if flagged:
+                    log.warning(
+                        "[premarket] ROTATION ALERT — held positions in lagging sectors: %s",
+                        [f["symbol"] + "(" + f["sector"] + ")" for f in flagged],
+                    )
+                    try:
+                        send_alert(
+                            "WARN", "TradingBot_PreMarket",
+                            "Sector rotation alert",
+                            error_details=(
+                                f"Lagging sectors {sector_regime.get('lagging')}; held "
+                                f"positions in those sectors: "
+                                f"{[f['symbol'] for f in flagged]}"
+                            ),
+                        )
+                    except Exception:
+                        pass
+            except Exception as _e:
+                log.info("sector rotation warning step skipped: %s", _e)
+
         def _side_str(p) -> str:
             s = p.side.value if hasattr(p.side, "value") else str(p.side)
             return str(s).split(".")[-1].upper()

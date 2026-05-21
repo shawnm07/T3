@@ -23,6 +23,8 @@ class MacroSignal:
     vix_regime: str
     breadth_pct_above_50: float | None
     notes: list[str]
+    # 2026-05-12 overhaul: sector-rotation awareness.
+    sector_regime: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -34,10 +36,86 @@ class MacroSignal:
             "vix_regime": self.vix_regime,
             "breadth_pct_above_50": self.breadth_pct_above_50,
             "notes": self.notes,
+            "sector_regime": self.sector_regime,
         }
 
 
-def compute_macro(client: AlpacaClient, breadth_symbols: list[str] | None = None) -> MacroSignal:
+def _build_sector_regime_via_client(client: AlpacaClient, cfg: Any = None) -> dict[str, Any] | None:
+    """Build a sector_regime dict using the AlpacaClient as the bar source.
+
+    Treated as best-effort: any failure returns None and the macro signal
+    proceeds without sector data (degraded but functional).
+    """
+    if cfg is None:
+        return None
+    try:
+        if not bool(cfg.get("sector_rotation", "enabled", default=False)):
+            return None
+        from src.sector_etfs import (
+            SectorSnapshot,
+            compute_sector_regime,
+            _save_cached,
+        )
+    except Exception:
+        return None
+    etfs_map = cfg.get("sector_rotation", "etfs", default={}) or {}
+    if not etfs_map:
+        return None
+    symbols = list(etfs_map.keys()) + ["SPY"]
+    try:
+        bars = client.get_stock_bars(symbols, lookback_days=30)
+    except Exception as e:
+        log.info("sector_etfs bar fetch failed: %s", e)
+        return None
+    try:
+        spy_df = bars.xs("SPY", level="symbol") if "symbol" in bars.index.names else bars
+        spy_open = float(spy_df["close"].iloc[-2]) if len(spy_df) >= 2 else 0.0
+        spy_last = float(spy_df["close"].iloc[-1]) if len(spy_df) else 0.0
+        spy_intra = (spy_last / spy_open - 1.0) if spy_open else 0.0
+    except Exception:
+        spy_intra = 0.0
+    snaps: list = []
+    for sym, sector_name in etfs_map.items():
+        try:
+            df = bars.xs(sym, level="symbol")
+            if len(df) < 2:
+                continue
+            close = df["close"]
+            last = float(close.iloc[-1])
+            prev = float(close.iloc[-2])
+            def _ret(n: int) -> float:
+                if len(close) > n:
+                    base = float(close.iloc[-(n + 1)])
+                    return (last / base - 1.0) if base else 0.0
+                return 0.0
+            intra = (last / prev - 1.0) if prev else 0.0
+            snaps.append(SectorSnapshot(
+                symbol=sym,
+                sector_name=str(sector_name),
+                price=last,
+                ret_1d=_ret(1),
+                ret_5d=_ret(5),
+                ret_20d=_ret(20),
+                intraday_change_pct=intra,
+                intraday_rs_vs_spy=intra - spy_intra,
+            ))
+        except Exception:
+            continue
+    if not snaps:
+        return None
+    regime = compute_sector_regime(cfg, snaps)
+    try:
+        _save_cached(cfg, {"snapshots": [s.to_dict() for s in snaps]})
+    except Exception:
+        pass
+    return regime.to_dict()
+
+
+def compute_macro(
+    client: AlpacaClient,
+    breadth_symbols: list[str] | None = None,
+    cfg: Any = None,
+) -> MacroSignal:
     notes: list[str] = []
 
     # SPY trend
@@ -119,6 +197,31 @@ def compute_macro(client: AlpacaClient, breadth_symbols: list[str] | None = None
     else:
         regime = "neutral"
 
+    sector_regime: dict[str, Any] | None = None
+    try:
+        sector_regime = _build_sector_regime_via_client(client, cfg=cfg)
+        if sector_regime:
+            notes.append(
+                f"sector_regime={sector_regime.get('rotation_regime', '?')}_"
+                f"leading={','.join(sector_regime.get('leading') or [])}"
+            )
+            # Sector rotation can attenuate the headline macro score: a
+            # technically-flat market that is rotating defensives→leadership
+            # should not read as cleanly "risk-on". Subtract up to 0.10 when
+            # cyclicals are clearly lagging.
+            if sector_regime.get("cyclicals_lagging") and sector_regime.get("defensives_leading"):
+                score = max(-1.0, score - 0.10)
+                if score > 0.35:
+                    regime = "risk_on"
+                elif score < -0.35:
+                    regime = "risk_off"
+                else:
+                    regime = "neutral"
+                notes.append("defensive_rotation_attenuation")
+    except Exception as e:
+        log.info("sector_regime computation skipped: %s", e)
+        sector_regime = None
+
     return MacroSignal(
         regime=regime,
         score=score,
@@ -128,4 +231,5 @@ def compute_macro(client: AlpacaClient, breadth_symbols: list[str] | None = None
         vix_regime=vix_regime,
         breadth_pct_above_50=breadth_pct,
         notes=notes,
+        sector_regime=sector_regime,
     )

@@ -16,6 +16,7 @@ from src.config import Config
 from src.daily_pnl import get_daily_pnl, get_spy_daily_pct
 from src.logging_setup import setup_logging
 from src.orchestrator import TradingOrchestrator
+from src.scanning_failure_alert import record_scan_outcome
 from src.telegram_notifier import notify_preclose, send_alert
 
 
@@ -41,6 +42,31 @@ def main() -> int:
         buys = len(result.get("new_executions", []))
         held = len([r for r in result.get("hold_reports", []) if r.get("decision") == "hold"])
         market_bias = float(result.get("market_bias", 0.0))
+
+        # 2026-05-11 overhaul: scanning-failure streak. Count today's preclose
+        # candidate evaluations; if 100% rejected for N consecutive days, alert.
+        try:
+            evaluated = int(
+                result.get("candidates_evaluated")
+                or len(result.get("new_candidates", []))
+                or 0
+            )
+            accepted = buys
+            sf_state = record_scan_outcome(
+                cfg, candidates_evaluated=evaluated, candidates_accepted=accepted,
+            )
+            if sf_state.get("should_alert"):
+                send_alert(
+                    "WARN", "TradingBot_PreClose",
+                    "Scanning-failure streak",
+                    error_details=(
+                        f"All preclose candidates rejected for "
+                        f"{sf_state.get('streak')} consecutive days. "
+                        f"Inspect gate calibration."
+                    ),
+                )
+        except Exception as _e:
+            log.warning("scanning_failure_alert failed: %s", _e)
         halt_threshold = float(cfg.get("macro", "bearish_halt_score", default=-0.55))
         bearish_halt = market_bias <= halt_threshold
         log.info("Preclose summary: held=%d closed=%d new_buys=%d market_bias=%+.2f",

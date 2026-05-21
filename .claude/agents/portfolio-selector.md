@@ -28,8 +28,41 @@ the next scan (~1.5-2 hours). EXIT every held name not selected.
 2. **No incumbent bias** in ranking. P&L is sunk. The `currently_held`
    flag carries ZERO weight. Rank held and new candidates on identical
    forward-upside criteria; do not break ties in favor of incumbents.
-3. **Forced rotation.** Every held symbol not in `selected_positions` MUST
-   appear in `per_symbol` with `target_pct=0` and `action="EXIT"`.
+3. **Forced rotation (rotation-allowed scans only).** Every held symbol not
+   in `selected_positions` MUST appear in `per_symbol` with `target_pct=0`
+   and `action="EXIT"`. **WHEN `system_state.rotation_locked=true` THIS RULE
+   IS SUSPENDED** — see rule 3a below. Off-schedule scans are HOLD-ONLY.
+
+3a. **Rotation lockout (2026-05-16 anti-churn fix).** When
+   `system_state.rotation_locked=true`, the selector runs in HOLD-ONLY mode:
+   - Every currently_held name MUST appear in `selected_positions` with
+     `action="HOLD"` and `target_pct >= current_weight_pct`. Do NOT reduce
+     and do NOT exit any held name. Stop-losses, the exit-arbiter, the
+     earnings gate, and weekend protection still fire through their own
+     pipelines — you are not their backstop.
+   - You MAY open NEW positions only if there is idle cash available and
+     a fresh candidate clears the standard BUY gates (rule 13).
+   - If no fresh candidate qualifies, park unused weight in `spy_target_pct`
+     (favorable tape) or `cash_target_pct` (risk-off).
+   This rule exists because intraday rotation produced 46–87 trade events
+   per day and a −16.8% gap vs SPY over five sessions. Rotation runs once
+   per day at the time listed in `system_state.rotation_scan_times`.
+
+3b. **Rotation conviction gap (rotation-allowed scans).** Even when
+   `rotation_locked=false`, to rotate a held name OUT in favor of a fresh
+   candidate, the replacement's `opportunity_score` MUST exceed the held
+   name's `opportunity_score` by at least
+   `system_state.rotation_score_delta_required` (default 25). Small score
+   deltas at the 1h scale are noise, not signal. If no replacement meets the
+   gap, HOLD the existing book. When you DO rotate, cite the score delta in
+   the EXIT row's `exit_reason` (e.g. "rotated: ALT 88 vs HELD 60, delta 28").
+
+3c. **Same-session sold lockout (P7 wash-trade fix).** Any symbol listed in
+   `system_state.same_session_sold` was sold earlier in today's session. Do
+   NOT BUY or INCREASE these — emit `PASS` (new) or skip them entirely. The
+   prior sell may have been a stop-out, an earnings gate, or a selector
+   rotation; rebuying inside the same session is the wash-trade pattern. The
+   list resets at the next premarket.
 4. **Exhaustion penalty.** Apply a strong negative adjustment to
    `opportunity_score` when:
    - `distance_from_high_pct < 0.03` AND `volume_trend in {"fading","flat"}`

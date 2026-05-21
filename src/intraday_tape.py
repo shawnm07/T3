@@ -205,3 +205,44 @@ def compute_tape_signal(
         notes=notes,
         has_data=True,
     )
+
+
+def sector_tape_adjustment(
+    base_signal: TapeSignal,
+    candidate_sector: str | None,
+    sector_regime: dict[str, Any] | None,
+    cfg: dict[str, Any] | None = None,
+) -> tuple[float, dict[str, Any]]:
+    """Return (effective_floor, audit). Adjusts the SPY-based opportunity-score
+    floor by the candidate sector's intraday relative strength vs SPY.
+
+    A tech candidate on a -1.8% XLK / -0.4% SPY day sees a *higher* floor
+    than a healthcare candidate on the same day. This is the fix for the
+    2026-05-12 failure mode where every candidate saw the same SPY-only
+    tape regardless of sector.
+    """
+    cfg = cfg or {}
+    base_floor = float(base_signal.min_opportunity_score_floor)
+    if not candidate_sector or not sector_regime:
+        return base_floor, {"reason": "no_sector_data", "floor": base_floor}
+    snapshots = sector_regime.get("snapshots") or []
+    target = None
+    for snap in snapshots:
+        if str(snap.get("sector_name", "")).strip().lower() == str(candidate_sector).strip().lower():
+            target = snap
+            break
+    if target is None:
+        return base_floor, {"reason": "sector_etf_not_found", "floor": base_floor}
+    rs = float(target.get("intraday_rs_vs_spy", 0.0) or 0.0)
+    # Convert RS pct to additional floor points. -0.5% rs -> +5 floor; +0.5% rs -> -5 floor.
+    # Clamp the adjustment so a 2% divergence doesn't blow the floor past max.
+    adjust = max(-10.0, min(20.0, -rs * 1000.0))
+    effective = max(0.0, base_floor + adjust)
+    return effective, {
+        "candidate_sector": candidate_sector,
+        "sector_etf": target.get("symbol"),
+        "intraday_rs_vs_spy_pct": round(rs, 4),
+        "floor_adjustment_points": round(adjust, 2),
+        "effective_floor": round(effective, 1),
+        "base_floor": round(base_floor, 1),
+    }

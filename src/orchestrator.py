@@ -2,6 +2,7 @@
 from __future__ import annotations
 import json
 import logging
+import time
 from dataclasses import replace
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -170,6 +171,14 @@ def _slim_selector_pool_blocks(pool: list[dict[str, Any]]) -> None:
 
 class TradingOrchestrator:
     def __init__(self, config: Config):
+        # 2026-05-11 overhaul: apply adaptive overrides BEFORE any subsystem
+        # reads the config (so e.g. an auto-tuned exit_arbiter.min_confidence
+        # is in effect for RiskManager and the AI arbiters from init).
+        try:
+            from src.adaptive_config import apply_overrides as _apply_overrides
+            _apply_overrides(config)
+        except Exception as _e:
+            log.warning("adaptive_config.apply_overrides failed: %s", _e)
         self.cfg = config
         self.client = AlpacaClient(config)
         self.risk = RiskManager(config)
@@ -1319,13 +1328,133 @@ class TradingOrchestrator:
     # ---------- macro ----------
     def macro_brief(self) -> MacroSignal:
         universe = build_stock_universe(self.cfg)[:60]  # sample for breadth
-        macro = compute_macro(self.client, breadth_symbols=universe)
+        macro = compute_macro(self.client, breadth_symbols=universe, cfg=self.cfg)
         log.info(
             "Macro: regime=%s score=%.2f spy_trend=%.2f vix=%s breadth=%s",
             macro.regime, macro.score, macro.spy_trend, macro.vix_regime,
             f"{macro.breadth_pct_above_50:.0%}" if macro.breadth_pct_above_50 else "n/a",
         )
+        sr = getattr(macro, "sector_regime", None) or {}
+        if sr:
+            log.info(
+                "Sector regime: %s rotation_score=%.2f leading=%s lagging=%s",
+                sr.get("rotation_regime", "?"),
+                float(sr.get("rotation_score", 0) or 0),
+                sr.get("leading"), sr.get("lagging"),
+            )
+        # 2026-05-12 overhaul: feed tape_recovery detector each macro brief.
+        try:
+            from src.tape_recovery import record_and_detect
+            from src.intraday_tape import compute_tape_signal
+            tape_cfg = self.cfg.get("macro", "intraday_tape_filter", default={}) or {}
+            spy_intra = None
+            try:
+                spy_intra = self._fetch_intraday(["SPY"], minutes=5).get("SPY") if hasattr(self, "_fetch_intraday") else None
+            except Exception:
+                spy_intra = None
+            tape_sig = compute_tape_signal(spy_intra, cfg=tape_cfg)
+            record_and_detect(self.cfg, tape_sig.tape_badness)
+        except Exception as _e:
+            log.info("tape_recovery update skipped: %s", _e)
         return macro
+
+    def _record_close_artifacts(
+        self,
+        action: Any,
+        exec_result: Any,
+        *,
+        lifecycle_ctx: dict[str, Any] | None = None,
+    ) -> None:
+        """Post-close hook: write a postmortem record and mark the closed
+        symbol's theme as on cooldown so a same-theme replacement BUY in the
+        same scan is blocked. Best-effort — never raises into the close path.
+
+        2026-05-16 postmortem fix: ``lifecycle_ctx`` should be captured by the
+        caller BEFORE ``_clear_position_lifecycle`` runs. It carries the real
+        ``entry_ts`` and ``filled_avg_price`` so the postmortem row has
+        non-zero hold_minutes, entry_price, and realized_pl_usd.
+        """
+        try:
+            symbol = str(getattr(action, "symbol", "") or "").upper()
+            if not symbol:
+                return
+            # Mark this symbol as sold in the current session (P7: wash-trade lockout).
+            try:
+                self._record_same_session_sold(symbol, reason=str(getattr(action, "reason", "") or "")[:200])
+            except Exception as _e:
+                log.info("same_session_sold record skipped: %s", _e)
+            # Pull sector + theme + entry context. Best effort against several
+            # action-object shapes used elsewhere in the orchestrator.
+            sector = getattr(action, "sector", None) or getattr(action, "gics_sector", None)
+            if not sector:
+                try:
+                    from src.universe import sp500_sectors
+                    sector = sp500_sectors().get(symbol)
+                except Exception:
+                    sector = None
+            lc = lifecycle_ctx or {}
+            entry_price = float(
+                getattr(action, "avg_entry_price", 0)
+                or getattr(action, "entry_price", 0)
+                or lc.get("filled_avg_price") or 0
+            )
+            if entry_price <= 0:
+                # Final fallback: query Alpaca for the closed position's avg_entry.
+                try:
+                    pos = self.client.get_position(symbol)
+                    entry_price = float(getattr(pos, "avg_entry_price", 0) or 0)
+                except Exception:
+                    entry_price = 0.0
+            exit_price = float(getattr(exec_result, "fill_price", 0) or getattr(exec_result, "avg_fill_price", 0) or 0)
+            qty = float(
+                getattr(action, "qty", 0)
+                or getattr(action, "current_qty", 0)
+                or lc.get("filled_qty") or 0
+            )
+            entry_ts = (
+                lc.get("entry_ts")
+                or getattr(action, "entry_time", None)
+                or getattr(action, "opened_at", None)
+            )
+            exit_score = float(getattr(action, "opportunity_score", 0) or 0)
+            confidence = float(getattr(action, "confidence", 0) or 0)
+            # Theme cooldown ledger
+            try:
+                from src.theme_cooldown import record_exit as _tc_record
+                _tc_record(self.cfg, symbol, sector=sector, exit_score=exit_score)
+            except Exception as _e:
+                log.info("theme_cooldown record skipped: %s", _e)
+            # Postmortem journal
+            try:
+                from src.postmortem import record_postmortem
+                from src.sector_guard import (
+                    _build_sector_to_theme, _symbol_overrides, theme_bucket_for,
+                )
+                theme = theme_bucket_for(
+                    sector or "", _build_sector_to_theme(self.cfg), symbol, _symbol_overrides(self.cfg),
+                )
+                record_postmortem(
+                    self.cfg,
+                    symbol=symbol, theme=theme, sector=sector,
+                    entry_ts=entry_ts,
+                    exit_ts=getattr(exec_result, "filled_at", None) or pd.Timestamp.utcnow().isoformat(),
+                    entry_price=entry_price, exit_price=exit_price, qty=qty,
+                    entry_score=None, exit_score=exit_score,
+                    entry_confidence=None, exit_confidence=confidence,
+                    entry_arbiter_quote=None,
+                    exit_arbiter_quote=str(getattr(action, "reason", "") or "")[:300],
+                    exit_kind="exit_arbiter" if "arbiter" in str(getattr(action, "reason", "")).lower() else "selector",
+                )
+            except Exception as _e:
+                log.info("postmortem record skipped: %s", _e)
+            # Daily fill cap: count the exit (non-stop) toward the cap
+            try:
+                from src.daily_fill_cap import record_fill
+                record_fill(symbol, is_stop_loss=False)
+            except Exception:
+                pass
+        except Exception as e:
+            log.info("_record_close_artifacts unexpected: %s", e)
 
     def _detect_scan_type(self) -> str:
         """Return 'FIRST', 'MIDDAY', or 'UNKNOWN' based on current Eastern Time.
@@ -1344,6 +1473,75 @@ class TradingOrchestrator:
         if 11 * 60 <= et_min <= 16 * 60:
             return "MIDDAY"
         return "UNKNOWN"
+
+    def _is_rotation_scan(self) -> bool:
+        """2026-05-16 postmortem fix: rotation only at scheduled times.
+
+        Returns True when the current ET clock-time falls within ±15 min of
+        any entry in selector.rotation_scan_times. Off-schedule scans run the
+        selector in HOLD-ONLY mode (see _build_selector_context).
+        Empty list = legacy unlimited-rotation behavior.
+        """
+        times = self.cfg.get("selector", "rotation_scan_times", default=None)
+        if not times:
+            return True
+        try:
+            et_now = pd.Timestamp.now(tz="America/New_York")
+            et_min = et_now.hour * 60 + et_now.minute
+            for entry in times:
+                hh, mm = str(entry).split(":")
+                target = int(hh) * 60 + int(mm)
+                if abs(et_min - target) <= 15:
+                    return True
+        except Exception:
+            return True
+        return False
+
+    # ---------- same-session-sold ledger (P7 wash-trade fix) ----------
+    def _same_session_sold_path(self) -> Path:
+        rel = self.cfg.get(
+            "selector", "same_session_sold_state_file",
+            default="data/state/same_session_sold.json",
+        )
+        return Path(__file__).resolve().parents[1] / rel
+
+    def _load_same_session_sold(self) -> dict[str, Any]:
+        path = self._same_session_sold_path()
+        if not path.exists():
+            return {}
+        try:
+            raw = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return {}
+        if not isinstance(raw, dict):
+            return {}
+        # Drop entries older than today's premarket window.
+        try:
+            et_today = pd.Timestamp.now(tz="America/New_York").normalize()
+            cutoff = et_today.tz_convert("UTC").timestamp()
+        except Exception:
+            cutoff = 0
+        return {
+            sym: meta for sym, meta in raw.items()
+            if isinstance(meta, dict) and float(meta.get("ts_epoch") or 0) >= cutoff
+        }
+
+    def _record_same_session_sold(self, symbol: str, *, reason: str = "") -> None:
+        sym = str(symbol or "").strip().upper()
+        if not sym or self._is_cash_proxy(sym):
+            return
+        state = self._load_same_session_sold()
+        state[sym] = {
+            "ts": datetime.now(timezone.utc).isoformat(),
+            "ts_epoch": time.time(),
+            "reason": str(reason)[:200],
+        }
+        path = self._same_session_sold_path()
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps(state, indent=2, default=str), encoding="utf-8")
+        except OSError as exc:
+            log.warning("same_session_sold save failed: %s", exc)
 
     # ---------- screening ----------
     def technical_screen(self, symbols: list[str], top_n: int = 40) -> list[TechnicalSignal]:
@@ -1900,6 +2098,60 @@ class TradingOrchestrator:
                      p.symbol, model_used, action, conf, reasoning)
 
             if action == "exit" and conf >= min_exit_conf:
+                # 2026-05-11 overhaul: minimum-hold guard. Block discretionary
+                # exits within risk.min_hold_minutes unless confidence clears
+                # the override floor. Stop-losses fire regardless and never
+                # route through the exit-arbiter path.
+                try:
+                    from src.hold_time_guard import should_block_discretionary_exit
+                    entry_ts = getattr(p, "entry_time", None) or getattr(p, "opened_at", None)
+                    if not entry_ts:
+                        # 2026-05-16 postmortem fix: fall back to position_lifecycle
+                        # so the hold-time guard isn't defeated by missing
+                        # entry_time on the Alpaca Position object.
+                        try:
+                            entry_ts = self._position_lifecycle_context(p.symbol).get("entry_ts")
+                        except Exception:
+                            entry_ts = None
+                    blocked, audit = should_block_discretionary_exit(
+                        self.cfg, entry_time=entry_ts, confidence=conf, is_stop_loss=False,
+                    )
+                    if blocked:
+                        log.info(
+                            "[%s] exit-arbiter EXIT held by min-hold guard: %s",
+                            p.symbol, audit,
+                        )
+                        log_decision({
+                            "event": "min_hold_block",
+                            "symbol": p.symbol,
+                            "confidence": conf,
+                            "audit": audit,
+                        })
+                        self._record_exit_arbiter_action(p.symbol, "hold", conf, reasoning)
+                        continue
+                except Exception as _e:
+                    log.warning("min_hold_guard check failed: %s", _e)
+                # 2026-05-11 overhaul: daily fill cap. Once we've burned
+                # max_daily_fills counted fills, the rest of the day is HOLD-only
+                # (stops still fire — they don't route through here).
+                try:
+                    from src.daily_fill_cap import is_capped
+                    capped, cap_audit = is_capped(self.cfg)
+                    if capped:
+                        log.info(
+                            "[%s] exit-arbiter EXIT blocked by daily fill cap: %s",
+                            p.symbol, cap_audit,
+                        )
+                        log_decision({
+                            "event": "daily_fill_cap_block",
+                            "symbol": p.symbol,
+                            "kind": "exit",
+                            "audit": cap_audit,
+                        })
+                        self._record_exit_arbiter_action(p.symbol, "hold", conf, reasoning)
+                        continue
+                except Exception as _e:
+                    log.warning("daily_fill_cap check failed: %s", _e)
                 # Phase 4a: 30-min hold confirmation buffer. Today's review
                 # showed PWR exited on a momentum-fade signal that recovered
                 # +$94 within the next 30 min. Require a second consecutive
@@ -3481,9 +3733,22 @@ class TradingOrchestrator:
                             return {**action_dict, "skipped": "ai_delta_qty_side_mismatch"}
                     except (TypeError, ValueError):
                         return {**action_dict, "skipped": "invalid_ai_delta_qty"}
+                # 2026-05-16 postmortem fix: capture lifecycle BEFORE close,
+                # so the postmortem row gets real entry_ts/entry_price.
+                try:
+                    lifecycle_ctx_pre = self._position_lifecycle_context(action.symbol)
+                except Exception:
+                    lifecycle_ctx_pre = {}
                 exec_result = self.executor.close_position(action.symbol, reason=action.reason)
                 action_dict["full_exit_via_close_position"] = True
                 if exec_result.ok:
+                    # 2026-05-11/12 overhaul: record post-close artifacts —
+                    # postmortem journal + theme cooldown for ai_data_center-
+                    # style replacement guard. Record BEFORE clearing lifecycle.
+                    try:
+                        self._record_close_artifacts(action, exec_result, lifecycle_ctx=lifecycle_ctx_pre)
+                    except Exception as _e:
+                        log.info("close artifacts hook failed: %s", _e)
                     self._clear_position_lifecycle(action.symbol)
                 return {**action_dict, "execution": exec_result.to_dict()}
 
@@ -3743,6 +4008,42 @@ class TradingOrchestrator:
                 ai_cash_target_pct = max(0.0, min(1.0, float(cash_t)))
             except (TypeError, ValueError):
                 ai_cash_target_pct = None
+
+        # 2026-05-11 overhaul: SPY ballast cap. Any SPY target above
+        # risk.max_spy_pct is rerouted to BIL (or whichever short-duration
+        # treasury proxy is configured). "No signal" should NOT equal "long
+        # beta" — that's exactly what cost us yesterday on a -1.8% open.
+        try:
+            from src.spy_ballast import split_idle_ballast
+            if ai_spy_target_pct is not None:
+                ballast = split_idle_ballast(
+                    self.cfg,
+                    proposed_spy_pct=ai_spy_target_pct,
+                    proposed_cash_pct=ai_cash_target_pct or 0.0,
+                )
+                if ballast.rerouted_pct > 0:
+                    bil_sym = str(self.cfg.get("risk", "cash_proxy_idle_symbol", default="BIL") or "BIL")
+                    log.info(
+                        "[spy_ballast] capping SPY %.1f%% -> %.1f%%, routing %.1f%% to %s",
+                        ai_spy_target_pct * 100, ballast.spy_target_pct * 100,
+                        ballast.rerouted_pct * 100, bil_sym,
+                    )
+                    ai_spy_target_pct = ballast.spy_target_pct
+                    # Inject BIL into target weights so the verifier picks it up
+                    ai_target_weights[bil_sym] = round(
+                        float(ai_target_weights.get(bil_sym, 0.0) or 0.0) + ballast.rerouted_pct, 4,
+                    )
+                    ai_per_symbol.setdefault(bil_sym, {})
+                    ai_per_symbol[bil_sym].update({
+                        "action": "BUY",
+                        "target_pct": ai_target_weights[bil_sym],
+                        "one_sentence_reason": (
+                            "SPY ballast cap (risk.max_spy_pct); idle equity "
+                            "routed to short-duration treasury proxy."
+                        ),
+                    })
+        except Exception as _e:
+            log.info("spy_ballast hook skipped: %s", _e)
         log.info("Arbiter thesis: %s", (arbiter_result.get("portfolio_thesis") or "")[:200])
         log.info("Arbiter targets: %s",
                  {s: round(w, 3) for s, w in ai_target_weights.items()})
@@ -3886,6 +4187,56 @@ class TradingOrchestrator:
             before_snapshot["spy_value"], after_snapshot["spy_value"],
             len(results), "yes" if spy_action_result else "no",
         )
+
+        # 2026-05-11 overhaul: carry-forward roster. Persist every pool symbol
+        # that scored above the carry-forward floor but wasn't selected, so
+        # tomorrow's discovery sees them even if ranking truncation would have
+        # dropped them.
+        try:
+            from src.carry_forward import record_unpicked
+            ranked = []
+            for sym, info in (ai_per_symbol or {}).items():
+                if not isinstance(info, dict):
+                    continue
+                # Use the AI opportunity_score scaled into [0..1] as the
+                # carry-forward score.
+                try:
+                    sc = float(info.get("opportunity_score") or 0.0)
+                except (TypeError, ValueError):
+                    sc = 0.0
+                ranked.append((sym, sc / 100.0 if sc > 1 else sc))
+            sel = set(str(s) for s in (arbiter_result.get("selected_positions") or []))
+            record_unpicked(self.cfg, ranked, sel)
+        except Exception as _e:
+            log.info("carry_forward record_unpicked skipped: %s", _e)
+
+        # 2026-05-12 overhaul: tactical hedge decision. Shadow mode logs only.
+        try:
+            from src.tactical_hedge import decide as hedge_decide
+            sr = getattr(macro, "sector_regime", None) or (
+                getattr(self, "_last_macro", None) and getattr(self._last_macro, "sector_regime", None)
+            )
+            held_themes: set[str] = set()
+            try:
+                from src.sector_guard import _build_sector_to_theme, _symbol_overrides, theme_bucket_for
+                stt = _build_sector_to_theme(self.cfg)
+                so = _symbol_overrides(self.cfg)
+                for sym in (ai_target_weights or {}):
+                    sec = (ai_per_symbol.get(sym) or {}).get("sector") or sp500_sectors().get(sym, "")
+                    held_themes.add(theme_bucket_for(sec or "", stt, sym, so))
+            except Exception:
+                pass
+            audit = hedge_decide(
+                self.cfg,
+                macro_score=float(getattr(macro, "score", 0.0) or 0.0) if 'macro' in locals() else 0.0,
+                sector_regime=sr,
+                held_themes=held_themes,
+                equity=float(after_snapshot.get("equity", 0.0) or 0.0),
+            )
+            if audit.get("action") and audit["action"] != "none":
+                log.info("[tactical_hedge] %s — %s", audit["action"], audit.get("reason"))
+        except Exception as _e:
+            log.info("tactical_hedge decision skipped: %s", _e)
 
         return results
 
@@ -4698,6 +5049,40 @@ class TradingOrchestrator:
                        requested_delta_notional=target_notional,
                        earnings=earnings_block)
                 continue
+            # 2026-05-11 overhaul: theme cooldown gate. Block fresh BUY of any
+            # symbol whose theme was just exited unless the candidate's score
+            # beats the exited symbol by the configured delta. Fixes 2026-05-12
+            # AMD-right-after-VRT.
+            try:
+                from src.theme_cooldown import is_blocked as theme_blocked
+                cand_sector = (pool_meta.get(sym) or {}).get("sector") or info.get("sector")
+                cand_score = float(
+                    (pool_meta.get(sym) or {}).get("opportunity_score")
+                    or info.get("opportunity_score")
+                    or 0.0
+                )
+                tc_blocked, tc_audit = theme_blocked(
+                    self.cfg, sym, sector=cand_sector, candidate_score=cand_score,
+                )
+                if tc_blocked:
+                    _block(sym, "theme_cooldown",
+                           requested_delta_notional=target_notional,
+                           theme_cooldown=tc_audit)
+                    continue
+            except Exception as _e:
+                log.info("theme_cooldown gate check failed: %s", _e)
+            # 2026-05-11 overhaul: daily fill cap. Once we've burned
+            # risk.max_daily_fills counted fills, no new entries.
+            try:
+                from src.daily_fill_cap import is_capped as fillcap_is_capped
+                capped, fc_audit = fillcap_is_capped(self.cfg)
+                if capped:
+                    _block(sym, "daily_fill_cap_reached",
+                           requested_delta_notional=target_notional,
+                           daily_fill_cap=fc_audit)
+                    continue
+            except Exception as _e:
+                log.info("daily_fill_cap gate check failed: %s", _e)
             try:
                 qty = float(info.get("qty") or 0)
                 entry = float(info.get("entry_price") or 0)
@@ -5100,6 +5485,23 @@ class TradingOrchestrator:
                     "selector", "selector_rotation_rebuy_min_score_delta", default=10
                 ) or 10
             )
+        # 2026-05-16 postmortem fix: rotation cadence + wash-trade lockout.
+        rotation_allowed = self._is_rotation_scan()
+        ss["rotation_allowed"] = bool(rotation_allowed)
+        ss["rotation_locked"] = not rotation_allowed
+        ss["rotation_scan_times"] = list(
+            self.cfg.get("selector", "rotation_scan_times", default=[]) or []
+        )
+        ss["rotation_score_delta_required"] = float(
+            self.cfg.get("selector", "rotation_score_delta_required", default=25) or 25
+        )
+        try:
+            sold_state = self._load_same_session_sold()
+            if sold_state:
+                ss["same_session_sold"] = sorted(sold_state.keys())
+        except Exception:
+            pass
+
         # Phase E (2026-05-07): late-day entry freeze. Compute minutes to close
         # so the selector and validator can block fresh BUYs in the last N min.
         mins_to_close, no_new_entries = self._minutes_to_close_with_freeze_flag()
@@ -5541,6 +5943,12 @@ class TradingOrchestrator:
                 res = self.executor.close_position(sym, reason=reason)
                 exit_results.append({**res.to_dict(), "reason": reason})
                 if res.ok:
+                    # P7 (2026-05-16): record sell in same-session ledger so the
+                    # selector cannot rebuy this name later today.
+                    try:
+                        self._record_same_session_sold(sym, reason=reason)
+                    except Exception:
+                        pass
                     self._clear_position_lifecycle(sym)
         if exit_results and not dry_run:
             exited_syms = {e.get("symbol") for e in exit_results

@@ -92,7 +92,7 @@ Trade count per day: 7, 9, 19, 24, 21, 10, 23, 38, 53. Accelerating churn.
 ## Trade / Decision Quality Table (Last Active Session: 2026-05-04)
 
 | Symbol | Action | Entry | Exit/Current | P&L % | AI Grade | One-line Reason | Verdict |
-|--------|--------|-------|--------------|-------|----------|-----------------|--------|
+|--------|--------|-------|--------------|-------|----------|-----------------|----------|
 | GEV | EXIT | $1,140.45 (avg) | $1,071.49 | -6.1% | conf 0.97 | Weak momentum, below VWAP, bearish EMA | OK — correctly exited loser |
 | UNH | EXIT | — | $368.25 | — | conf 0.97 | Fading volume; LLY preferred | Premature — UNH had acceptable continuation |
 | LLY | BUY→EXIT | $963.38 | $963.71 | +0.03% | — | Entered; exited same scan (score 53, "fading") | **CHURN** — wash trade, net loss after spread |
